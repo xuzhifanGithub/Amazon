@@ -22,12 +22,12 @@ from src.core.simulator import AmazonsSimulator, WHITE_AMAZON, BLACK_AMAZON, OBS
 from src.gui.amazon_board_widget import BoardWidget, AWAITING_PIECE_SELECTION, AWAITING_MOVE_DESTINATION, \
     AWAITING_ARROW_DESTINATION
 
-# 导入新的 HexAIAgent 类
+
 from src.ai.amazon_ai_agent import AmazonAIAgent
 
 class AmazonsMainWindow(QMainWindow):
     """
-    亚马逊棋游戏主窗口 - 模仿海克斯棋加入 AI 结构。
+    亚马逊棋游戏主窗口
     """
     # 定义玩家类型常量
     PLAYER_TYPE_HUMAN = 'human'
@@ -93,7 +93,7 @@ class AmazonsMainWindow(QMainWindow):
 
     def on_turn_made(self, start_pos, move_pos, arrow_pos, source='human'):
         """
-        接收一个 source 参数来区分走法来源 ('human' 或 'gtp')。
+        接收一个 source 参数来区分走法来源。
         """
         if self.simulator.game_over or not self.board_widget.isEnabled():
             return
