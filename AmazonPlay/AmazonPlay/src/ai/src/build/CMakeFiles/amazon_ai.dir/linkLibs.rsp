@@ -1,0 +1,1 @@
+ "C:/Program Files/python/libs/python311.lib" -lgomp -lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32 

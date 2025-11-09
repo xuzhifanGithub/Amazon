@@ -1,0 +1,3 @@
+D:/Amazon/AmazonPlay/AmazonPlay/src/ai/src/build/CMakeFiles/amazon_ai.dir
+D:/Amazon/AmazonPlay/AmazonPlay/src/ai/src/build/CMakeFiles/edit_cache.dir
+D:/Amazon/AmazonPlay/AmazonPlay/src/ai/src/build/CMakeFiles/rebuild_cache.dir
