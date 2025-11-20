@@ -33,43 +33,34 @@ class AmazonsMainWindow(QMainWindow):
     PLAYER_TYPE_HUMAN = 'human'
     PLAYER_TYPE_AI_MCTS = 'mcts'  # 保留 MCTS
     PLAYER_TYPE_AI_MCTS2 = 'mcts_test'  # 保留 MCTS
+    PLAYER_TYPE_AI_KATAAMAZON = 'kataAmazon'  #
 
     def __init__(self, simulator: AmazonsSimulator):
         super().__init__()
         self.simulator = simulator
-        self.settings = {}
         self.animation_group = None
-        self.is_paused = False
-        self.last_turn_details = None
 
         self.move_history = []  # 正确：初始化为空列表
         self.board_widget = None  # 将在init_ui中初始化
 
-        # --- 玩家模式设置 ---
-        self.player_modes = {
-            'black': self.PLAYER_TYPE_HUMAN,
-            'white': self.PLAYER_TYPE_HUMAN
-        }
-
-        # --- AI 代理 ---
-        self.ai_agent = AmazonAIAgent(self)
-        self.ai_agent.move_calculated.connect(self.handle_ai_move)
-
-        # --- 主题设置 ---
+        self.black_modes = self.PLAYER_TYPE_HUMAN
+        self.white_modes = self.PLAYER_TYPE_HUMAN
+        # AI
+        self.black_ai_agent = AmazonAIAgent(self)
+        self.white_ai_agent = AmazonAIAgent(self)
+        self.black_ai_agent.move_calculated.connect(self.execute_ai_move)
+        self.white_ai_agent.move_calculated.connect(self.execute_ai_move)
+        # 主题设置
         self.current_color_scheme = 'BW'  # 默认经典黑白主题
-
-        self.load_app_settings()
-        self.setup_sound()
         self.setWindowTitle("亚马逊棋")
-        self.init_ui()
-        self.update_ui_from_settings()
-        self.start_new_game('hvh')
 
-    def start_new_game(self, mode='hvh', human_color=None):
+        self.init_ui()
+        self.start_new_game()
+
+    def start_new_game(self):
         if not self.confirm_action("开始新游戏"):
             return
 
-        self.is_paused = False
         self.simulator.reset()
         self.board_widget.reset_selection()
         self.board_widget.set_last_turn(None)
@@ -79,21 +70,22 @@ class AmazonsMainWindow(QMainWindow):
         self.board_widget.setEnabled(True)
 
         # 将玩家模式重置为人类
-        self.player_modes['black'] = self.PLAYER_TYPE_HUMAN
-        self.player_modes['white'] = self.PLAYER_TYPE_HUMAN
+        self.black_modes = self.PLAYER_TYPE_HUMAN
+        self.white_modes = self.PLAYER_TYPE_HUMAN
         # 更新菜单选项的选中状态
         self.black_human_action.setChecked(True)
         self.white_human_action.setChecked(True)
-
         self.update_status()
+
+        self.black_ai_agent.clear_board()
+        self.white_ai_agent.clear_board()
 
         # 检查是否轮到 AI 先手，如果是则触发AI下棋
         if self.is_ai_turn():
             self.start_ai_turn()
 
-    def on_turn_made(self, start_pos, move_pos, arrow_pos, source='human'):
+    def on_turn_made(self, start_pos, move_pos, arrow_pos):
         """
-        接收一个 source 参数来区分走法来源。
         """
         if self.simulator.game_over or not self.board_widget.isEnabled():
             return
@@ -102,35 +94,48 @@ class AmazonsMainWindow(QMainWindow):
         if self.is_ai_turn():
             return
 
-        player_who_moved = self.simulator.current_player
         # 将 source 参数传递给动画完成后的回调
-        callback = lambda: self.post_animation_update(start_pos, move_pos, arrow_pos, source)
-        self.run_full_turn_animation_sequence(start_pos, move_pos, arrow_pos, player_who_moved, callback)
+        callback = lambda: self.post_animation_update(start_pos, move_pos, arrow_pos)
+        self.run_full_turn_animation_sequence(start_pos, move_pos, arrow_pos, self.simulator.current_player, callback)
 
     def undo_move(self):
         """
         处理悔棋操作，人机模式下连续悔两步。
         """
-        # 1. 检查游戏是否已结束
         if self.simulator.game_over:
             self.statusBar().showMessage("游戏已结束，无法悔棋。")
             return
 
-        # 悔棋前判断是否是人机对战
-        is_human_vs_human = (self.player_modes['black'] == self.PLAYER_TYPE_HUMAN and
-                             self.player_modes['white'] == self.PLAYER_TYPE_HUMAN)
+        # 判断是否为人人
+        is_human_vs_human = (
+                self.black_modes == self.PLAYER_TYPE_HUMAN and
+                self.white_modes == self.PLAYER_TYPE_HUMAN
+        )
 
-        # 2. 执行第一次悔棋
+        # ========== 执行第一次悔棋 ==========
         if self.simulator.undo():
             if self.move_history:
-                self.move_history.pop()
+                last_turn = self.move_history.pop()
 
-            # 3. 如果不是人类 vs 人类，则再悔一步，以跳过 AI 的回合
+                # 根据悔掉的是谁的回合，回退对应 AI 的内部棋盘
+                last_player = -self.simulator.current_player  # undo 后 current_player 已反转
+                if last_player == BLACK_AMAZON:
+                    self.black_ai_agent.undo_board()
+                else:
+                    self.white_ai_agent.undo_board()
+
+            # ====== 如果是人机对战，要再悔一步跳过 AI ======
             if not is_human_vs_human:
                 if self.simulator.undo():
                     if self.move_history:
-                        self.move_history.pop()
-                    self.statusBar().showMessage("已连续悔棋，跳过AI回合。")
+                        last_turn = self.move_history.pop()
+                        last_player = -self.simulator.current_player
+                        if last_player == BLACK_AMAZON:
+                            self.black_ai_agent.undo_board()
+                        else:
+                            self.white_ai_agent.undo_board()
+
+                    self.statusBar().showMessage("已连续悔棋，跳过 AI 回合。")
                 else:
                     self.statusBar().showMessage("无法连续悔棋，已是开局。")
 
@@ -139,48 +144,20 @@ class AmazonsMainWindow(QMainWindow):
             self.statusBar().showMessage("无法悔棋，已是开局。")
             return
 
-        # 4. 更新UI状态
+        # ========= UI 更新 ==========
         self.board_widget.reset_selection()
-        # 根据 move_history 恢复上一步状态
+
         if self.move_history:
-            # 最后一个完整的走法 (start, move, arrow)
-            last_turn = self.move_history[-1]
-            self.board_widget.set_last_turn(last_turn)
+            self.board_widget.set_last_turn(self.move_history[-1])
         else:
             self.board_widget.set_last_turn(None)
 
         self.board_widget.update()
         self.update_status()
 
-        # 5. 如果悔棋后轮到 AI，则触发 AI 下棋
+        # ========== 如果悔棋后轮到AI，则继续AI ==========
         if self.is_ai_turn():
             self.start_ai_turn()
-
-    def load_app_settings(self):
-        """从本地加载应用设置（仅保留play_sound）。"""
-        settings = QSettings("MyCompany", "AmazonsGame")
-        default_settings = {
-            'play_sound': True,
-        }
-        self.settings = {
-            'play_sound': settings.value("play_sound", default_settings['play_sound'], type=bool),
-        }
-        # 移除加载 color_scheme 的代码
-
-    def save_app_settings(self):
-        """保存当前应用设置到本地（仅保留play_sound）。"""
-        settings = QSettings("MyCompany", "AmazonsGame")
-        settings.setValue('play_sound', self.settings['play_sound'])
-        # 移除保存 color_scheme 的代码
-
-    def setup_sound(self):
-        """初始化音效。"""
-        self.stone_sound = QSoundEffect(self)
-        sound_path = os.path.join("src", "assets", "sounds", "Stone.wav")
-        if os.path.exists(sound_path):
-            self.stone_sound.setSource(QUrl.fromLocalFile(sound_path))
-        else:
-            print(f"警告: 音效文件 '{sound_path}' 不存在。")
 
     def init_ui(self):
         """初始化主窗口的用户界面布局和控件。"""
@@ -207,7 +184,7 @@ class AmazonsMainWindow(QMainWindow):
         right_board_panel = QWidget()
         right_v_layout = QVBoxLayout(right_board_panel)
         self.board_widget = BoardWidget(self.simulator, color_scheme=self.current_color_scheme)
-        self.board_widget.turn_made.connect(self.on_turn_made)
+        self.board_widget.mouse_genmove_completed.connect(self.on_turn_made)
         self.board_widget.game_over_signal.connect(self.show_game_over_message)
         right_v_layout.addWidget(self.board_widget)
 
@@ -258,6 +235,13 @@ class AmazonsMainWindow(QMainWindow):
         black_player_group.addAction(black_ai_mcts_test_action)
         black_ai_menu.addAction(black_ai_mcts_test_action)
 
+        #  kataAmazon
+        black_ai_kataAmazon_action = QAction("kataAmazon", self, checkable=True)
+        black_ai_kataAmazon_action.triggered.connect(
+            lambda: self.set_player_mode(BLACK_AMAZON, self.PLAYER_TYPE_AI_KATAAMAZON))
+        black_player_group.addAction(black_ai_kataAmazon_action)
+        black_ai_menu.addAction(black_ai_kataAmazon_action)
+
         black_player_menu.addMenu(black_ai_menu)
         game_menu.addMenu(black_player_menu)
 
@@ -285,6 +269,12 @@ class AmazonsMainWindow(QMainWindow):
         white_ai_mcts_test_action.triggered.connect(lambda: self.set_player_mode(WHITE_AMAZON, self.PLAYER_TYPE_AI_MCTS2))
         white_player_group.addAction(white_ai_mcts_test_action)
         white_ai_menu.addAction(white_ai_mcts_test_action)
+
+        white_ai_kataAmazon_action = QAction("kataAmazon", self, checkable=True)
+        white_ai_kataAmazon_action.triggered.connect(
+            lambda: self.set_player_mode(WHITE_AMAZON, self.PLAYER_TYPE_AI_KATAAMAZON))
+        white_player_group.addAction(white_ai_kataAmazon_action)
+        white_ai_menu.addAction(white_ai_kataAmazon_action)
 
         white_player_menu.addMenu(white_ai_menu)
         game_menu.addMenu(white_player_menu)
@@ -353,11 +343,15 @@ class AmazonsMainWindow(QMainWindow):
         设置某一边的玩家类型
         """
         if side == BLACK_AMAZON:
-            self.player_modes['black'] = player_type
+            self.black_modes= player_type
             side_text = "黑方"
+            if player_type == self.PLAYER_TYPE_AI_KATAAMAZON:
+                self.black_ai_agent.init_ai_engine()
         else:
-            self.player_modes['white'] = player_type
+            self.white_modes = player_type
             side_text = "白方"
+            if player_type == self.PLAYER_TYPE_AI_KATAAMAZON:
+                self.white_ai_agent.init_ai_engine()
 
         if player_type == self.PLAYER_TYPE_HUMAN:
             mode_text = "人类"
@@ -366,6 +360,7 @@ class AmazonsMainWindow(QMainWindow):
 
 
         self.statusBar().showMessage(f"已将 {side_text} 设置为 {mode_text} 玩家。", 3000)
+
 
         if self.simulator.game_over:
             self.show_game_over_message()
@@ -407,14 +402,13 @@ class AmazonsMainWindow(QMainWindow):
         """
         判断当前回合是否轮到 AI 下棋。
         """
-        current_player = self.simulator.current_player
         # 获取当前玩家对应的模式
-        if current_player == BLACK_AMAZON:
-            current_mode = self.player_modes['black']
+        if self.simulator.current_player == BLACK_AMAZON:
+            current_mode = self.black_modes
         else:
-            current_mode = self.player_modes['white']
+            current_mode = self.white_modes
 
-        # 如果模式不是“人类”，则认为是 AI (即 PLAYER_TYPE_AI_MCTS)
+        # 如果模式不是“人类”，则认为是 AI
         return current_mode != self.PLAYER_TYPE_HUMAN
 
     def update_status(self):
@@ -460,10 +454,6 @@ class AmazonsMainWindow(QMainWindow):
                                 f"您可以在「游戏」菜单的「主题设置」中切换不同的配色方案。\n\n"
                                 )
 
-    def closeEvent(self, event):
-        """关闭窗口时，保存设置（仅保存play_sound）。"""
-        self.save_app_settings()
-        event.accept()
 
     def resign_game(self):
         """处理认输操作。"""
@@ -494,21 +484,18 @@ class AmazonsMainWindow(QMainWindow):
             winner_name = "黑方" if self.simulator.winner == BLACK_AMAZON else "白方"
             self.show_game_over_message(f"游戏结束！{winner_name}获胜！")
 
-    def update_ui_from_settings(self):
-        """根据当前的设置更新UI组件。"""
-        # 设置保存的主题
-        if self.board_widget:
-            self.set_color_scheme(self.current_color_scheme)
-        self.adjustSize()
 
-    def post_animation_update(self, start_pos, move_pos, arrow_pos, source='human'):
+    def post_animation_update(self, start_pos, move_pos, arrow_pos):
         """
         动画完成后的核心处理逻辑。
         """
+        if self.simulator.current_player == BLACK_AMAZON:
+            self.white_ai_agent.update_engine_board(self.simulator.current_player, start_pos, move_pos, arrow_pos)
+        else:
+            self.black_ai_agent.update_engine_board(self.simulator.current_player, start_pos, move_pos, arrow_pos)
+
         if self.simulator.execute_turn(start_pos, move_pos, arrow_pos):
             self.move_history.append((start_pos, move_pos, arrow_pos))
-            if self.settings.get('play_sound', True):
-                self.stone_sound.play()
             self.board_widget.set_last_turn((start_pos, move_pos, arrow_pos))
 
             self.update_status()
@@ -537,14 +524,13 @@ class AmazonsMainWindow(QMainWindow):
         arrow_land_duration = 300  # 箭落地动画持续时间
         arrow_shrink_duration = 0  # 箭瞬间缩小动画持续时间
 
-        if True:
+        if self.black_modes != self.PLAYER_TYPE_HUMAN and self.white_modes != self.PLAYER_TYPE_HUMAN:
             piece_move_duration = 200  # 棋子移动动画持续时间
             piece_settle_duration = 100  # 棋子缩放归位动画持续时间
             arrow_move_duration = 100  # 箭移动动画持续时间
             arrow_land_duration = 100  # 箭落地动画持续时间
             arrow_shrink_duration = 0  # 箭瞬间缩小动画持续时间
 
-        # ... (动画开始前的代码保持不变) ...
         # 在动画开始前，清除上一步留下的路径箭头。
         self.board_widget.set_last_turn(None)
 
@@ -659,33 +645,31 @@ class AmazonsMainWindow(QMainWindow):
         self.board_widget.repaint()
 
         # 2. 延迟启动 AI 计算，避免阻塞 UI
-        QTimer.singleShot(100, self.execute_ai_move)
+        QTimer.singleShot(100, self.start_ai_calculation)
 
-    def execute_ai_move(self):
+    def start_ai_calculation(self):
         """
         执行AI的下棋操作。
         """
-        if not self.ai_agent:
-            self.statusBar().showMessage("警告：AI 模块未加载。请选择人类玩家。", 5000)
-            self.board_widget.setEnabled(True)
-            self.update_status()
-            return
+        # 选择当前玩家的模式和 agent
+        if self.simulator.current_player == BLACK_AMAZON:
+            current_player_mode = self.black_modes
+            current_agent = self.black_ai_agent
+        else:
+            current_player_mode = self.white_modes
+            current_agent = self.white_ai_agent
 
-        current_player_mode = self.player_modes['black'] if self.simulator.current_player == BLACK_AMAZON else \
-            self.player_modes['white']
-
+        # 根据玩家类型启动 AI 计算
         if current_player_mode == self.PLAYER_TYPE_AI_MCTS:
-            self.ai_agent.start_ai_move('mcts')
+            current_agent.start_thread_ai_calculation('mcts')
         elif current_player_mode == self.PLAYER_TYPE_AI_MCTS2:
-            self.ai_agent.start_ai_move('mcts_test')
+            current_agent.start_thread_ai_calculation('mcts_test')
+        elif current_player_mode == self.PLAYER_TYPE_AI_KATAAMAZON:
+            current_agent.start_thread_ai_calculation('kataAmazon')
 
-
-
-    def handle_ai_move(self, result: tuple):
+    def execute_ai_move(self, result: tuple):
         """
         处理AI计算出的最佳移动，执行下棋并更新UI。
-
-        预期 result 格式: ((start_row, start_col, move_row, move_col, arrow_row, arrow_col), win_pro, maxApt, select_pro)
         """
         best_move, win_pro, maxApt, select_pro = result
 
@@ -719,7 +703,7 @@ class AmazonsMainWindow(QMainWindow):
 
         # 使用动画执行 AI 的走法
         player_who_moved = self.simulator.current_player
-        callback = lambda: self.post_animation_update(start_pos, move_pos, arrow_pos, source='ai')
+        callback = lambda: self.post_animation_update(start_pos, move_pos, arrow_pos)
         self.run_full_turn_animation_sequence(start_pos, move_pos, arrow_pos, player_who_moved, callback)
 
         # 动画完成后的逻辑会由 on_group_finished -> post_animation_update 处理

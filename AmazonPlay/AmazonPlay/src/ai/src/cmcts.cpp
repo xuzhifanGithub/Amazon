@@ -138,6 +138,12 @@ int getNeighborsEmptyNumber(const boardArray& board, int fromX, int fromY);
 double calculateOneQueenMobilityValue(const boardArray& board, int kingPosX, int kingPosY);
 double valueAll(const boardArray& board, const queenArray& queenPos, int moveSide);
 
+std::vector<int> fillExpandTerritory(boardArray board,int actionFrom,std::vector<int> vecGetMovePos,int d);
+double valueT1_Test(const boardArray& board, const queenArray& queenPos,int moveSide);
+std::vector<int> fillNeighborsEmptyPos(boardArray& board,int actionFrom,std::vector<int> vecNeighbors,int d);
+double valueT2_Test(const boardArray& board, const queenArray& queenPos,int moveSide);
+double valueMobility_Test(const boardArray& board,const queenArray& queenPos,int moveSide);
+
 UCTNode* uctInitNode(const boardArray& board, const queenArray& queenPos, UCTNode* head, int moveSide);
 void deleteRoot(UCTNode* node);
 UCTNode* uctSelect(UCTNode* node);
@@ -551,6 +557,300 @@ double valueT1(const boardArray& board, const queenArray& queenPos, int moveSide
     return valueT1(board, queenPos, moveSide, &w);
 }
 
+std::vector<int> fillExpandTerritory(boardArray board,int actionFrom,std::vector<int> vecGetMovePos,int d)
+{
+    int fromX = actionFrom/10;
+    int fromY = actionFrom%10;
+    int x;
+    int y;
+
+    //vector<int> vecGetMovePos;
+
+    //正左
+    for(x=fromX,y=fromY-1;y>=0;y--)
+    {
+        if(board[x][y] == INT_MAX)
+        {
+            board[x][y] = d;
+            vecGetMovePos.push_back(x*10+y);
+        }
+        else if(board[x][y] == d)
+        {
+            continue;
+        }
+        else
+        {
+            break;
+        }
+    }
+
+    //左上
+    for(x=fromX-1,y=fromY-1;x>=0 && y>=0;x--,y--)
+    {
+        if(board[x][y] == INT_MAX)
+        {
+            board[x][y] = d;
+            vecGetMovePos.push_back(x*10+y);
+        }
+        else if(board[x][y] == d)
+        {
+            continue;
+        }
+        else
+        {
+            break;
+        }
+    }
+    //checkDispalyMoveAction(vecGetMovePos);
+
+    //正上
+    for(x=fromX-1,y=fromY;x>=0;x--)
+    {
+        if(board[x][y] == INT_MAX)
+        {
+            board[x][y] = d;
+            vecGetMovePos.push_back(x*10+y);
+        }
+        else if(board[x][y] == d)
+        {
+            continue;
+        }
+        else
+        {
+            break;
+        }
+    }
+    //checkDispalyMoveAction(vecGetMovePos);
+
+    //右上
+    for(x=fromX-1,y=fromY+1;x>=0 && y<=9 ;x--,y++)
+    {
+        if(board[x][y] == INT_MAX)
+        {
+            board[x][y] = d;
+            vecGetMovePos.push_back(x*10+y);
+        }
+        else if(board[x][y] == d)
+        {
+            continue;
+        }
+        else
+        {
+            break;
+        }
+    }
+
+    //正右
+    for(x=fromX,y=fromY+1;y<=9;y++)
+    {
+        if(board[x][y] == INT_MAX)
+        {
+            board[x][y] = d;
+            vecGetMovePos.push_back(x*10+y);
+        }
+        else if(board[x][y] == d)
+        {
+            continue;
+        }
+        else
+        {
+            break;
+        }
+    }
+
+    //右下
+    for(x=fromX+1,y=fromY+1;x<=9 && y<=9;x++,y++)
+    {
+        if(board[x][y] == INT_MAX)
+        {
+            board[x][y] = d;
+            vecGetMovePos.push_back(x*10+y);
+        }
+        else if(board[x][y] == d)
+        {
+            continue;
+        }
+        else
+        {
+            break;
+        }
+    }
+
+    //正下
+    for(x=fromX+1,y=fromY;x<=9;x++)
+    {
+        if(board[x][y] == INT_MAX)
+        {
+            board[x][y] = d;
+            vecGetMovePos.push_back(x*10+y);
+        }
+        else if(board[x][y] == d)
+        {
+            continue;
+        }
+        else
+        {
+            break;
+        }
+    }
+
+    //左下
+    for(x=fromX+1,y=fromY-1;x<=9 && y>=0;x++,y--)
+    {
+        if(board[x][y] == INT_MAX)
+        {
+            board[x][y] = d;
+            vecGetMovePos.push_back(x*10+y);
+        }
+        else if(board[x][y] == d)
+        {
+            continue;
+        }
+        else
+        {
+            break;
+        }
+    }
+
+    return vecGetMovePos;
+}
+
+double valueT1_Test(const boardArray& board, const queenArray& queenPos,int moveSide)
+{
+    int tempRedBoard[10][10],tempBlueBoard[10][10];
+    int i,j;
+    int d=1;
+    std::vector<int> vecExpand,vecRedQueen,vecBlueQueen;
+
+    double t1;
+    double territoryValue;
+    double k = 0;
+
+    //vecEmptySquares = getEmptySquares(board);//获得所有空格子位置
+    t1 = 0;//Queen距离估值,局面大致趋势
+
+    for(i=0;i<10;i++)
+    {
+        for(j=0;j<10;j++)
+        {
+            if(board[i][j] == EMPTY)
+            {
+                tempRedBoard[i][j] = INT_MAX;
+                tempBlueBoard[i][j] = INT_MAX;
+            }
+            else if(board[i][j] == RED_QUEEN)
+            {
+                tempRedBoard[i][j] = 0;
+                tempBlueBoard[i][j] = -1;
+            }
+            else if(board[i][j] == BLUE_QUEEN)
+            {
+                tempRedBoard[i][j] = -1;
+                tempBlueBoard[i][j] = 0;
+            }
+            else if(board[i][j] == STONE)
+            {
+                tempRedBoard[i][j] = -1;
+                tempBlueBoard[i][j] = -1;
+            }
+        }
+    }
+
+
+
+    //寻找红方皇后存入向量中
+    for(i=0;i<4;i++)
+    {
+        vecRedQueen.push_back(queenPos[0][i]);
+    }
+
+    //寻找蓝方皇后存入向量中
+    for(i=0;i<4;i++)
+    {
+        vecBlueQueen.push_back(queenPos[1][i]);
+    }
+
+    //红方
+    while(1)
+    {
+        for(i=0;i<vecRedQueen.size();i++)
+        {
+            vecExpand = fillExpandTerritory(tempRedBoard,vecRedQueen[i],vecExpand,d);
+        }
+
+        if(vecExpand.empty() == true)
+        {
+            break;
+        }
+
+        vecRedQueen = vecExpand;
+        vecExpand.clear();
+        d++;
+    }
+
+    d=1;
+
+    //蓝方
+    while(1)
+    {
+        for(i=0;i<vecBlueQueen.size();i++)
+        {
+            vecExpand = fillExpandTerritory(tempBlueBoard,vecBlueQueen[i],vecExpand,d);
+        }
+
+
+        if(vecExpand.empty() == true)
+        {
+            break;
+        }
+        vecBlueQueen = vecExpand;
+        vecExpand.clear();
+        d++;
+    }
+
+    for(i=0;i<10;i++)
+    {
+        for(j=0;j<10;j++)
+        {
+            if(tempRedBoard[i][j] > 0)
+            {
+                if(tempRedBoard[i][j] == tempBlueBoard[i][j] && tempRedBoard[i][j] == INT_MAX)
+                {
+                    ;
+                }
+                else if(tempRedBoard[i][j] == tempBlueBoard[i][j] && tempRedBoard[i][j] != INT_MAX)
+                {
+                    t1 += k;
+                }
+                else if(tempRedBoard[i][j] < tempBlueBoard[i][j])
+                {
+                    t1 += 1;
+                }
+                else if(tempRedBoard[i][j] > tempBlueBoard[i][j])
+                {
+                    t1 -= 1;
+                }
+
+                //c1 += 2 * ( pow(2,-tempRedBoard[i][j]) - pow(2,-tempBlueBoard[i][j]) );
+            }
+        }
+    }
+
+    territoryValue = t1;
+
+    if(moveSide == RED_SIDE)
+    {
+        //printf("(%f,%f,%f,%f,%f)",t1,c1,c2,t2,territoryValue);
+        return territoryValue;
+    }
+    if(moveSide == BLUE_SIDE)
+    {
+        //printf("(%f,%f,%f,%f,%f)",t1,c1,c2,t2,territoryValue);
+        return -territoryValue;
+    }
+}
+
+
 double valueT2(const boardArray& board,const queenArray& queenPos, int moveSide)
 {
     double value = 0;
@@ -621,24 +921,300 @@ double valueT2(const boardArray& board,const queenArray& queenPos, int moveSide)
     return moveSide == RED_SIDE ? value : -value;
 }
 
+std::vector<int> fillNeighborsEmptyPos(boardArray& board,int actionFrom,std::vector<int> vecNeighbors,int d)
+{
+    int i,j;
+    int fromX,fromY;
+    int toX,toY;
+
+    //vector<int> vecNeighbors;
+
+    //筛选条件
+    actionFrom/10 == 0 ? fromX=0 : fromX=actionFrom/10-1;
+    actionFrom/10 == 9 ? toX=9 : toX=actionFrom/10+1;
+    actionFrom%10 == 0 ? fromY=0 : fromY=actionFrom%10-1;
+    actionFrom%10 == 9 ? toY = 9 : toY = actionFrom%10+1;
+
+    //寻找周围坐标
+    for(i=fromX;i<=toX;i++)
+    {
+        for(j=fromY;j<=toY;j++)
+        {
+            if(i==actionFrom/10 && j==actionFrom%10)
+            {
+                ;
+            }
+            else if(board[i][j] == INT_MAX)
+            {
+                board[i][j] = d;
+                vecNeighbors.push_back(i*10+j);
+            }
+        }
+    }
+
+    return vecNeighbors;
+}
+
+double valueT2_Test(const boardArray& board, const queenArray& queenPos,int moveSide)
+{
+    int tempRedBoard[10][10],tempBlueBoard[10][10];
+    int i,j;
+    int d=1;
+    std::vector<int> vecExpand,vecRedQueen,vecBlueQueen;
+
+    double t2;
+    double territoryValue;
+
+    t2 = 0;//King距离估值,局面大致趋势
+
+    for(i=0;i<10;i++)
+    {
+        for(j=0;j<10;j++)
+        {
+            if(board[i][j] == EMPTY)
+            {
+                tempRedBoard[i][j] = INT_MAX;
+                tempBlueBoard[i][j] = INT_MAX;
+            }
+            else if(board[i][j] == RED_QUEEN)
+            {
+                tempRedBoard[i][j] = 0;
+                tempBlueBoard[i][j] = -1;
+            }
+            else if(board[i][j] == BLUE_QUEEN)
+            {
+                tempRedBoard[i][j] = -1;
+                tempBlueBoard[i][j] = 0;
+            }
+            else if(board[i][j] == STONE)
+            {
+                tempRedBoard[i][j] = -1;
+                tempBlueBoard[i][j] = -1;
+            }
+        }
+    }
+
+
+
+    //寻找红方皇后存入向量中
+    for(i=0;i<4;i++)
+    {
+        vecRedQueen.push_back(queenPos[0][i]);
+    }
+
+    //寻找蓝方皇后存入向量中
+    for(i=0;i<4;i++)
+    {
+        vecBlueQueen.push_back(queenPos[1][i]);
+    }
+
+    //红方
+    while(1)
+    {
+        for(i=0;i<vecRedQueen.size();i++)
+        {
+            vecExpand = fillNeighborsEmptyPos(tempRedBoard,vecRedQueen[i],vecExpand,d);
+        }
+
+        if(vecExpand.empty() == true)
+        {
+            break;
+        }
+
+        vecRedQueen = vecExpand;
+        vecExpand.clear();
+        d++;
+    }
+
+    d=1;
+
+    //蓝方
+    while(1)
+    {
+        for(i=0;i<vecBlueQueen.size();i++)
+        {
+            vecExpand = fillNeighborsEmptyPos(tempBlueBoard,vecBlueQueen[i],vecExpand,d);
+        }
+
+
+        if(vecExpand.empty() == true)
+        {
+            break;
+        }
+        vecBlueQueen = vecExpand;
+        vecExpand.clear();
+        d++;
+    }
+
+    for(i=0;i<10;i++)
+    {
+        for(j=0;j<10;j++)
+        {
+            if(tempRedBoard[i][j] > 0)
+            {
+                if(tempRedBoard[i][j] == tempBlueBoard[i][j] && tempRedBoard[i][j] == INT_MAX)
+                {
+                    ;
+                }
+                else if(tempRedBoard[i][j] == tempBlueBoard[i][j] && tempRedBoard[i][j] != INT_MAX)
+                {
+                    t2 += 0;
+                }
+                else if(tempRedBoard[i][j] < tempBlueBoard[i][j])
+                {
+                    t2 += 1;
+                }
+                else if(tempRedBoard[i][j] > tempBlueBoard[i][j])
+                {
+                    t2 -= 1;
+                }
+
+                //c1 += 2 * ( pow(2,-tempRedBoard[i][j]) - pow(2,-tempBlueBoard[i][j]) );
+            }
+        }
+    }
+
+    territoryValue = t2;
+
+    if(moveSide == RED_SIDE)
+    {
+        //printf("(%f,%f,%f,%f,%f)",t1,c1,c2,t2,territoryValue);
+        return territoryValue;
+    }
+    if(moveSide == BLUE_SIDE)
+    {
+        //printf("(%f,%f,%f,%f,%f)",t1,c1,c2,t2,territoryValue);
+        return -territoryValue;
+    }
+}
+
+
+
 double calculateOneQueenMobilityValue(const boardArray& board, int kingPosX, int kingPosY)
 {
+    int count;
+    int N;
+    int maxCount = 3;
     double mobilityValue = 0;
-    const int maxCount = 3;
+    //正左
+    count = 1;
+    while ((kingPosY - count) >= 0 && board[kingPosX][kingPosY - count] == EMPTY)
+    {
+        N = getNeighborsEmptyNumber(board, kingPosX, (kingPosY - count));
+        mobilityValue += N * pow(2, 1 - count);
+        count++;
 
-    for (int dir = 0; dir < 8; dir++) {
-        for (int count = 1; count <= maxCount; count++) {
-            int newX = kingPosX + dx[dir] * count;
-            int newY = kingPosY + dy[dir] * count;
+        if (count >= maxCount)
+        {
+            break;
+        }
+    }
 
-            // 检查边界
-            if (newX < 0 || newX > BOARD_SIZE-1 || newY < 0 || newY > BOARD_SIZE - 1 ||
-                board[newX][newY] != EMPTY) {
-                break;
-            }
 
-            int N = getNeighborsEmptyNumber(board, newX, newY);
-            mobilityValue += N * pow(2, 1 - count);
+    //左上
+
+    count = 1;
+    while ((kingPosX - count) >= 0 && (kingPosY - count) >= 0 && board[kingPosX - count][kingPosY - count] == EMPTY)
+    {
+        N = getNeighborsEmptyNumber(board, (kingPosX - count), (kingPosY - count));
+        mobilityValue += N * pow(2, 1 - count);
+        count++;
+
+        if (count >= maxCount)
+        {
+            break;
+        }
+    }
+
+
+    //正上
+    count = 1;
+    while ((kingPosX - count) >= 0 && board[kingPosX - count][kingPosY] == EMPTY)
+    {
+        N = getNeighborsEmptyNumber(board, (kingPosX - count), kingPosY);
+        mobilityValue += N * pow(2, 1 - count);
+        count++;
+
+        if (count >= maxCount)
+        {
+            break;
+        }
+    }
+
+
+    //右上
+    count = 1;
+    while ((kingPosX - count) >= 0 && (kingPosY + count) <= 9 && board[kingPosX - count][kingPosY + count] == EMPTY)
+    {
+        N = getNeighborsEmptyNumber(board, (kingPosX - count), (kingPosY + count));
+        mobilityValue += N * pow(2, 1 - count);
+        count++;
+
+        if (count >= maxCount)
+        {
+            break;
+        }
+    }
+
+
+    //正右
+    count = 1;
+    while ((kingPosY + count) <= 9 && board[kingPosX][kingPosY + count] == EMPTY)
+    {
+        N = getNeighborsEmptyNumber(board, kingPosX, (kingPosY + count));
+        mobilityValue += N * pow(2, 1 - count);
+        count++;
+
+        if (count >= maxCount)
+        {
+            break;
+        }
+    }
+
+
+    //右下
+    count = 1;
+    while ((kingPosX + count) <= 9 && (kingPosY + count) <= 9 && board[kingPosX + count][kingPosY + count] == EMPTY)
+    {
+        N = getNeighborsEmptyNumber(board, (kingPosX + count), (kingPosY + count));
+        mobilityValue += N * pow(2, 1 - count);
+        count++;
+
+        if (count >= maxCount)
+        {
+            break;
+        }
+    }
+
+
+    //正下
+    count = 1;
+
+    while ((kingPosX + count) <= 9 && board[kingPosX + count][kingPosY] == EMPTY)
+    {
+        N = getNeighborsEmptyNumber(board, (kingPosX + count), kingPosY);
+        mobilityValue += N * pow(2, 1 - count);
+        count++;
+
+        if (count >= maxCount)
+        {
+            break;
+        }
+    }
+
+
+    //左下
+    count = 1;
+
+    while ((kingPosX + count) <= 9 && (kingPosY - count) >= 0 && board[kingPosX + count][kingPosY - count] == EMPTY)
+    {
+        N = getNeighborsEmptyNumber(board, (kingPosX + count), (kingPosY - count));
+        mobilityValue += N * pow(2, 1 - count);
+        count++;
+
+        if (count >= maxCount)
+        {
+            break;
         }
     }
 
@@ -679,6 +1255,391 @@ double valueMobility(const boardArray& board,const queenArray& queenPos, int mov
     }
 
     return (moveSide == RED_SIDE) ? mobilityValue : -mobilityValue;
+}
+
+double valueMobility_Test(const boardArray& board,const queenArray& queenPos,int moveSide)
+{
+    int i;
+    int count;
+    int N;
+    int kingPosX,kingPosY;
+    double mobilityValue = 0;
+    double valueMRed[4];
+    double valueMBlue[4];
+    int maxCount = 3;
+
+    //红方
+    for(i=0;i<4;i++)
+    {
+        kingPosX = queenPos[0][i]/10;
+        kingPosY = queenPos[0][i]%10;
+
+        //正左
+        if(kingPosY > 0)
+        {
+            count = 1;
+
+            while(board[kingPosX][kingPosY-count] == EMPTY && (kingPosY-count) >= 0)
+            {
+                N = getNeighborsEmptyNumber(board,kingPosX * 10 + (kingPosY-count));
+                mobilityValue += N * pow(2,1-count);
+                count++;
+
+                if(count >= maxCount)
+                {
+                    break;
+                }
+            }
+        }
+
+        //左上
+        if(kingPosX > 0 && kingPosY > 0)
+        {
+            count = 1;
+
+            while(board[kingPosX-count][kingPosY-count] == EMPTY && (kingPosX-count) >=0 && (kingPosY-count) >= 0)
+            {
+                N = getNeighborsEmptyNumber(board,(kingPosX-count) * 10 + (kingPosY-count));
+                mobilityValue += N * pow(2,1-count);
+                count++;
+
+                if(count >= maxCount)
+                {
+                    break;
+                }
+            }
+        }
+
+        //正上
+        if(kingPosX > 0)
+        {
+            count = 1;
+
+            while(board[kingPosX-count][kingPosY] == EMPTY && (kingPosX-count) >=0)
+            {
+                N = getNeighborsEmptyNumber(board,(kingPosX-count) * 10 + kingPosY);
+                mobilityValue += N * pow(2,1-count);
+                count++;
+
+                if(count >= maxCount)
+                {
+                    break;
+                }
+            }
+        }
+
+        //右上
+        if(kingPosX > 0 && kingPosY < 9)
+        {
+            count = 1;
+
+            while(board[kingPosX-count][kingPosY+count] == EMPTY && (kingPosX-count) >=0 && (kingPosY+count) <= 9)
+            {
+                N = getNeighborsEmptyNumber(board,(kingPosX-count) * 10 + (kingPosY+count));
+                mobilityValue += N * pow(2,1-count);
+                count++;
+
+                if(count >= maxCount)
+                {
+                    break;
+                }
+            }
+        }
+
+        //正右
+        if(kingPosY < 9)
+        {
+            count = 1;
+
+            while(board[kingPosX][kingPosY+count] == EMPTY && (kingPosY+count) <=9)
+            {
+                N = getNeighborsEmptyNumber(board,kingPosX * 10 + (kingPosY+count));
+                mobilityValue += N * pow(2,1-count);
+                count++;
+
+                if(count >= maxCount)
+                {
+                    break;
+                }
+            }
+        }
+
+        //右下
+        if(kingPosX < 9 && kingPosY < 9)
+        {
+            count = 1;
+
+            while(board[kingPosX+count][kingPosY+count] == EMPTY && (kingPosX+count) <=9 && (kingPosY+count) <= 9)
+            {
+                N = getNeighborsEmptyNumber(board,(kingPosX+count) * 10 + (kingPosY+count));
+                mobilityValue += N * pow(2,1-count);
+                count++;
+
+                if(count >= maxCount)
+                {
+                    break;
+                }
+            }
+        }
+
+        //正下
+        if(kingPosX < 9)
+        {
+            count = 1;
+
+            while(board[kingPosX+count][kingPosY] == EMPTY && (kingPosX+count) <=9)
+            {
+                N = getNeighborsEmptyNumber(board,(kingPosX+count) * 10 + kingPosY);
+                mobilityValue += N * pow(2,1-count);
+                count++;
+
+                if(count >= maxCount)
+                {
+                    break;
+                }
+            }
+        }
+
+        //左下
+        if(kingPosX < 9 && kingPosY > 0)
+        {
+            count = 1;
+
+            while(board[kingPosX+count][kingPosY-count] == EMPTY && (kingPosX+count) <=9 && (kingPosY-count) >= 0)
+            {
+                N = getNeighborsEmptyNumber(board,(kingPosX+count) * 10 + (kingPosY-count));
+                mobilityValue += N * pow(2,1-count);
+                count++;
+
+                if(count >= maxCount)
+                {
+                    break;
+                }
+            }
+        }
+
+
+        valueMRed[i] = mobilityValue;
+        mobilityValue = 0;
+
+    }
+
+
+    //蓝方
+    for(i=0;i<4;i++)
+    {
+        kingPosX = queenPos[1][i]/10;
+        kingPosY = queenPos[1][i]%10;
+
+        //正左
+        if(kingPosY > 0)
+        {
+            count = 1;
+
+            while(board[kingPosX][kingPosY-count] == EMPTY && (kingPosY-count) >= 0)
+            {
+                N = getNeighborsEmptyNumber(board,kingPosX * 10 + (kingPosY-count));
+                mobilityValue += N * pow(2,1-count);
+                count++;
+
+                if(count >= maxCount)
+                {
+                    break;
+                }
+            }
+        }
+
+        //左上
+        if(kingPosX > 0 && kingPosY > 0)
+        {
+            count = 1;
+
+            while(board[kingPosX-count][kingPosY-count] == EMPTY && (kingPosX-count) >=0 && (kingPosY-count) >= 0)
+            {
+                N = getNeighborsEmptyNumber(board,(kingPosX-count) * 10 + (kingPosY-count));
+                mobilityValue += N * pow(2,1-count);
+                count++;
+
+                if(count >= maxCount)
+                {
+                    break;
+                }
+            }
+        }
+
+        //正上
+        if(kingPosX > 0)
+        {
+            count = 1;
+
+            while(board[kingPosX-count][kingPosY] == EMPTY && (kingPosX-count) >=0)
+            {
+                N = getNeighborsEmptyNumber(board,(kingPosX-count) * 10 + kingPosY);
+                mobilityValue += N * pow(2,1-count);
+                count++;
+
+                if(count >= maxCount)
+                {
+                    break;
+                }
+            }
+        }
+
+        //右上
+        if(kingPosX > 0 && kingPosY < 9)
+        {
+            count = 1;
+
+            while(board[kingPosX-count][kingPosY+count] == EMPTY && (kingPosX-count) >=0 && (kingPosY+count) <= 9)
+            {
+                N = getNeighborsEmptyNumber(board,(kingPosX-count) * 10 + (kingPosY+count));
+                mobilityValue += N * pow(2,1-count);
+                count++;
+
+                if(count >= maxCount)
+                {
+                    break;
+                }
+            }
+        }
+
+        //正右
+        if(kingPosY < 9)
+        {
+            count = 1;
+
+            while(board[kingPosX][kingPosY+count] == EMPTY && (kingPosY+count) <=9)
+            {
+                N = getNeighborsEmptyNumber(board,kingPosX * 10 + (kingPosY+count));
+                mobilityValue += N * pow(2,1-count);
+                count++;
+
+                if(count >= maxCount)
+                {
+                    break;
+                }
+            }
+        }
+
+        //右下
+        if(kingPosX < 9 && kingPosY < 9)
+        {
+            count = 1;
+
+            while(board[kingPosX+count][kingPosY+count] == EMPTY && (kingPosX+count) <=9 && (kingPosY+count) <= 9)
+            {
+                N = getNeighborsEmptyNumber(board,(kingPosX+count) * 10 + (kingPosY+count));
+                mobilityValue += N * pow(2,1-count);
+                count++;
+
+                if(count >= maxCount)
+                {
+                    break;
+                }
+            }
+        }
+
+        //正下
+        if(kingPosX < 9)
+        {
+            count = 1;
+
+            while(board[kingPosX+count][kingPosY] == EMPTY && (kingPosX+count) <=9)
+            {
+                N = getNeighborsEmptyNumber(board,(kingPosX+count) * 10 + kingPosY);
+                mobilityValue += N * pow(2,1-count);
+                count++;
+
+                if(count >= maxCount)
+                {
+                    break;
+                }
+            }
+        }
+
+        //左下
+        if(kingPosX < 9 && kingPosY > 0)
+        {
+            count = 1;
+
+            while(board[kingPosX+count][kingPosY-count] == EMPTY && (kingPosX+count) <=9 && (kingPosY-count) >= 0)
+            {
+                N = getNeighborsEmptyNumber(board,(kingPosX+count) * 10 + (kingPosY-count));
+                mobilityValue += N * pow(2,1-count);
+                count++;
+
+                if(count >= maxCount)
+                {
+                    break;
+                }
+            }
+        }
+
+        valueMBlue[i] = mobilityValue;
+        mobilityValue = 0;
+
+    }
+
+    mobilityValue = 0;
+
+    /*for(i=0;i<4;i++)
+    {
+        mobilityValue += (double)30 / (5 + valueMBlue[i]);
+
+        mobilityValue -= (double)30 / (5 + valueMRed[i]);
+    }*/
+
+for(i=0;i<4;i++)
+    {
+        if(valueMBlue[i] <= 5)
+        {
+            mobilityValue += -0.4 * valueMBlue[i] + 7;
+            /*if(valueMBlue[i] == 0)
+            {
+                mobilityValue += 7;
+            }
+            else
+            {
+                mobilityValue += 5.5;
+            }*/
+
+        }
+        else
+        {
+            mobilityValue += (double)85 / (12 + valueMBlue[i]);
+        }
+
+        if(valueMRed[i] <= 5)
+        {
+            mobilityValue -= -0.4 * valueMRed[i] + 7;
+            /*if(valueMRed[i] == 0)
+            {
+                mobilityValue -= 7;
+            }
+            else
+            {
+                mobilityValue -= 5.5;
+            }*/
+        }
+        else
+        {
+            mobilityValue -= (double)85 / (12 + valueMRed[i]);//85,12//187.5,32.5
+        }
+    }
+    /*for(i=0;i<4;i++)
+    {
+        mobilityValue -= valueMBlue[i];
+        mobilityValue += valueMRed[i];
+    }*/
+
+    if(moveSide == RED_SIDE)
+    {
+        return mobilityValue;
+    }
+    if(moveSide == BLUE_SIDE)
+    {
+        return -mobilityValue;
+    }
 }
 
 // 获得某一点周围一圈邻接为空的个数
@@ -722,6 +1683,22 @@ double valueAll(const boardArray& board, const queenArray& queenPos, int moveSid
     double t1 = valueT1(board, queenPos, moveSide, &w);
     double t2 = valueT2(board, queenPos, moveSide);
     double m = valueMobility(board, queenPos, moveSide);
+
+
+    double t1Test = valueT1_Test(board, queenPos, moveSide);
+    if(t1!=t1Test){
+        printf("!!!!t1!=t1Test!!![%f,%f]\n",t1,t1Test);
+    }
+
+    double t2Test = valueT2_Test(board, queenPos, moveSide);
+    if(t2!=t2Test){
+        printf("!!!!t2!=t2Test!!![%f,%f]\n",t2,t2Test);
+    }
+
+    double mTest = valueMobility(board, queenPos, moveSide);
+    if(m!=mTest){
+        printf("!!!!mTest!=mTest!!![%f,%f]\n",m,mTest);
+    }
 
     double k1, k2, k3;
     if (w >= 0 && w <= 14) {
@@ -1164,7 +2141,9 @@ void InitializeRandomSeed() {
 //uct算法
 UctRes  uctAll(const boardArray& board,const queenArray& queenPos, int moveSide, double calTime,bool isDisplayInfo)
 {
-    InitializeRandomSeed();
+
+
+    //displayBoard(board);
 
     double uctTime = calTime;
 
@@ -1304,7 +2283,9 @@ void convert_pylist_to_carray(py::list py_queens, queenArray& c_queens) {
 class AmazonasAI {
 public:
     // 构造函数：无状态类，无需参数
-    AmazonasAI() {}
+    AmazonasAI() {
+        InitializeRandomSeed();
+    }
     ~AmazonasAI() {}
 
     // 核心函数：包装并调用原始的 uctAll

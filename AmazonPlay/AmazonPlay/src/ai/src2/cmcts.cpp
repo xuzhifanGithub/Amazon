@@ -623,22 +623,129 @@ double valueT2(const boardArray& board,const queenArray& queenPos, int moveSide)
 
 double calculateOneQueenMobilityValue(const boardArray& board, int kingPosX, int kingPosY)
 {
+    int count;
+    int N;
+    int maxCount = 3;
     double mobilityValue = 0;
-    const int maxCount = 3;
+    //正左
+    count = 1;
+    while ((kingPosY - count) >= 0 && board[kingPosX][kingPosY - count] == EMPTY)
+    {
+        N = getNeighborsEmptyNumber(board, kingPosX, (kingPosY - count));
+        mobilityValue += N * pow(2, 1 - count);
+        count++;
 
-    for (int dir = 0; dir < 8; dir++) {
-        for (int count = 1; count <= maxCount; count++) {
-            int newX = kingPosX + dx[dir] * count;
-            int newY = kingPosY + dy[dir] * count;
+        if (count >= maxCount)
+        {
+            break;
+        }
+    }
 
-            // 检查边界
-            if (newX < 0 || newX > BOARD_SIZE-1 || newY < 0 || newY > BOARD_SIZE - 1 ||
-                board[newX][newY] != EMPTY) {
-                break;
-            }
 
-            int N = getNeighborsEmptyNumber(board, newX, newY);
-            mobilityValue += N * pow(2, 1 - count);
+    //左上
+
+    count = 1;
+    while ((kingPosX - count) >= 0 && (kingPosY - count) >= 0 && board[kingPosX - count][kingPosY - count] == EMPTY)
+    {
+        N = getNeighborsEmptyNumber(board, (kingPosX - count), (kingPosY - count));
+        mobilityValue += N * pow(2, 1 - count);
+        count++;
+
+        if (count >= maxCount)
+        {
+            break;
+        }
+    }
+
+
+    //正上
+    count = 1;
+    while ((kingPosX - count) >= 0 && board[kingPosX - count][kingPosY] == EMPTY)
+    {
+        N = getNeighborsEmptyNumber(board, (kingPosX - count), kingPosY);
+        mobilityValue += N * pow(2, 1 - count);
+        count++;
+
+        if (count >= maxCount)
+        {
+            break;
+        }
+    }
+
+
+    //右上
+    count = 1;
+    while ((kingPosX - count) >= 0 && (kingPosY + count) <= 9 && board[kingPosX - count][kingPosY + count] == EMPTY)
+    {
+        N = getNeighborsEmptyNumber(board, (kingPosX - count), (kingPosY + count));
+        mobilityValue += N * pow(2, 1 - count);
+        count++;
+
+        if (count >= maxCount)
+        {
+            break;
+        }
+    }
+
+
+    //正右
+    count = 1;
+    while ((kingPosY + count) <= 9 && board[kingPosX][kingPosY + count] == EMPTY)
+    {
+        N = getNeighborsEmptyNumber(board, kingPosX, (kingPosY + count));
+        mobilityValue += N * pow(2, 1 - count);
+        count++;
+
+        if (count >= maxCount)
+        {
+            break;
+        }
+    }
+
+
+    //右下
+    count = 1;
+    while ((kingPosX + count) <= 9 && (kingPosY + count) <= 9 && board[kingPosX + count][kingPosY + count] == EMPTY)
+    {
+        N = getNeighborsEmptyNumber(board, (kingPosX + count), (kingPosY + count));
+        mobilityValue += N * pow(2, 1 - count);
+        count++;
+
+        if (count >= maxCount)
+        {
+            break;
+        }
+    }
+
+
+    //正下
+    count = 1;
+
+    while ((kingPosX + count) <= 9 && board[kingPosX + count][kingPosY] == EMPTY)
+    {
+        N = getNeighborsEmptyNumber(board, (kingPosX + count), kingPosY);
+        mobilityValue += N * pow(2, 1 - count);
+        count++;
+
+        if (count >= maxCount)
+        {
+            break;
+        }
+    }
+
+
+    //左下
+    count = 1;
+
+    while ((kingPosX + count) <= 9 && (kingPosY - count) >= 0 && board[kingPosX + count][kingPosY - count] == EMPTY)
+    {
+        N = getNeighborsEmptyNumber(board, (kingPosX + count), (kingPosY - count));
+        mobilityValue += N * pow(2, 1 - count);
+        count++;
+
+        if (count >= maxCount)
+        {
+            break;
         }
     }
 

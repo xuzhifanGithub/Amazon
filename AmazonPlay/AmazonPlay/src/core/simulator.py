@@ -18,6 +18,7 @@ class AmazonsSimulator:
         self.board = np.zeros((size, size), dtype=np.int8)
         self.current_player = BLACK_AMAZON
         self.history = []
+        self.history_do_chess = []
         self.game_over = False
         self.winner = 0
         self.reset()
@@ -36,32 +37,17 @@ class AmazonsSimulator:
         self.board[self.size - 1, self.size//2 - 2] = BLACK_AMAZON
         self.board[self.size - 1, self.size//2 + 1] = BLACK_AMAZON
 
-
-        # 白方 (玩家1)
-        # self.board[0, 3] = WHITE_AMAZON
-        # self.board[0, 6] = WHITE_AMAZON
-        # self.board[3, 0] = WHITE_AMAZON
-        # self.board[3, 9] = WHITE_AMAZON
-        # # 黑方 (玩家-1)
-        # self.board[6, 0] = BLACK_AMAZON
-        # self.board[6, 9] = BLACK_AMAZON
-        # self.board[9, 3] = BLACK_AMAZON
-        # self.board[9, 6] = BLACK_AMAZON
-
         self.current_player = BLACK_AMAZON
         # 历史记录只保存棋盘状态，开局时保存一次
         self.history = [self.board.copy()]
         self.game_over = False
         self.winner = 0
 
-    def save_state(self):
-        """保存当前棋盘状态到历史记录中。"""
-        self.history.append(self.board.copy())
-
     def undo(self):
         """悔棋，撤销最近的一步棋。"""
         if len(self.history) > 1:
             self.history.pop()  # 弹出当前棋盘状态
+            self.history_do_chess.pop()
             self.board = self.history[-1].copy() # 恢复到上一步的棋盘状态
             self.current_player *= -1 # 将玩家顺序反转回来
             self.game_over = False
@@ -117,9 +103,11 @@ class AmazonsSimulator:
         self.board[start_pos] = EMPTY
         self.board[arrow_pos] = OBSTACLE
 
+        self.history_do_chess.append((start_pos, move_pos, arrow_pos))
+
         # 先切换玩家，再保存状态
         self.current_player *= -1
-        self.save_state()
+        self.history.append(self.board.copy())
 
         # 检查游戏是否结束
         self.check_game_over()

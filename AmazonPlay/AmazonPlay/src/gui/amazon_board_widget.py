@@ -74,7 +74,7 @@ class BoardWidget(QWidget):
     负责绘制棋盘、棋子、高亮提示，并处理用户的三步式落子操作。
     为动画效果提供属性接口，并增加鼠标悬停效果。
     """
-    turn_made = pyqtSignal(tuple, tuple, tuple)
+    mouse_genmove_completed = pyqtSignal(tuple, tuple, tuple)
     game_over_signal = pyqtSignal(str)
 
     def __init__(self, simulator, parent=None, color_scheme: str = DEFAULT_COLOR_SCHEME):  # <-- 增加 color_scheme 参数
@@ -318,7 +318,7 @@ class BoardWidget(QWidget):
 
         elif self.game_phase == AWAITING_ARROW_DESTINATION:
             if (row, col) in self.valid_moves:
-                self.turn_made.emit(self.selected_piece_pos, self.moved_piece_pos, (row, col))
+                self.mouse_genmove_completed.emit(self.selected_piece_pos, self.moved_piece_pos, (row, col))
             else:
                 self.reset_selection()
 
@@ -362,7 +362,6 @@ class BoardWidget(QWidget):
     def set_color_scheme(self, scheme_key: str):
         """
         更改棋盘的配色方案。
-        :param scheme_key: 'BW' (经典黑白)、'RB' (红蓝对决)、'GS' (森林绿意) 或 'PS' (梦幻紫韵)。
         """
         scheme_key = scheme_key.upper()
         if scheme_key in COLOR_SCHEMES:
