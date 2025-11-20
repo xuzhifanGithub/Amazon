@@ -1,0 +1,261 @@
+2025-11-21 01:28:41+0800: GTP Engine starting...
+2025-11-21 01:28:41+0800: KataGo v1.10.0
+2025-11-21 01:28:41+0800: Using default rules initially, unless GTP/GUI overrides this
+2025-11-21 01:28:41+0800: Using 20 CPU thread(s) for search
+2025-11-21 01:28:41+0800: nnRandSeed0 = 1007999682965514395
+2025-11-21 01:28:41+0800: After dedups: nnModelFile0 = ./src/ai/amazons_engine/weights/amazons10x10.bin.gz useFP16 auto useNHWC auto
+2025-11-21 01:28:41+0800: Initializing neural net buffer to be size 10 * 10 exactly
+2025-11-21 01:28:41+0800: Found OpenCL Platform 0: NVIDIA CUDA (NVIDIA Corporation) (OpenCL 3.0 CUDA 13.0.84)
+2025-11-21 01:28:41+0800: Found 1 device(s) on platform 0 with type CPU or GPU or Accelerator
+2025-11-21 01:28:41+0800: Found OpenCL Device 0: NVIDIA GeForce GTX 1650 (NVIDIA Corporation) (score 11000300)
+2025-11-21 01:28:41+0800: Creating context for OpenCL Platform: NVIDIA CUDA (NVIDIA Corporation) (OpenCL 3.0 CUDA 13.0.84)
+2025-11-21 01:28:41+0800: Using OpenCL Device 0: NVIDIA GeForce GTX 1650 (NVIDIA Corporation) OpenCL 3.0 CUDA (Extensions: cl_khr_global_int32_base_atomics cl_khr_global_int32_extended_atomics cl_khr_local_int32_base_atomics cl_khr_local_int32_extended_atomics cl_khr_fp64 cl_khr_3d_image_writes cl_khr_byte_addressable_store cl_khr_icd cl_khr_gl_sharing cl_nv_compiler_options cl_nv_device_attribute_query cl_nv_pragma_unroll cl_nv_d3d10_sharing cl_khr_d3d10_sharing cl_nv_d3d11_sharing cl_nv_copy_opts cl_nv_create_buffer cl_khr_int64_base_atomics cl_khr_int64_extended_atomics cl_khr_device_uuid cl_khr_pci_bus_info cl_khr_external_semaphore cl_khr_external_memory cl_khr_external_semaphore_win32 cl_khr_external_memory_win32 cl_khr_semaphore)
+2025-11-21 01:28:42+0800: Loaded tuning parameters from: D:\Amazon\AmazonPlay\AmazonPlay\src\ai\amazons_engine\engine/KataGoData/opencltuning/tune8_gpuNVIDIAGeForceGTX1650_x10_y10_c256_mv10.txt
+2025-11-21 01:28:42+0800: OpenCL backend thread 0: Device 0 Model version 10
+2025-11-21 01:28:42+0800: OpenCL backend thread 0: Device 0 Model name: amazons8x-b20c256-s182755840-d39606896
+2025-11-21 01:28:43+0800: OpenCL backend thread 0: Device 0 FP16Storage false FP16Compute false FP16TensorCores false
+2025-11-21 01:28:43+0800: Loaded neural net with nnXLen 10 nnYLen 10
+2025-11-21 01:28:43+0800: Initializing board with boardXSize 10 boardYSize 10
+2025-11-21 01:28:43+0800: --------------
+2025-11-21 01:28:43+0800: WARNING: Config had unused keys! You may have a typo, an option you specified is being unused from ./src/ai/amazons_engine/engine.cfg
+2025-11-21 01:28:43+0800: WARNING: Unused key 'gpuToUseThread1' in ./src/ai/amazons_engine/engine.cfg
+2025-11-21 01:28:43+0800: WARNING: Unused key 'gpuToUseThread2' in ./src/ai/amazons_engine/engine.cfg
+2025-11-21 01:28:43+0800: WARNING: Unused key 'gpuToUseThread3' in ./src/ai/amazons_engine/engine.cfg
+2025-11-21 01:28:43+0800: WARNING: Unused key 'hasButton' in ./src/ai/amazons_engine/engine.cfg
+2025-11-21 01:28:43+0800: WARNING: Unused key 'koRule' in ./src/ai/amazons_engine/engine.cfg
+2025-11-21 01:28:43+0800: WARNING: Unused key 'multiStoneSuicideLegal' in ./src/ai/amazons_engine/engine.cfg
+2025-11-21 01:28:43+0800: WARNING: Unused key 'scoringRule' in ./src/ai/amazons_engine/engine.cfg
+2025-11-21 01:28:43+0800: WARNING: Unused key 'searchFactorAfterOnePass' in ./src/ai/amazons_engine/engine.cfg
+2025-11-21 01:28:43+0800: WARNING: Unused key 'searchFactorAfterTwoPass' in ./src/ai/amazons_engine/engine.cfg
+2025-11-21 01:28:43+0800: WARNING: Unused key 'whiteHandicapBonus' in ./src/ai/amazons_engine/engine.cfg
+2025-11-21 01:28:43+0800: --------------
+2025-11-21 01:28:43+0800: Loaded config ./src/ai/amazons_engine/engine.cfg
+2025-11-21 01:28:43+0800: Loaded model ./src/ai/amazons_engine/weights/amazons10x10.bin.gz
+2025-11-21 01:28:43+0800: Model name: amazons8x-b20c256-s182755840-d39606896
+2025-11-21 01:28:43+0800: GTP ready, beginning main protocol loop
+2025-11-21 01:28:43+0800: Controller: boardsize 10
+2025-11-21 01:28:43+0800: = 
+2025-11-21 01:28:43+0800: Controller: clear_board
+2025-11-21 01:28:43+0800: = 
+2025-11-21 01:28:43+0800: Controller: time_settings 0 1 1
+2025-11-21 01:28:43+0800: = 
+2025-11-21 01:28:43+0800: Controller: genmove b
+2025-11-21 01:28:44+0800: MoveNum: 0 HASH: 6E5564C716843759786F497EFEA886BD
+   A B C D E F G H J K
+10 . . . X . . X . . .
+ 9 . . . . . . . . . .
+ 8 . . . . . . . . . .
+ 7 X . . . . . . . . X
+ 6 . . . . . . . . . .
+ 5 . . . . . . . . . .
+ 4 O . . . . . . . . O
+ 3 . . . . . . . . . .
+ 2 . . . . . . . . . .
+ 1 . . . O . . O . . .
+
+taxNONEkomi7.5
+Time taken: 0.531
+Root visits: 163
+New playouts: 163
+NN rows: 196
+NN batches: 15
+NN avg batch size: 13.0667
+PV: G10 G3 D3 K4 F8 B8
+Tree:
+: T   7.14c W   7.14c S  -0.00c ( -0.6 L  -0.0) N     163  --  G10 G3 D3 K4 F8 B8
+---Black(^)---
+G10 : T   7.64c W   7.64c S  -0.00c ( -0.8 L  -0.5) LCB    4.72c P 41.39% WF  44.6 PSV      49 N      47  --  G10 G3 D3 K4 F8 B8
+D10 : T   7.91c W   7.91c S  -0.00c ( -0.9 L  -0.5) LCB    4.40c P 36.84% WF  42.4 PSV      43 N      44  --  D10 D3 G3 G1 B6
+K7  : T   6.28c W   6.28c S  -0.00c ( -0.3 L  +0.5) LCB    0.56c P 11.48% WF  31.2 PSV       9 N      34  --  K7 G4 D4 K4 F8 D8 A7 C5
+A7  : T   6.57c W   6.57c S  -0.00c ( -0.3 L  +0.6) LCB    1.40c P 10.25% WF  33.0 PSV       8 N      35  --  A7 D4 G4 K4 F8 F9 K7
+pss : T -100.00c W -100.00c S  -0.00c ( -0.0 L  -0.0) LCB -200.00c P  0.05% WF   0.1 PSV       0 N       2  --  pass
+
+2025-11-21 01:28:44+0800: = G10
+2025-11-21 01:28:44+0800: Controller: genmove w
+2025-11-21 01:28:44+0800: MoveNum: 1 HASH: 6BC26F8317D4CC681476D7F369C11C8B
+   A B C D E F G H J K
+10 . . . X . . X1. . .
+ 9 . . . . . . . . . .
+ 8 . . . . . . . . . .
+ 7 X . . . . . . . . X
+ 6 . . . . . . . . . .
+ 5 . . . . . . . . . .
+ 4 O . . . . . . . . O
+ 3 . . . . . . @ . . .
+ 2 . . . . . . . . . .
+ 1 . . . O . . O . . .
+
+taxNONEkomi7.5
+Time taken: 0.531
+Root visits: 333
+New playouts: 280
+NN rows: 285
+NN batches: 23
+NN avg batch size: 12.3913
+PV: G3 D3 K4 F8 B8 K7 E2 C2 D1 D2
+Tree:
+: T   8.21c W   8.21c S  -0.00c ( -0.1 L  +1.4) N     333  --  G3 D3 K4 F8 B8 K7 E2
+---Black(^)---
+G3  : T  10.63c W  10.63c S  -0.00c ( -0.1 L  +1.5) LCB    8.35c P 57.03% WF 126.3 PSV     123 N     123  --  G3 D3 K4 F8 B8 K7 E2 C2
+G2  : T  10.77c W  10.77c S   0.00c ( +0.1 L  +2.1) LCB    6.87c P 18.70% WF  65.5 PSV      42 N      64  --  G2 D2 D1 J6 J7 K7 H9 H2
+G4  : T   7.70c W   7.70c S  -0.00c ( -0.6 L  +0.8) LCB    3.58c P  8.66% WF  41.4 PSV       9 N      42  --  G4 D4 K4 F8 J8 A7 A5 B5
+G5  : T   7.23c W   7.23c S   0.00c ( +0.3 L  +1.8) LCB    2.42c P  5.05% WF  37.0 PSV       5 N      40  --  G5 D2 D1 H5 E2 K7 H7
+B5  : T   5.93c W   5.93c S  -0.00c ( -0.2 L  +0.4) LCB   -0.77c P  2.92% WF  21.1 PSV       2 N      23  --  B5 B4 D1 D8 E9 A7 E3
+G6  : T   3.88c W   3.88c S  -0.00c ( -0.2 L  +0.3) LCB   -8.46c P  1.96% WF  11.5 PSV       1 N      12  --  G6 D3 D1 H5 C5 D10
+C6  : T   0.29c W   0.29c S  -0.00c ( -0.5 L  -1.2) LCB  -10.76c P  1.59% WF   8.4 PSV       0 N       9  --  C6 G2 D1 D8 B6 A7
+G8  : T  -2.57c W  -2.57c S  -0.00c ( -1.0 L  -2.1) LCB  -39.85c P  0.71% WF   3.7 PSV       0 N       4  --  G8 B3 D1 D8
+D7  : T  -5.13c W  -5.13c S  -0.00c ( -0.2 L  -1.5) LCB -157.97c P  1.12% WF   2.7 PSV       0 N       3  --  D7 D2 G1
+G7  : T  -5.28c W  -5.28c S   0.00c ( +2.6 L  +3.0) LCB -200.00c P  0.90% WF   0.9 PSV       0 N       1  --  G7
+
+2025-11-21 01:28:44+0800: = G3
+2025-11-21 01:28:44+0800: Controller: genmove b
+2025-11-21 01:28:45+0800: MoveNum: 2 HASH: 23D27EDA5BAA76D96A7EF769AA3CF914
+   A B C D E F G H J K
+10 . . . X . . .1. . .
+ 9 . . . . . . . . . .
+ 8 . . . . . . . . . .
+ 7 X . . . . . . . . X
+ 6 . . . . . . . . . .
+ 5 . . . . . . . . . .
+ 4 O . . . . . . . . O
+ 3 . . . @ . . X2. . .
+ 2 . . . . . . . . . .
+ 1 . . . O . . O . . .
+
+taxNONEkomi7.5
+Time taken: 0.532
+Root visits: 406
+New playouts: 277
+NN rows: 285
+NN batches: 24
+NN avg batch size: 11.875
+PV: D3 D1 H5 C5 A7 A6 H6 K4 D4 D9 D10
+Tree:
+: T  10.96c W  10.96c S  -0.00c ( -0.6 L  +0.8) N     406  --  D3 D1 H5 C5 A7 A6 H6
+---Black(^)---
+D3  : T  13.35c W  13.35c S  -0.00c ( -0.5 L  +1.5) LCB   11.69c P 51.03% WF 218.6 PSV     212 N     212  --  D3 D1 H5 C5 A7 A6 H6 K4
+F2  : T  11.55c W  11.55c S  -0.00c ( -0.9 L  +0.6) LCB    6.81c P  8.71% WF  62.9 PSV      17 N      63  --  F2 D1 D8 B6 A7 A6 F1 G1
+J5  : T   8.47c W   8.47c S  -0.00c ( -1.1 L  -0.4) LCB    4.35c P 10.17% WF  37.5 PSV      11 N      39  --  J5 D1 D8 B6 A7 F7 J4 K4
+H2  : T   6.98c W   6.98c S  -0.00c ( -0.4 L  +0.3) LCB    1.32c P  5.03% WF  24.7 PSV       4 N      26  --  H2 D1 D8 B6 D10 J5 J4 K4
+J3  : T   5.05c W   5.05c S  -0.00c ( -0.7 L  -0.5) LCB   -0.94c P  3.98% WF  18.7 PSV       2 N      20  --  J3 D1 D8 B6 D10 H6 H4 K4
+B3  : T   5.53c W   5.53c S  -0.00c ( -0.2 L  +0.3) LCB   -0.85c P  3.28% WF  13.2 PSV       2 N      14  --  B3 D1 D8 B6 A7 G7 J5
+D6  : T   7.45c W   7.45c S  -0.00c ( -0.5 L  -0.2) LCB   -1.80c P  2.19% WF  13.4 PSV       2 N      14  --  D6 K4 E9 B6 A7 F7
+G2  : T   2.87c W   2.87c S  -0.00c ( -0.2 L  -0.5) LCB  -49.83c P  2.54% WF   4.7 PSV       1 N       5  --  G2 D1 D8 B6 A7
+H4  : T   2.53c W   2.53c S  -0.00c ( -2.1 L  -3.4) LCB -172.55c P  2.00% WF   2.8 PSV       1 N       3  --  H4 D1
+E1  : T   1.52c W   1.52c S  -0.00c ( -2.2 L  -3.4) LCB -200.00c P  1.89% WF   1.9 PSV       1 N       2  --  E1 D1
+
+2025-11-21 01:28:45+0800: = D3
+2025-11-21 01:28:50+0800: Controller: play w G1
+2025-11-21 01:28:50+0800: = 
+2025-11-21 01:28:50+0800: Controller: play b B6
+2025-11-21 01:28:50+0800: = 
+2025-11-21 01:28:50+0800: Controller: play w J6
+2025-11-21 01:28:50+0800: = 
+2025-11-21 01:28:50+0800: Controller: time_settings 0 1 1
+2025-11-21 01:28:50+0800: = 
+2025-11-21 01:28:50+0800: Controller: genmove b
+2025-11-21 01:28:51+0800: MoveNum: 6 HASH: 405BA5F5801B7FF201A7687286662276
+   A B C D E F G H J K
+10 . . . X . . . . . .
+ 9 . . . . . . . . . .
+ 8 . . . . . . . . . .
+ 7 X . . . . . . . . X
+ 6 . O2. . . . . . B3.
+ 5 . . . . . . . . . .
+ 4 O . . . . . . . . O
+ 3 . . . B . . X . . .
+ 2 . . . . . . . . . .
+ 1 . . . O . . .1. . .
+
+taxNONEkomi7.5
+Time taken: 0.563
+Root visits: 391
+New playouts: 301
+NN rows: 320
+NN batches: 24
+NN avg batch size: 13.3333
+PV: D10 F8 J5 K4 H4 H2 K7 H7 D7 A4
+Tree:
+: T  15.40c W  15.40c S  -0.00c ( -0.9 L  +1.2) N     391  --  D10 F8 J5 K4 H4 H2 K7
+---Black(^)---
+D10 : T  16.70c W  16.70c S  -0.00c ( -1.3 L  +0.9) LCB   13.66c P 38.59% WF 180.2 PSV     177 N     177  --  D10 F8 J5 K4 H4 H2 K7 H7
+K7  : T  15.93c W  15.93c S  -0.00c ( -0.6 L  +1.7) LCB   13.35c P 36.65% WF 136.2 PSV     117 N     136  --  K7 H9 H6 A4 E8 B8 D10 D4
+A7  : T  11.75c W  11.75c S  -0.00c ( -0.8 L  +0.9) LCB    5.73c P 19.68% WF  53.3 PSV      23 N      56  --  A7 A5 J5 K4 H4 H2 K7 C7
+G3  : T  10.93c W  10.93c S  -0.00c ( -0.7 L  +1.2) LCB    2.86c P  5.04% WF  19.1 PSV       5 N      20  --  G3 H4 J5 A4 E8 J8 K7 F7
+pss : T -100.00c W -100.00c S  -0.00c ( -0.0 L  -0.0) LCB -200.00c P  0.04% WF   0.2 PSV       0 N       1  --  pass
+
+2025-11-21 01:28:51+0800: = D10
+2025-11-21 01:28:51+0800: Controller: genmove w
+2025-11-21 01:28:51+0800: MoveNum: 7 HASH: A077D835260F1F7764ED4F31F0122EC6
+   A B C D E F G H J K
+10 . . . X3. . . . . .
+ 9 . . . . . . . . . .
+ 8 . . . . . @ . . . .
+ 7 X . . . . . . . . X
+ 6 . O1. . . . . . B2.
+ 5 . . . . . . . . . .
+ 4 O . . . . . . . . O
+ 3 . . . B . . X . . .
+ 2 . . . . . . . . . .
+ 1 . . . O . . . . . .
+
+taxNONEkomi7.5
+Time taken: 0.547
+Root visits: 472
+New playouts: 286
+NN rows: 295
+NN batches: 24
+NN avg batch size: 12.2917
+PV: F8 J5 K4 H4 H3 K7 H7 F9 D1
+Tree:
+: T  17.56c W  17.56c S  -0.00c ( -1.1 L  +1.4) N     472  --  F8 J5 K4 H4 H3 K7 H7
+---Black(^)---
+F8  : T  20.21c W  20.21c S  -0.00c ( -1.3 L  +1.7) LCB   16.36c P 18.57% WF 136.7 PSV     143 N     132  --  F8 J5 K4 H4 H3 K7 H7 F9
+H6  : T  20.15c W  20.15c S  -0.00c ( -1.2 L  +1.5) LCB   15.94c P 18.02% WF 131.9 PSV     123 N     128  --  H6 C6 B6 D8 B6 K7 F7 J4
+D4  : T  18.03c W  18.03c S  -0.00c ( -1.0 L  +1.5) LCB   13.59c P 14.57% WF  70.2 PSV      41 N      70  --  D4 J4 A4 E8 B8 K7 H9 H6
+D5  : T  12.65c W  12.65c S  -0.00c ( -0.7 L  +0.7) LCB    4.85c P 28.64% WF  70.7 PSV      32 N      76  --  D5 J5 A4 E8 J8 K7 G7 F8
+D6  : T  13.03c W  13.03c S  -0.00c ( -0.3 L  +2.1) LCB    6.62c P  8.02% WF  32.2 PSV       9 N      34  --  D6 H6 A4 F9 J9 K7 F7 J4
+J5  : T  10.30c W  10.30c S  -0.00c ( -1.8 L  -1.0) LCB   -6.20c P  4.08% WF  11.2 PSV       3 N      12  --  J5 J4 K4 H2 H9 K7
+G7  : T   9.93c W   9.93c S  -0.00c ( -0.6 L  +0.6) LCB    3.92c P  2.27% WF   9.3 PSV       1 N      10  --  G7 J5 A4 E8 J8 K7
+E9  : T   8.02c W   8.02c S  -0.00c ( -2.1 L  -1.2) LCB -128.71c P  1.63% WF   3.7 PSV       1 N       4  --  E9 J5 A4 E8
+D7  : T   6.26c W   6.26c S  -0.00c ( -1.2 L  -0.7) LCB -405.79c P  1.72% WF   2.8 PSV       1 N       3  --  D7 G7 B6
+D8  : T   6.17c W   6.17c S  -0.00c ( -0.6 L  +0.3) LCB -200.00c P  1.28% WF   1.9 PSV       0 N       2  --  D8 E8
+
+2025-11-21 01:28:51+0800: = F8
+2025-11-21 01:28:51+0800: Controller: genmove b
+2025-11-21 01:28:52+0800: MoveNum: 8 HASH: B9CDB7CAC24BCE0115EEC16E0A5F7FB9
+   A B C D E F G H J K
+10 . . . .2. . . . . .
+ 9 . . . . . . . . . .
+ 8 . . . . . X3. . . .
+ 7 X . . . . . . . . X
+ 6 . O . . . . . . B1.
+ 5 . . . . . . . . @ .
+ 4 O . . . . . . . . O
+ 3 . . . B . . X . . .
+ 2 . . . . . . . . . .
+ 1 . . . O . . . . . .
+
+taxNONEkomi7.5
+Time taken: 0.547
+Root visits: 401
+New playouts: 261
+NN rows: 269
+NN batches: 21
+NN avg batch size: 12.8095
+PV: J5 K4 H4 E7 K7 H7 F9 A4 E8 B8 A7 D7 D9 D1
+Tree:
+: T  20.35c W  20.35c S  -0.00c ( -1.4 L  +1.5) N     401  --  J5 K4 H4 E7 K7 H7 F9
+---Black(^)---
+J5  : T  21.94c W  21.94c S  -0.00c ( -1.5 L  +1.6) LCB   19.21c P 60.21% WF 351.3 PSV     345 N     345  --  J5 K4 H4 E7 K7 H7 F9 A4
+H6  : T  11.60c W  11.60c S  -0.00c ( -0.1 L  +1.9) LCB    7.33c P 22.55% WF  37.2 PSV      17 N      42  --  H6 A4 F9 H7 K7 H9 A2 K4
+E8  : T   2.34c W   2.34c S  -0.00c ( -2.9 L  -3.7) LCB -245.34c P  6.03% WF   2.6 PSV       2 N       3  --  E8 K4 G7
+F9  : T   2.43c W   2.43c S  -0.00c ( -2.8 L  -3.6) LCB -200.00c P  2.83% WF   1.8 PSV       1 N       2  --  F9 K4
+F3  : T   2.23c W   2.23c S  -0.00c ( -3.3 L  -3.7) LCB -200.00c P  2.04% WF   0.9 PSV       0 N       1  --  F3
+F1  : T   2.88c W   2.88c S  -0.00c ( -2.8 L  -3.6) LCB -200.00c P  0.84% WF   0.9 PSV       0 N       1  --  F1
+B4  : T  -9.15c W  -9.15c S  -0.00c ( -2.1 L  -4.2) LCB -200.00c P  0.75% WF   0.8 PSV       0 N       1  --  B4
+A3  : T   0.58c W   0.58c S  -0.00c ( -2.6 L  -3.5) LCB -200.00c P  0.56% WF   0.9 PSV       0 N       1  --  A3
+D8  : T   1.48c W   1.48c S  -0.00c ( -2.9 L  -3.6) LCB -200.00c P  0.55% WF   0.9 PSV       0 N       1  --  D8
+G8  : T   1.45c W   1.45c S  -0.00c ( -3.2 L  -3.8) LCB -200.00c P  0.52% WF   0.9 PSV       0 N       1  --  G8
+
+2025-11-21 01:28:52+0800: = J5
