@@ -3,3 +3,4 @@
 "*.pyc" 
 "**/gtp_logs/" 
 **/KataGoData/ 
+"**/__pycache__/" 
