@@ -22,10 +22,8 @@ class AmazonsKataGoEngine(QObject):
     command_sent = pyqtSignal(str)
     response_received = pyqtSignal(str)
     def __init__(self,
-                 engine_dir: str = './src/ai/amazons_engine',
-                 engine_exe: str = 'engine/amazons.exe',
-                 config_file: str = './src/ai/amazons_engine/engine.cfg',
-                 model_file: str = './src/ai/amazons_engine/weights/amazons10x10.bin.gz'):
+                 engine_dir: str = './src/ai/kataAmazonEngine',
+                 engine_exe: str = 'kataAmazon.exe'):
 
         super().__init__()
 
@@ -33,18 +31,14 @@ class AmazonsKataGoEngine(QObject):
 
         if not os.path.exists(engine_path):
             raise FileNotFoundError(f"引擎文件未找到: {engine_path}")
-        if not os.path.exists(config_file):
-            raise FileNotFoundError(f"配置文件未找到: {config_file}")
-        if not os.path.exists(model_file):
-            raise FileNotFoundError(f"模型文件未找到: {model_file}")
 
-        command = [engine_path, "gtp", "-config", config_file, "-model", model_file]
+        command = [engine_path, "gtp", "-config", "engine.cfg", "-model", "weights/amazons10x10.bin.gz"]
 
         startupinfo = None
-        if os.name == 'nt':
-            startupinfo = subprocess.STARTUPINFO()
-            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-            startupinfo.wShowWindow = subprocess.SW_HIDE
+        # if os.name == 'nt':
+        #     startupinfo = subprocess.STARTUPINFO()
+        #     startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        #     startupinfo.wShowWindow = subprocess.SW_HIDE
 
         try:
             self.process = subprocess.Popen(
@@ -56,7 +50,7 @@ class AmazonsKataGoEngine(QObject):
                 text=True,
                 bufsize=1,
                 startupinfo=startupinfo,
-                cwd='.'
+                cwd=engine_dir
             )
         except Exception as e:
             print(f"启动AI引擎失败: {e}")
@@ -65,7 +59,6 @@ class AmazonsKataGoEngine(QObject):
         self._wait_for_engine_ready()
         self._initialize_engine()
         print("亚马逊棋AI引擎初始化完成，准备就绪。")
-
 
     def _wait_for_engine_ready(self):
         if self.process.stdout:
