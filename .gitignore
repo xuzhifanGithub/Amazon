@@ -1,3 +1,5 @@
 ".idea/" 
 "__pycache__/" 
 "*.pyc" 
+"**/gtp_logs/" 
+**/KataGoData/ 
