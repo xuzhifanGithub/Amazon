@@ -8,7 +8,7 @@ set(CMAKE_DEPENDS_LANGUAGES
 
 # The set of dependency files which are needed:
 set(CMAKE_DEPENDS_DEPENDENCY_FILES
-  "D:/Amazon/AmazonPlay/AmazonPlay/src/ai/src/cmcts.cpp" "CMakeFiles/amazon_ai.dir/cmcts.cpp.obj" "gcc" "CMakeFiles/amazon_ai.dir/cmcts.cpp.obj.d"
+  "D:/Amazon/src/ai/src/cmcts.cpp" "CMakeFiles/amazon_ai.dir/cmcts.cpp.obj" "gcc" "CMakeFiles/amazon_ai.dir/cmcts.cpp.obj.d"
   )
 
 # Targets to which this target links which contain Fortran sources.

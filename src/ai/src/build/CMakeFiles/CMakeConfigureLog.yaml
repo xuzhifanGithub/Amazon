@@ -28,7 +28,7 @@ events:
       Compilation of the CXX compiler identification source "CMakeCXXCompilerId.cpp" produced "a.exe"
       
       The CXX compiler identification is GNU, found in:
-        D:/Amazon/AmazonPlay/AmazonPlay/src/ai/src/build/CMakeFiles/3.29.2/CompilerIdCXX/a.exe
+        D:/Amazon/src/ai/src/build/CMakeFiles/3.29.2/CompilerIdCXX/a.exe
       
   -
     kind: "try_compile-v1"
@@ -39,8 +39,8 @@ events:
     checks:
       - "Detecting CXX compiler ABI info"
     directories:
-      source: "D:/Amazon/AmazonPlay/AmazonPlay/src/ai/src/build/CMakeFiles/CMakeScratch/TryCompile-gmavet"
-      binary: "D:/Amazon/AmazonPlay/AmazonPlay/src/ai/src/build/CMakeFiles/CMakeScratch/TryCompile-gmavet"
+      source: "D:/Amazon/src/ai/src/build/CMakeFiles/CMakeScratch/TryCompile-kx0f4s"
+      binary: "D:/Amazon/src/ai/src/build/CMakeFiles/CMakeScratch/TryCompile-kx0f4s"
     cmakeVariables:
       CMAKE_CXX_FLAGS: ""
       CMAKE_CXX_FLAGS_DEBUG: "-g"
@@ -49,13 +49,13 @@ events:
       variable: "CMAKE_CXX_ABI_COMPILED"
       cached: true
       stdout: |
-        Change Dir: 'D:/Amazon/AmazonPlay/AmazonPlay/src/ai/src/build/CMakeFiles/CMakeScratch/TryCompile-gmavet'
+        Change Dir: 'D:/Amazon/src/ai/src/build/CMakeFiles/CMakeScratch/TryCompile-kx0f4s'
         
-        Run Build Command(s): "F:/Program Files/CMake/bin/cmake.exe" -E env VERBOSE=1 D:/TDM-GCC-64/bin/mingw32-make.exe -f Makefile cmTC_a411d/fast
-        D:/TDM-GCC-64/bin/mingw32-make.exe  -f CMakeFiles\\cmTC_a411d.dir\\build.make CMakeFiles/cmTC_a411d.dir/build
-        mingw32-make.exe[1]: Entering directory 'D:/Amazon/AmazonPlay/AmazonPlay/src/ai/src/build/CMakeFiles/CMakeScratch/TryCompile-gmavet'
-        Building CXX object CMakeFiles/cmTC_a411d.dir/CMakeCXXCompilerABI.cpp.obj
-        D:\\TDM-GCC-64\\bin\\g++.exe   -v -o CMakeFiles\\cmTC_a411d.dir\\CMakeCXXCompilerABI.cpp.obj -c "F:\\Program Files\\CMake\\share\\cmake-3.29\\Modules\\CMakeCXXCompilerABI.cpp"
+        Run Build Command(s): "F:/Program Files/CMake/bin/cmake.exe" -E env VERBOSE=1 D:/TDM-GCC-64/bin/mingw32-make.exe -f Makefile cmTC_47124/fast
+        D:/TDM-GCC-64/bin/mingw32-make.exe  -f CMakeFiles\\cmTC_47124.dir\\build.make CMakeFiles/cmTC_47124.dir/build
+        mingw32-make.exe[1]: Entering directory 'D:/Amazon/src/ai/src/build/CMakeFiles/CMakeScratch/TryCompile-kx0f4s'
+        Building CXX object CMakeFiles/cmTC_47124.dir/CMakeCXXCompilerABI.cpp.obj
+        D:\\TDM-GCC-64\\bin\\g++.exe   -v -o CMakeFiles\\cmTC_47124.dir\\CMakeCXXCompilerABI.cpp.obj -c "F:\\Program Files\\CMake\\share\\cmake-3.29\\Modules\\CMakeCXXCompilerABI.cpp"
         Using built-in specs.
         COLLECT_GCC=D:\\TDM-GCC-64\\bin\\g++.exe
         Target: x86_64-w64-mingw32
@@ -63,8 +63,8 @@ events:
         Thread model: posix
         Supported LTO compression algorithms: zlib zstd
         gcc version 10.3.0 (tdm64-1) 
-        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles\\cmTC_a411d.dir\\CMakeCXXCompilerABI.cpp.obj' '-c' '-mtune=generic' '-march=x86-64'
-         D:/TDM-GCC-64/bin/../libexec/gcc/x86_64-w64-mingw32/10.3.0/cc1plus.exe -quiet -v -iprefix D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/ -D_REENTRANT F:\\Program Files\\CMake\\share\\cmake-3.29\\Modules\\CMakeCXXCompilerABI.cpp -quiet -dumpbase CMakeCXXCompilerABI.cpp -mtune=generic -march=x86-64 -auxbase-strip CMakeFiles\\cmTC_a411d.dir\\CMakeCXXCompilerABI.cpp.obj -version -o C:\\Users\\lenovo\\AppData\\Local\\Temp\\ccHYbl9T.s
+        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles\\cmTC_47124.dir\\CMakeCXXCompilerABI.cpp.obj' '-c' '-mtune=generic' '-march=x86-64'
+         D:/TDM-GCC-64/bin/../libexec/gcc/x86_64-w64-mingw32/10.3.0/cc1plus.exe -quiet -v -iprefix D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/ -D_REENTRANT F:\\Program Files\\CMake\\share\\cmake-3.29\\Modules\\CMakeCXXCompilerABI.cpp -quiet -dumpbase CMakeCXXCompilerABI.cpp -mtune=generic -march=x86-64 -auxbase-strip CMakeFiles\\cmTC_47124.dir\\CMakeCXXCompilerABI.cpp.obj -version -o C:\\Users\\lenovo\\AppData\\Local\\Temp\\ccH1ssWu.s
         GNU C++14 (tdm64-1) version 10.3.0 (x86_64-w64-mingw32)
         	compiled by GNU C version 10.3.0, GMP version 6.2.1, MPFR version 4.1.0, MPC version 1.2.1, isl version isl-0.23-GMP
         
@@ -91,17 +91,17 @@ events:
         
         GGC heuristics: --param ggc-min-expand=100 --param ggc-min-heapsize=131072
         Compiler executable checksum: 5e49fa89ed7bfe906173ae8e94e08de6
-        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles\\cmTC_a411d.dir\\CMakeCXXCompilerABI.cpp.obj' '-c' '-mtune=generic' '-march=x86-64'
-         D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../x86_64-w64-mingw32/bin/as.exe -v -o CMakeFiles\\cmTC_a411d.dir\\CMakeCXXCompilerABI.cpp.obj C:\\Users\\lenovo\\AppData\\Local\\Temp\\ccHYbl9T.s
+        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles\\cmTC_47124.dir\\CMakeCXXCompilerABI.cpp.obj' '-c' '-mtune=generic' '-march=x86-64'
+         D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../x86_64-w64-mingw32/bin/as.exe -v -o CMakeFiles\\cmTC_47124.dir\\CMakeCXXCompilerABI.cpp.obj C:\\Users\\lenovo\\AppData\\Local\\Temp\\ccH1ssWu.s
         GNU assembler version 2.36.1 (x86_64-w64-mingw32) using BFD version (GNU Binutils) 2.36.1
         COMPILER_PATH=D:/TDM-GCC-64/bin/../libexec/gcc/x86_64-w64-mingw32/10.3.0/;D:/TDM-GCC-64/bin/../libexec/gcc/;D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../x86_64-w64-mingw32/bin/
         LIBRARY_PATH=D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/;D:/TDM-GCC-64/bin/../lib/gcc/;D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../x86_64-w64-mingw32/lib/../lib/;D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../lib/;D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../x86_64-w64-mingw32/lib/;D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../
-        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles\\cmTC_a411d.dir\\CMakeCXXCompilerABI.cpp.obj' '-c' '-mtune=generic' '-march=x86-64'
-        Linking CXX executable cmTC_a411d.exe
-        "F:\\Program Files\\CMake\\bin\\cmake.exe" -E cmake_link_script CMakeFiles\\cmTC_a411d.dir\\link.txt --verbose=1
-        "F:\\Program Files\\CMake\\bin\\cmake.exe" -E rm -f CMakeFiles\\cmTC_a411d.dir/objects.a
-        D:\\TDM-GCC-64\\bin\\ar.exe qc CMakeFiles\\cmTC_a411d.dir/objects.a @CMakeFiles\\cmTC_a411d.dir\\objects1.rsp
-        D:\\TDM-GCC-64\\bin\\g++.exe  -v -Wl,-v -Wl,--whole-archive CMakeFiles\\cmTC_a411d.dir/objects.a -Wl,--no-whole-archive -o cmTC_a411d.exe -Wl,--out-implib,libcmTC_a411d.dll.a -Wl,--major-image-version,0,--minor-image-version,0
+        COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles\\cmTC_47124.dir\\CMakeCXXCompilerABI.cpp.obj' '-c' '-mtune=generic' '-march=x86-64'
+        Linking CXX executable cmTC_47124.exe
+        "F:\\Program Files\\CMake\\bin\\cmake.exe" -E cmake_link_script CMakeFiles\\cmTC_47124.dir\\link.txt --verbose=1
+        "F:\\Program Files\\CMake\\bin\\cmake.exe" -E rm -f CMakeFiles\\cmTC_47124.dir/objects.a
+        D:\\TDM-GCC-64\\bin\\ar.exe qc CMakeFiles\\cmTC_47124.dir/objects.a @CMakeFiles\\cmTC_47124.dir\\objects1.rsp
+        D:\\TDM-GCC-64\\bin\\g++.exe  -v -Wl,-v -Wl,--whole-archive CMakeFiles\\cmTC_47124.dir/objects.a -Wl,--no-whole-archive -o cmTC_47124.exe -Wl,--out-implib,libcmTC_47124.dll.a -Wl,--major-image-version,0,--minor-image-version,0
         Using built-in specs.
         COLLECT_GCC=D:\\TDM-GCC-64\\bin\\g++.exe
         COLLECT_LTO_WRAPPER=D:/TDM-GCC-64/bin/../libexec/gcc/x86_64-w64-mingw32/10.3.0/lto-wrapper.exe
@@ -112,13 +112,13 @@ events:
         gcc version 10.3.0 (tdm64-1) 
         COMPILER_PATH=D:/TDM-GCC-64/bin/../libexec/gcc/x86_64-w64-mingw32/10.3.0/;D:/TDM-GCC-64/bin/../libexec/gcc/;D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../x86_64-w64-mingw32/bin/
         LIBRARY_PATH=D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/;D:/TDM-GCC-64/bin/../lib/gcc/;D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../x86_64-w64-mingw32/lib/../lib/;D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../lib/;D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../x86_64-w64-mingw32/lib/;D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../
-        COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_a411d.exe' '-mtune=generic' '-march=x86-64'
-         D:/TDM-GCC-64/bin/../libexec/gcc/x86_64-w64-mingw32/10.3.0/collect2.exe -plugin D:/TDM-GCC-64/bin/../libexec/gcc/x86_64-w64-mingw32/10.3.0/liblto_plugin-0.dll -plugin-opt=D:/TDM-GCC-64/bin/../libexec/gcc/x86_64-w64-mingw32/10.3.0/lto-wrapper.exe -plugin-opt=-fresolution=C:\\Users\\lenovo\\AppData\\Local\\Temp\\cckoxTmd.res -plugin-opt=-pass-through=-lmingw32 -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lpthread -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lmoldname -plugin-opt=-pass-through=-lmingwex -plugin-opt=-pass-through=-lmsvcrt -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lpthread -plugin-opt=-pass-through=-ladvapi32 -plugin-opt=-pass-through=-lshell32 -plugin-opt=-pass-through=-luser32 -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lmingw32 -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lpthread -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lmoldname -plugin-opt=-pass-through=-lmingwex -plugin-opt=-pass-through=-lmsvcrt -plugin-opt=-pass-through=-lkernel32 -m i386pep --exclude-libs=libpthread.a --undefined=__xl_f -Bdynamic -o cmTC_a411d.exe D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../x86_64-w64-mingw32/lib/../lib/crt2.o D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/crtbegin.o -LD:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0 -LD:/TDM-GCC-64/bin/../lib/gcc -LD:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../x86_64-w64-mingw32/lib/../lib -LD:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../lib -LD:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../x86_64-w64-mingw32/lib -LD:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../.. -v --whole-archive CMakeFiles\\cmTC_a411d.dir/objects.a --no-whole-archive --out-implib libcmTC_a411d.dll.a --major-image-version 0 --minor-image-version 0 -Bstatic -lstdc++ -Bdynamic -lmingw32 -lgcc -lpthread -lgcc -lkernel32 -lmoldname -lmingwex -lmsvcrt -lkernel32 -lpthread -ladvapi32 -lshell32 -luser32 -lkernel32 -lmingw32 -lgcc -lpthread -lgcc -lkernel32 -lmoldname -lmingwex -lmsvcrt -lkernel32 D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../x86_64-w64-mingw32/lib/../lib/default-manifest.o D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/crtend.o
+        COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_47124.exe' '-mtune=generic' '-march=x86-64'
+         D:/TDM-GCC-64/bin/../libexec/gcc/x86_64-w64-mingw32/10.3.0/collect2.exe -plugin D:/TDM-GCC-64/bin/../libexec/gcc/x86_64-w64-mingw32/10.3.0/liblto_plugin-0.dll -plugin-opt=D:/TDM-GCC-64/bin/../libexec/gcc/x86_64-w64-mingw32/10.3.0/lto-wrapper.exe -plugin-opt=-fresolution=C:\\Users\\lenovo\\AppData\\Local\\Temp\\cc3sN3j5.res -plugin-opt=-pass-through=-lmingw32 -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lpthread -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lmoldname -plugin-opt=-pass-through=-lmingwex -plugin-opt=-pass-through=-lmsvcrt -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lpthread -plugin-opt=-pass-through=-ladvapi32 -plugin-opt=-pass-through=-lshell32 -plugin-opt=-pass-through=-luser32 -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lmingw32 -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lpthread -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lmoldname -plugin-opt=-pass-through=-lmingwex -plugin-opt=-pass-through=-lmsvcrt -plugin-opt=-pass-through=-lkernel32 -m i386pep --exclude-libs=libpthread.a --undefined=__xl_f -Bdynamic -o cmTC_47124.exe D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../x86_64-w64-mingw32/lib/../lib/crt2.o D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/crtbegin.o -LD:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0 -LD:/TDM-GCC-64/bin/../lib/gcc -LD:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../x86_64-w64-mingw32/lib/../lib -LD:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../lib -LD:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../x86_64-w64-mingw32/lib -LD:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../.. -v --whole-archive CMakeFiles\\cmTC_47124.dir/objects.a --no-whole-archive --out-implib libcmTC_47124.dll.a --major-image-version 0 --minor-image-version 0 -Bstatic -lstdc++ -Bdynamic -lmingw32 -lgcc -lpthread -lgcc -lkernel32 -lmoldname -lmingwex -lmsvcrt -lkernel32 -lpthread -ladvapi32 -lshell32 -luser32 -lkernel32 -lmingw32 -lgcc -lpthread -lgcc -lkernel32 -lmoldname -lmingwex -lmsvcrt -lkernel32 D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../x86_64-w64-mingw32/lib/../lib/default-manifest.o D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/crtend.o
         collect2 version 10.3.0
-        D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../x86_64-w64-mingw32/bin/ld.exe -plugin D:/TDM-GCC-64/bin/../libexec/gcc/x86_64-w64-mingw32/10.3.0/liblto_plugin-0.dll -plugin-opt=D:/TDM-GCC-64/bin/../libexec/gcc/x86_64-w64-mingw32/10.3.0/lto-wrapper.exe -plugin-opt=-fresolution=C:\\Users\\lenovo\\AppData\\Local\\Temp\\cckoxTmd.res -plugin-opt=-pass-through=-lmingw32 -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lpthread -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lmoldname -plugin-opt=-pass-through=-lmingwex -plugin-opt=-pass-through=-lmsvcrt -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lpthread -plugin-opt=-pass-through=-ladvapi32 -plugin-opt=-pass-through=-lshell32 -plugin-opt=-pass-through=-luser32 -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lmingw32 -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lpthread -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lmoldname -plugin-opt=-pass-through=-lmingwex -plugin-opt=-pass-through=-lmsvcrt -plugin-opt=-pass-through=-lkernel32 -m i386pep --exclude-libs=libpthread.a --undefined=__xl_f -Bdynamic -o cmTC_a411d.exe D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../x86_64-w64-mingw32/lib/../lib/crt2.o D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/crtbegin.o -LD:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0 -LD:/TDM-GCC-64/bin/../lib/gcc -LD:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../x86_64-w64-mingw32/lib/../lib -LD:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../lib -LD:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../x86_64-w64-mingw32/lib -LD:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../.. -v --whole-archive CMakeFiles\\cmTC_a411d.dir/objects.a --no-whole-archive --out-implib libcmTC_a411d.dll.a --major-image-version 0 --minor-image-version 0 -Bstatic -lstdc++ -Bdynamic -lmingw32 -lgcc -lpthread -lgcc -lkernel32 -lmoldname -lmingwex -lmsvcrt -lkernel32 -lpthread -ladvapi32 -lshell32 -luser32 -lkernel32 -lmingw32 -lgcc -lpthread -lgcc -lkernel32 -lmoldname -lmingwex -lmsvcrt -lkernel32 D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../x86_64-w64-mingw32/lib/../lib/default-manifest.o D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/crtend.o
+        D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../x86_64-w64-mingw32/bin/ld.exe -plugin D:/TDM-GCC-64/bin/../libexec/gcc/x86_64-w64-mingw32/10.3.0/liblto_plugin-0.dll -plugin-opt=D:/TDM-GCC-64/bin/../libexec/gcc/x86_64-w64-mingw32/10.3.0/lto-wrapper.exe -plugin-opt=-fresolution=C:\\Users\\lenovo\\AppData\\Local\\Temp\\cc3sN3j5.res -plugin-opt=-pass-through=-lmingw32 -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lpthread -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lmoldname -plugin-opt=-pass-through=-lmingwex -plugin-opt=-pass-through=-lmsvcrt -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lpthread -plugin-opt=-pass-through=-ladvapi32 -plugin-opt=-pass-through=-lshell32 -plugin-opt=-pass-through=-luser32 -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lmingw32 -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lpthread -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lmoldname -plugin-opt=-pass-through=-lmingwex -plugin-opt=-pass-through=-lmsvcrt -plugin-opt=-pass-through=-lkernel32 -m i386pep --exclude-libs=libpthread.a --undefined=__xl_f -Bdynamic -o cmTC_47124.exe D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../x86_64-w64-mingw32/lib/../lib/crt2.o D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/crtbegin.o -LD:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0 -LD:/TDM-GCC-64/bin/../lib/gcc -LD:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../x86_64-w64-mingw32/lib/../lib -LD:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../lib -LD:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../x86_64-w64-mingw32/lib -LD:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../.. -v --whole-archive CMakeFiles\\cmTC_47124.dir/objects.a --no-whole-archive --out-implib libcmTC_47124.dll.a --major-image-version 0 --minor-image-version 0 -Bstatic -lstdc++ -Bdynamic -lmingw32 -lgcc -lpthread -lgcc -lkernel32 -lmoldname -lmingwex -lmsvcrt -lkernel32 -lpthread -ladvapi32 -lshell32 -luser32 -lkernel32 -lmingw32 -lgcc -lpthread -lgcc -lkernel32 -lmoldname -lmingwex -lmsvcrt -lkernel32 D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../x86_64-w64-mingw32/lib/../lib/default-manifest.o D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/crtend.o
         GNU ld (GNU Binutils) 2.36.1
-        COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_a411d.exe' '-mtune=generic' '-march=x86-64'
-        mingw32-make.exe[1]: Leaving directory 'D:/Amazon/AmazonPlay/AmazonPlay/src/ai/src/build/CMakeFiles/CMakeScratch/TryCompile-gmavet'
+        COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_47124.exe' '-mtune=generic' '-march=x86-64'
+        mingw32-make.exe[1]: Leaving directory 'D:/Amazon/src/ai/src/build/CMakeFiles/CMakeScratch/TryCompile-kx0f4s'
         
       exitCode: 0
   -
@@ -159,13 +159,13 @@ events:
       Parsed CXX implicit link information:
         link line regex: [^( *|.*[/\\])(ld[0-9]*(\\.[a-z]+)?|CMAKE_LINK_STARTFILE-NOTFOUND|([^/\\]+-)?ld|collect2)[^/\\]*( |$)]
         linker tool regex: [^[ 	]*(->|")?[ 	]*(([^"]*[/\\])?(ld[0-9]*(\\.[a-z]+)?))("|,| |$)]
-        ignore line: [Change Dir: 'D:/Amazon/AmazonPlay/AmazonPlay/src/ai/src/build/CMakeFiles/CMakeScratch/TryCompile-gmavet']
+        ignore line: [Change Dir: 'D:/Amazon/src/ai/src/build/CMakeFiles/CMakeScratch/TryCompile-kx0f4s']
         ignore line: []
-        ignore line: [Run Build Command(s): "F:/Program Files/CMake/bin/cmake.exe" -E env VERBOSE=1 D:/TDM-GCC-64/bin/mingw32-make.exe -f Makefile cmTC_a411d/fast]
-        ignore line: [D:/TDM-GCC-64/bin/mingw32-make.exe  -f CMakeFiles\\cmTC_a411d.dir\\build.make CMakeFiles/cmTC_a411d.dir/build]
-        ignore line: [mingw32-make.exe[1]: Entering directory 'D:/Amazon/AmazonPlay/AmazonPlay/src/ai/src/build/CMakeFiles/CMakeScratch/TryCompile-gmavet']
-        ignore line: [Building CXX object CMakeFiles/cmTC_a411d.dir/CMakeCXXCompilerABI.cpp.obj]
-        ignore line: [D:\\TDM-GCC-64\\bin\\g++.exe   -v -o CMakeFiles\\cmTC_a411d.dir\\CMakeCXXCompilerABI.cpp.obj -c "F:\\Program Files\\CMake\\share\\cmake-3.29\\Modules\\CMakeCXXCompilerABI.cpp"]
+        ignore line: [Run Build Command(s): "F:/Program Files/CMake/bin/cmake.exe" -E env VERBOSE=1 D:/TDM-GCC-64/bin/mingw32-make.exe -f Makefile cmTC_47124/fast]
+        ignore line: [D:/TDM-GCC-64/bin/mingw32-make.exe  -f CMakeFiles\\cmTC_47124.dir\\build.make CMakeFiles/cmTC_47124.dir/build]
+        ignore line: [mingw32-make.exe[1]: Entering directory 'D:/Amazon/src/ai/src/build/CMakeFiles/CMakeScratch/TryCompile-kx0f4s']
+        ignore line: [Building CXX object CMakeFiles/cmTC_47124.dir/CMakeCXXCompilerABI.cpp.obj]
+        ignore line: [D:\\TDM-GCC-64\\bin\\g++.exe   -v -o CMakeFiles\\cmTC_47124.dir\\CMakeCXXCompilerABI.cpp.obj -c "F:\\Program Files\\CMake\\share\\cmake-3.29\\Modules\\CMakeCXXCompilerABI.cpp"]
         ignore line: [Using built-in specs.]
         ignore line: [COLLECT_GCC=D:\\TDM-GCC-64\\bin\\g++.exe]
         ignore line: [Target: x86_64-w64-mingw32]
@@ -173,8 +173,8 @@ events:
         ignore line: [Thread model: posix]
         ignore line: [Supported LTO compression algorithms: zlib zstd]
         ignore line: [gcc version 10.3.0 (tdm64-1) ]
-        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles\\cmTC_a411d.dir\\CMakeCXXCompilerABI.cpp.obj' '-c' '-mtune=generic' '-march=x86-64']
-        ignore line: [ D:/TDM-GCC-64/bin/../libexec/gcc/x86_64-w64-mingw32/10.3.0/cc1plus.exe -quiet -v -iprefix D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/ -D_REENTRANT F:\\Program Files\\CMake\\share\\cmake-3.29\\Modules\\CMakeCXXCompilerABI.cpp -quiet -dumpbase CMakeCXXCompilerABI.cpp -mtune=generic -march=x86-64 -auxbase-strip CMakeFiles\\cmTC_a411d.dir\\CMakeCXXCompilerABI.cpp.obj -version -o C:\\Users\\lenovo\\AppData\\Local\\Temp\\ccHYbl9T.s]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles\\cmTC_47124.dir\\CMakeCXXCompilerABI.cpp.obj' '-c' '-mtune=generic' '-march=x86-64']
+        ignore line: [ D:/TDM-GCC-64/bin/../libexec/gcc/x86_64-w64-mingw32/10.3.0/cc1plus.exe -quiet -v -iprefix D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/ -D_REENTRANT F:\\Program Files\\CMake\\share\\cmake-3.29\\Modules\\CMakeCXXCompilerABI.cpp -quiet -dumpbase CMakeCXXCompilerABI.cpp -mtune=generic -march=x86-64 -auxbase-strip CMakeFiles\\cmTC_47124.dir\\CMakeCXXCompilerABI.cpp.obj -version -o C:\\Users\\lenovo\\AppData\\Local\\Temp\\ccH1ssWu.s]
         ignore line: [GNU C++14 (tdm64-1) version 10.3.0 (x86_64-w64-mingw32)]
         ignore line: [	compiled by GNU C version 10.3.0  GMP version 6.2.1  MPFR version 4.1.0  MPC version 1.2.1  isl version isl-0.23-GMP]
         ignore line: []
@@ -201,8 +201,8 @@ events:
         ignore line: []
         ignore line: [GGC heuristics: --param ggc-min-expand=100 --param ggc-min-heapsize=131072]
         ignore line: [Compiler executable checksum: 5e49fa89ed7bfe906173ae8e94e08de6]
-        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles\\cmTC_a411d.dir\\CMakeCXXCompilerABI.cpp.obj' '-c' '-mtune=generic' '-march=x86-64']
-        ignore line: [ D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../x86_64-w64-mingw32/bin/as.exe -v -o CMakeFiles\\cmTC_a411d.dir\\CMakeCXXCompilerABI.cpp.obj C:\\Users\\lenovo\\AppData\\Local\\Temp\\ccHYbl9T.s]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles\\cmTC_47124.dir\\CMakeCXXCompilerABI.cpp.obj' '-c' '-mtune=generic' '-march=x86-64']
+        ignore line: [ D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../x86_64-w64-mingw32/bin/as.exe -v -o CMakeFiles\\cmTC_47124.dir\\CMakeCXXCompilerABI.cpp.obj C:\\Users\\lenovo\\AppData\\Local\\Temp\\ccH1ssWu.s]
         ignore line: [GNU assembler version 2.36.1 (x86_64-w64-mingw32) using BFD version (GNU Binutils) 2.36.1]
         ignore line: [COMPILER_PATH=D:/TDM-GCC-64/bin/../libexec/gcc/x86_64-w64-mingw32/10.3.0/]
         ignore line: [D:/TDM-GCC-64/bin/../libexec/gcc/]
@@ -213,12 +213,12 @@ events:
         ignore line: [D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../lib/]
         ignore line: [D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../x86_64-w64-mingw32/lib/]
         ignore line: [D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../]
-        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles\\cmTC_a411d.dir\\CMakeCXXCompilerABI.cpp.obj' '-c' '-mtune=generic' '-march=x86-64']
-        ignore line: [Linking CXX executable cmTC_a411d.exe]
-        ignore line: ["F:\\Program Files\\CMake\\bin\\cmake.exe" -E cmake_link_script CMakeFiles\\cmTC_a411d.dir\\link.txt --verbose=1]
-        ignore line: ["F:\\Program Files\\CMake\\bin\\cmake.exe" -E rm -f CMakeFiles\\cmTC_a411d.dir/objects.a]
-        ignore line: [D:\\TDM-GCC-64\\bin\\ar.exe qc CMakeFiles\\cmTC_a411d.dir/objects.a @CMakeFiles\\cmTC_a411d.dir\\objects1.rsp]
-        ignore line: [D:\\TDM-GCC-64\\bin\\g++.exe  -v -Wl -v -Wl --whole-archive CMakeFiles\\cmTC_a411d.dir/objects.a -Wl --no-whole-archive -o cmTC_a411d.exe -Wl --out-implib libcmTC_a411d.dll.a -Wl --major-image-version 0 --minor-image-version 0]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'CMakeFiles\\cmTC_47124.dir\\CMakeCXXCompilerABI.cpp.obj' '-c' '-mtune=generic' '-march=x86-64']
+        ignore line: [Linking CXX executable cmTC_47124.exe]
+        ignore line: ["F:\\Program Files\\CMake\\bin\\cmake.exe" -E cmake_link_script CMakeFiles\\cmTC_47124.dir\\link.txt --verbose=1]
+        ignore line: ["F:\\Program Files\\CMake\\bin\\cmake.exe" -E rm -f CMakeFiles\\cmTC_47124.dir/objects.a]
+        ignore line: [D:\\TDM-GCC-64\\bin\\ar.exe qc CMakeFiles\\cmTC_47124.dir/objects.a @CMakeFiles\\cmTC_47124.dir\\objects1.rsp]
+        ignore line: [D:\\TDM-GCC-64\\bin\\g++.exe  -v -Wl -v -Wl --whole-archive CMakeFiles\\cmTC_47124.dir/objects.a -Wl --no-whole-archive -o cmTC_47124.exe -Wl --out-implib libcmTC_47124.dll.a -Wl --major-image-version 0 --minor-image-version 0]
         ignore line: [Using built-in specs.]
         ignore line: [COLLECT_GCC=D:\\TDM-GCC-64\\bin\\g++.exe]
         ignore line: [COLLECT_LTO_WRAPPER=D:/TDM-GCC-64/bin/../libexec/gcc/x86_64-w64-mingw32/10.3.0/lto-wrapper.exe]
@@ -236,13 +236,13 @@ events:
         ignore line: [D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../lib/]
         ignore line: [D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../x86_64-w64-mingw32/lib/]
         ignore line: [D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../]
-        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_a411d.exe' '-mtune=generic' '-march=x86-64']
-        link line: [ D:/TDM-GCC-64/bin/../libexec/gcc/x86_64-w64-mingw32/10.3.0/collect2.exe -plugin D:/TDM-GCC-64/bin/../libexec/gcc/x86_64-w64-mingw32/10.3.0/liblto_plugin-0.dll -plugin-opt=D:/TDM-GCC-64/bin/../libexec/gcc/x86_64-w64-mingw32/10.3.0/lto-wrapper.exe -plugin-opt=-fresolution=C:\\Users\\lenovo\\AppData\\Local\\Temp\\cckoxTmd.res -plugin-opt=-pass-through=-lmingw32 -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lpthread -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lmoldname -plugin-opt=-pass-through=-lmingwex -plugin-opt=-pass-through=-lmsvcrt -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lpthread -plugin-opt=-pass-through=-ladvapi32 -plugin-opt=-pass-through=-lshell32 -plugin-opt=-pass-through=-luser32 -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lmingw32 -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lpthread -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lmoldname -plugin-opt=-pass-through=-lmingwex -plugin-opt=-pass-through=-lmsvcrt -plugin-opt=-pass-through=-lkernel32 -m i386pep --exclude-libs=libpthread.a --undefined=__xl_f -Bdynamic -o cmTC_a411d.exe D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../x86_64-w64-mingw32/lib/../lib/crt2.o D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/crtbegin.o -LD:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0 -LD:/TDM-GCC-64/bin/../lib/gcc -LD:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../x86_64-w64-mingw32/lib/../lib -LD:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../lib -LD:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../x86_64-w64-mingw32/lib -LD:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../.. -v --whole-archive CMakeFiles\\cmTC_a411d.dir/objects.a --no-whole-archive --out-implib libcmTC_a411d.dll.a --major-image-version 0 --minor-image-version 0 -Bstatic -lstdc++ -Bdynamic -lmingw32 -lgcc -lpthread -lgcc -lkernel32 -lmoldname -lmingwex -lmsvcrt -lkernel32 -lpthread -ladvapi32 -lshell32 -luser32 -lkernel32 -lmingw32 -lgcc -lpthread -lgcc -lkernel32 -lmoldname -lmingwex -lmsvcrt -lkernel32 D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../x86_64-w64-mingw32/lib/../lib/default-manifest.o D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/crtend.o]
+        ignore line: [COLLECT_GCC_OPTIONS='-v' '-o' 'cmTC_47124.exe' '-mtune=generic' '-march=x86-64']
+        link line: [ D:/TDM-GCC-64/bin/../libexec/gcc/x86_64-w64-mingw32/10.3.0/collect2.exe -plugin D:/TDM-GCC-64/bin/../libexec/gcc/x86_64-w64-mingw32/10.3.0/liblto_plugin-0.dll -plugin-opt=D:/TDM-GCC-64/bin/../libexec/gcc/x86_64-w64-mingw32/10.3.0/lto-wrapper.exe -plugin-opt=-fresolution=C:\\Users\\lenovo\\AppData\\Local\\Temp\\cc3sN3j5.res -plugin-opt=-pass-through=-lmingw32 -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lpthread -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lmoldname -plugin-opt=-pass-through=-lmingwex -plugin-opt=-pass-through=-lmsvcrt -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lpthread -plugin-opt=-pass-through=-ladvapi32 -plugin-opt=-pass-through=-lshell32 -plugin-opt=-pass-through=-luser32 -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lmingw32 -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lpthread -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lmoldname -plugin-opt=-pass-through=-lmingwex -plugin-opt=-pass-through=-lmsvcrt -plugin-opt=-pass-through=-lkernel32 -m i386pep --exclude-libs=libpthread.a --undefined=__xl_f -Bdynamic -o cmTC_47124.exe D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../x86_64-w64-mingw32/lib/../lib/crt2.o D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/crtbegin.o -LD:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0 -LD:/TDM-GCC-64/bin/../lib/gcc -LD:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../x86_64-w64-mingw32/lib/../lib -LD:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../lib -LD:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../x86_64-w64-mingw32/lib -LD:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../.. -v --whole-archive CMakeFiles\\cmTC_47124.dir/objects.a --no-whole-archive --out-implib libcmTC_47124.dll.a --major-image-version 0 --minor-image-version 0 -Bstatic -lstdc++ -Bdynamic -lmingw32 -lgcc -lpthread -lgcc -lkernel32 -lmoldname -lmingwex -lmsvcrt -lkernel32 -lpthread -ladvapi32 -lshell32 -luser32 -lkernel32 -lmingw32 -lgcc -lpthread -lgcc -lkernel32 -lmoldname -lmingwex -lmsvcrt -lkernel32 D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../x86_64-w64-mingw32/lib/../lib/default-manifest.o D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/crtend.o]
           arg [D:/TDM-GCC-64/bin/../libexec/gcc/x86_64-w64-mingw32/10.3.0/collect2.exe] ==> ignore
           arg [-plugin] ==> ignore
           arg [D:/TDM-GCC-64/bin/../libexec/gcc/x86_64-w64-mingw32/10.3.0/liblto_plugin-0.dll] ==> ignore
           arg [-plugin-opt=D:/TDM-GCC-64/bin/../libexec/gcc/x86_64-w64-mingw32/10.3.0/lto-wrapper.exe] ==> ignore
-          arg [-plugin-opt=-fresolution=C:\\Users\\lenovo\\AppData\\Local\\Temp\\cckoxTmd.res] ==> ignore
+          arg [-plugin-opt=-fresolution=C:\\Users\\lenovo\\AppData\\Local\\Temp\\cc3sN3j5.res] ==> ignore
           arg [-plugin-opt=-pass-through=-lmingw32] ==> ignore
           arg [-plugin-opt=-pass-through=-lgcc] ==> ignore
           arg [-plugin-opt=-pass-through=-lpthread] ==> ignore
@@ -272,7 +272,7 @@ events:
           arg [--undefined=__xl_f] ==> ignore
           arg [-Bdynamic] ==> search dynamic
           arg [-o] ==> ignore
-          arg [cmTC_a411d.exe] ==> ignore
+          arg [cmTC_47124.exe] ==> ignore
           arg [D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../x86_64-w64-mingw32/lib/../lib/crt2.o] ==> obj [D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../x86_64-w64-mingw32/lib/../lib/crt2.o]
           arg [D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/crtbegin.o] ==> obj [D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/crtbegin.o]
           arg [-LD:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0] ==> dir [D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0]
@@ -283,10 +283,10 @@ events:
           arg [-LD:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../..] ==> dir [D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../..]
           arg [-v] ==> ignore
           arg [--whole-archive] ==> ignore
-          arg [CMakeFiles\\cmTC_a411d.dir/objects.a] ==> ignore
+          arg [CMakeFiles\\cmTC_47124.dir/objects.a] ==> ignore
           arg [--no-whole-archive] ==> ignore
           arg [--out-implib] ==> ignore
-          arg [libcmTC_a411d.dll.a] ==> ignore
+          arg [libcmTC_47124.dll.a] ==> ignore
           arg [--major-image-version] ==> ignore
           arg [0] ==> ignore
           arg [--minor-image-version] ==> ignore
@@ -320,7 +320,7 @@ events:
           arg [D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../x86_64-w64-mingw32/lib/../lib/default-manifest.o] ==> obj [D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../x86_64-w64-mingw32/lib/../lib/default-manifest.o]
           arg [D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/crtend.o] ==> obj [D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/crtend.o]
         ignore line: [collect2 version 10.3.0]
-        ignore line: [D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../x86_64-w64-mingw32/bin/ld.exe -plugin D:/TDM-GCC-64/bin/../libexec/gcc/x86_64-w64-mingw32/10.3.0/liblto_plugin-0.dll -plugin-opt=D:/TDM-GCC-64/bin/../libexec/gcc/x86_64-w64-mingw32/10.3.0/lto-wrapper.exe -plugin-opt=-fresolution=C:\\Users\\lenovo\\AppData\\Local\\Temp\\cckoxTmd.res -plugin-opt=-pass-through=-lmingw32 -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lpthread -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lmoldname -plugin-opt=-pass-through=-lmingwex -plugin-opt=-pass-through=-lmsvcrt -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lpthread -plugin-opt=-pass-through=-ladvapi32 -plugin-opt=-pass-through=-lshell32 -plugin-opt=-pass-through=-luser32 -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lmingw32 -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lpthread -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lmoldname -plugin-opt=-pass-through=-lmingwex -plugin-opt=-pass-through=-lmsvcrt -plugin-opt=-pass-through=-lkernel32 -m i386pep --exclude-libs=libpthread.a --undefined=__xl_f -Bdynamic -o cmTC_a411d.exe D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../x86_64-w64-mingw32/lib/../lib/crt2.o D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/crtbegin.o -LD:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0 -LD:/TDM-GCC-64/bin/../lib/gcc -LD:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../x86_64-w64-mingw32/lib/../lib -LD:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../lib -LD:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../x86_64-w64-mingw32/lib -LD:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../.. -v --whole-archive CMakeFiles\\cmTC_a411d.dir/objects.a --no-whole-archive --out-implib libcmTC_a411d.dll.a --major-image-version 0 --minor-image-version 0 -Bstatic -lstdc++ -Bdynamic -lmingw32 -lgcc -lpthread -lgcc -lkernel32 -lmoldname -lmingwex -lmsvcrt -lkernel32 -lpthread -ladvapi32 -lshell32 -luser32 -lkernel32 -lmingw32 -lgcc -lpthread -lgcc -lkernel32 -lmoldname -lmingwex -lmsvcrt -lkernel32 D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../x86_64-w64-mingw32/lib/../lib/default-manifest.o D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/crtend.o]
+        ignore line: [D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../x86_64-w64-mingw32/bin/ld.exe -plugin D:/TDM-GCC-64/bin/../libexec/gcc/x86_64-w64-mingw32/10.3.0/liblto_plugin-0.dll -plugin-opt=D:/TDM-GCC-64/bin/../libexec/gcc/x86_64-w64-mingw32/10.3.0/lto-wrapper.exe -plugin-opt=-fresolution=C:\\Users\\lenovo\\AppData\\Local\\Temp\\cc3sN3j5.res -plugin-opt=-pass-through=-lmingw32 -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lpthread -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lmoldname -plugin-opt=-pass-through=-lmingwex -plugin-opt=-pass-through=-lmsvcrt -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lpthread -plugin-opt=-pass-through=-ladvapi32 -plugin-opt=-pass-through=-lshell32 -plugin-opt=-pass-through=-luser32 -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lmingw32 -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lpthread -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lkernel32 -plugin-opt=-pass-through=-lmoldname -plugin-opt=-pass-through=-lmingwex -plugin-opt=-pass-through=-lmsvcrt -plugin-opt=-pass-through=-lkernel32 -m i386pep --exclude-libs=libpthread.a --undefined=__xl_f -Bdynamic -o cmTC_47124.exe D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../x86_64-w64-mingw32/lib/../lib/crt2.o D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/crtbegin.o -LD:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0 -LD:/TDM-GCC-64/bin/../lib/gcc -LD:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../x86_64-w64-mingw32/lib/../lib -LD:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../lib -LD:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../x86_64-w64-mingw32/lib -LD:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../.. -v --whole-archive CMakeFiles\\cmTC_47124.dir/objects.a --no-whole-archive --out-implib libcmTC_47124.dll.a --major-image-version 0 --minor-image-version 0 -Bstatic -lstdc++ -Bdynamic -lmingw32 -lgcc -lpthread -lgcc -lkernel32 -lmoldname -lmingwex -lmsvcrt -lkernel32 -lpthread -ladvapi32 -lshell32 -luser32 -lkernel32 -lmingw32 -lgcc -lpthread -lgcc -lkernel32 -lmoldname -lmingwex -lmsvcrt -lkernel32 D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/../../../../x86_64-w64-mingw32/lib/../lib/default-manifest.o D:/TDM-GCC-64/bin/../lib/gcc/x86_64-w64-mingw32/10.3.0/crtend.o]
         linker tool for 'CXX': D:/TDM-GCC-64/x86_64-w64-mingw32/bin/ld.exe
         search lib [SEARCH_STATIC:stdc++] ==> [D:/TDM-GCC-64/lib/gcc/x86_64-w64-mingw32/10.3.0/libstdc++.a]
         remove lib [msvcrt]
@@ -356,11 +356,11 @@ events:
     backtrace:
       - "F:/Program Files/CMake/share/cmake-3.29/Modules/FindOpenMP.cmake:421 (try_compile)"
       - "F:/Program Files/CMake/share/cmake-3.29/Modules/FindOpenMP.cmake:561 (_OPENMP_GET_SPEC_DATE)"
-      - "CMakeLists.txt:25 (find_package)"
+      - "CMakeLists.txt:22 (find_package)"
     description: "Detecting CXX OpenMP version"
     directories:
-      source: "D:/Amazon/AmazonPlay/AmazonPlay/src/ai/src/build/CMakeFiles/CMakeScratch/TryCompile-tqb8oc"
-      binary: "D:/Amazon/AmazonPlay/AmazonPlay/src/ai/src/build/CMakeFiles/CMakeScratch/TryCompile-tqb8oc"
+      source: "D:/Amazon/src/ai/src/build/CMakeFiles/CMakeScratch/TryCompile-0xvoqb"
+      binary: "D:/Amazon/src/ai/src/build/CMakeFiles/CMakeScratch/TryCompile-0xvoqb"
     cmakeVariables:
       CMAKE_CXX_FLAGS: ""
       CMAKE_CXX_FLAGS_DEBUG: "-g"
@@ -370,19 +370,19 @@ events:
       variable: "OpenMP_SPECTEST_CXX_"
       cached: true
       stdout: |
-        Change Dir: 'D:/Amazon/AmazonPlay/AmazonPlay/src/ai/src/build/CMakeFiles/CMakeScratch/TryCompile-tqb8oc'
+        Change Dir: 'D:/Amazon/src/ai/src/build/CMakeFiles/CMakeScratch/TryCompile-0xvoqb'
         
-        Run Build Command(s): "F:/Program Files/CMake/bin/cmake.exe" -E env VERBOSE=1 D:/TDM-GCC-64/bin/mingw32-make.exe -f Makefile cmTC_ed6c1/fast
-        D:/TDM-GCC-64/bin/mingw32-make.exe  -f CMakeFiles\\cmTC_ed6c1.dir\\build.make CMakeFiles/cmTC_ed6c1.dir/build
-        mingw32-make.exe[1]: Entering directory 'D:/Amazon/AmazonPlay/AmazonPlay/src/ai/src/build/CMakeFiles/CMakeScratch/TryCompile-tqb8oc'
-        Building CXX object CMakeFiles/cmTC_ed6c1.dir/OpenMPCheckVersion.cpp.obj
-        D:\\TDM-GCC-64\\bin\\g++.exe   -fopenmp -o CMakeFiles\\cmTC_ed6c1.dir\\OpenMPCheckVersion.cpp.obj -c D:\\Amazon\\AmazonPlay\\AmazonPlay\\src\\ai\\src\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tqb8oc\\OpenMPCheckVersion.cpp
-        Linking CXX executable cmTC_ed6c1.exe
-        "F:\\Program Files\\CMake\\bin\\cmake.exe" -E cmake_link_script CMakeFiles\\cmTC_ed6c1.dir\\link.txt --verbose=1
-        "F:\\Program Files\\CMake\\bin\\cmake.exe" -E rm -f CMakeFiles\\cmTC_ed6c1.dir/objects.a
-        D:\\TDM-GCC-64\\bin\\ar.exe qc CMakeFiles\\cmTC_ed6c1.dir/objects.a @CMakeFiles\\cmTC_ed6c1.dir\\objects1.rsp
-        D:\\TDM-GCC-64\\bin\\g++.exe  -fopenmp -Wl,--whole-archive CMakeFiles\\cmTC_ed6c1.dir/objects.a -Wl,--no-whole-archive -o cmTC_ed6c1.exe -Wl,--out-implib,libcmTC_ed6c1.dll.a -Wl,--major-image-version,0,--minor-image-version,0 @CMakeFiles\\cmTC_ed6c1.dir\\linkLibs.rsp
-        mingw32-make.exe[1]: Leaving directory 'D:/Amazon/AmazonPlay/AmazonPlay/src/ai/src/build/CMakeFiles/CMakeScratch/TryCompile-tqb8oc'
+        Run Build Command(s): "F:/Program Files/CMake/bin/cmake.exe" -E env VERBOSE=1 D:/TDM-GCC-64/bin/mingw32-make.exe -f Makefile cmTC_a7c6d/fast
+        D:/TDM-GCC-64/bin/mingw32-make.exe  -f CMakeFiles\\cmTC_a7c6d.dir\\build.make CMakeFiles/cmTC_a7c6d.dir/build
+        mingw32-make.exe[1]: Entering directory 'D:/Amazon/src/ai/src/build/CMakeFiles/CMakeScratch/TryCompile-0xvoqb'
+        Building CXX object CMakeFiles/cmTC_a7c6d.dir/OpenMPCheckVersion.cpp.obj
+        D:\\TDM-GCC-64\\bin\\g++.exe   -fopenmp -o CMakeFiles\\cmTC_a7c6d.dir\\OpenMPCheckVersion.cpp.obj -c D:\\Amazon\\src\\ai\\src\\build\\CMakeFiles\\CMakeScratch\\TryCompile-0xvoqb\\OpenMPCheckVersion.cpp
+        Linking CXX executable cmTC_a7c6d.exe
+        "F:\\Program Files\\CMake\\bin\\cmake.exe" -E cmake_link_script CMakeFiles\\cmTC_a7c6d.dir\\link.txt --verbose=1
+        "F:\\Program Files\\CMake\\bin\\cmake.exe" -E rm -f CMakeFiles\\cmTC_a7c6d.dir/objects.a
+        D:\\TDM-GCC-64\\bin\\ar.exe qc CMakeFiles\\cmTC_a7c6d.dir/objects.a @CMakeFiles\\cmTC_a7c6d.dir\\objects1.rsp
+        D:\\TDM-GCC-64\\bin\\g++.exe  -fopenmp -Wl,--whole-archive CMakeFiles\\cmTC_a7c6d.dir/objects.a -Wl,--no-whole-archive -o cmTC_a7c6d.exe -Wl,--out-implib,libcmTC_a7c6d.dll.a -Wl,--major-image-version,0,--minor-image-version,0 @CMakeFiles\\cmTC_a7c6d.dir\\linkLibs.rsp
+        mingw32-make.exe[1]: Leaving directory 'D:/Amazon/src/ai/src/build/CMakeFiles/CMakeScratch/TryCompile-0xvoqb'
         
       exitCode: 0
 ...

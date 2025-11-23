@@ -4,9 +4,6 @@ cmake_minimum_required(VERSION 3.10)
 # 定义项目名称和版本
 project(amazon_ai LANGUAGES CXX VERSION 1.0)
 
-# =========================================================
-# ⚠️ 关键修正区域：解决 MinGW/GCC 找不到 OpenMP 的问题
-# =========================================================
 # 检查当前编译器是否为 GCC（即 TDM-GCC/MinGW）
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
     # 强制设置 OpenMP 所需的编译标志和链接库名称

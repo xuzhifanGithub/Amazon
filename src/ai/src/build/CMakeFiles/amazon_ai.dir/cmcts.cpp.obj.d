@@ -1,5 +1,4 @@
-CMakeFiles/amazon_ai.dir/cmcts.cpp.obj: \
- D:\Amazon\AmazonPlay\AmazonPlay\src\ai\src\cmcts.cpp \
+CMakeFiles/amazon_ai.dir/cmcts.cpp.obj: D:\Amazon\src\ai\src\cmcts.cpp \
  C:/Users/lenovo/AppData/Roaming/Python/Python311/site-packages/pybind11/include/pybind11/pybind11.h \
  C:/Users/lenovo/AppData/Roaming/Python/Python311/site-packages/pybind11/include/pybind11/detail/class.h \
  C:/Users/lenovo/AppData/Roaming/Python/Python311/site-packages/pybind11/include/pybind11/attr.h \
