@@ -1,8 +1,8 @@
 # src/ai/amazons_engine.py
 # cmd可以打开，命令如下
-# engine\amazons.exe gtp -config engine.cfg -model weights\amazons10x10.bin.gz
+# kataAmazon.exe gtp -config engine.cfg -model weights/amazons10x10.bin.gz
 import subprocess
-import os,sys
+import os, sys
 from PyQt6.QtCore import QObject, pyqtSignal
 
 current_dir = os.path.dirname(os.path.abspath(__file__))

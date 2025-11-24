@@ -667,36 +667,37 @@ class AmazonsMainWindow(QMainWindow):
         elif current_player_mode == self.PLAYER_TYPE_AI_KATAAMAZON:
             current_agent.start_thread_ai_calculation('kataAmazon')
 
-    def execute_ai_move(self, result: tuple):
+    def execute_ai_move(self, result):
         """
         处理AI计算出的最佳移动，执行下棋并更新UI。
         """
-        best_move, win_pro, maxApt, select_pro = result
+        best_res = result
 
-        if best_move == None:
+        if best_res is None or best_res == -1:
             self.statusBar().showMessage("AI 计算失败。")
             return
 
-        # 1. 皇后起始位置 (From)
-        # 格式: (start_row, start_col)
-        start_pos = (best_move.From // self.simulator.size, best_move.From % self.simulator.size)
+        if best_res == -2:
+            self.simulator.game_over = True
+            self.simulator.winner = -self.simulator.current_player
+            winner_name = "黑方" if self.simulator.winner == BLACK_AMAZON else "白方"
+            player_name = "黑方" if self.simulator.current_player == BLACK_AMAZON else "白方"
+            self.handle_game_over(f"{player_name}已认输，{winner_name}获胜！")
+            return
 
-        # 2. 皇后移动目标位置 (To)
-        # 格式: (move_row, move_col)
-        move_pos = (best_move.To // self.simulator.size, best_move.To % self.simulator.size)
 
-        # 3. 箭射出位置 (Stone)
-        # 格式: (arrow_row, arrow_col)
-        arrow_pos = (best_move.Stone // self.simulator.size, best_move.Stone % self.simulator.size)
+        start_pos = (best_res.best_pos_from // self.simulator.size, best_res.best_pos_from % self.simulator.size)
+        move_pos = (best_res.best_pos_to // self.simulator.size, best_res.best_pos_to % self.simulator.size)
+        arrow_pos = (best_res.best_pos_stone // self.simulator.size, best_res.best_pos_stone % self.simulator.size)
 
-        win_pro_str = f"{win_pro :.2f}%"
-        select_pro_str = f"{select_pro:.4f}"
+        win_pro_str = f"{best_res.win_pro :.2f}%"
+        select_pro_str = f"{best_res.select_pro:.4f}"
         player_name = "黑方" if self.simulator.current_player == BLACK_AMAZON else "白方"
         # 构建状态栏信息
         info_message = (
             f"{player_name}"
             f"AI 走法: 胜率={win_pro_str} | "
-            f"搜索次数={int(maxApt)} | "
+            f"搜索次数={int(best_res.max_apt)} | "
             f"局面估值={select_pro_str}"
         )
         self.statusBar().showMessage(info_message)

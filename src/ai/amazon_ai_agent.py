@@ -10,8 +10,17 @@ module_path = os.path.join(current_dir,'src', 'build')
 sys.path.append(module_path)
 module_path2 = os.path.join(current_dir,'src2', 'build')
 sys.path.append(module_path2)
-import amazon_ai
-import amazon_ai_test
+try:
+    import amazon_ai
+    print("成功导入 amazon_ai 模块")
+except ImportError:
+    print("警告: 未找到 amazon_ai 模块，请选择python版本为3.11.5或3.13.3之一，或者自行编译")
+try:
+    import amazon_ai_test
+    print("成功导入 amazon_ai_test 模块")
+except ImportError:
+    print("警告: 未找到 amazon_ai_test 模块，请选择python版本为3.11.5或3.13.3之一，或者自行编译")
+
 from src.ai.amazons_engine import AmazonsKataGoEngine
 # 获取当前脚本的绝对路径
 project_root = os.path.join(current_dir, '..', '..')
@@ -19,11 +28,24 @@ project_root = os.path.join(current_dir, '..', '..')
 sys.path.append(project_root)
 from src.core.simulator import  WHITE_AMAZON, BLACK_AMAZON
 
+
+class BestResult:
+    def __init__(self):
+        self.best_pos_from: int = 404
+        self.best_pos_to: int = 404
+        self.best_pos_stone: int = 404
+        self.win_pro = 404
+        self.max_apt = 404
+        self.select_pro = 404
+
+    def __str__(self):
+        return f"BestResult(a={self.best_pos}, win_pro={self.win_pro}, max_apt={self.max_apt}, select_pro={self.select_pro})"
+
 class AIWorker(QObject):
     """
     负责执行 AI 计算的 QObject 工作者。
     """
-    finished = pyqtSignal(tuple)  # 计算结果（-1 表示错误）
+    finished = pyqtSignal(object)  # 计算结果（-1 表示错误）
 
 
     def __init__(self, board_size, board, queen_pos, current_player,ai_type,ai_type_engine):
@@ -41,11 +63,7 @@ class AIWorker(QObject):
         """
         在子线程中执行耗时的 AI 计算。
         """
-        best_pos = None
-        win_pro = -404
-        max_apt = -404
-        select_pro = -404
-
+        best_res = BestResult()
         try:
             if self.ai_type == 'mcts' or self.ai_type == 'mcts_test':
                 best_move = self.ai_type_engine.uct_search(
@@ -55,33 +73,39 @@ class AIWorker(QObject):
                     1.0,  # 计算 1.0 秒
                     True
                 )
-                best_pos = best_move
-                win_pro = best_move.pro
-                max_apt = best_move.attempt
-                select_pro = best_move.value
+                best_res.best_pos_from = (best_move.From // self.board_size, best_move.From % self.board_size)
+                best_res.best_pos_to = (best_move.To // self.board_size, best_move.To % self.board_size)
+                best_res.best_pos_stone = (best_move.Stone // self.board_size, best_move.Stone % self.board_size)
+                best_res.best_pos = best_move
+                best_res.win_pro = best_move.pro
+                best_res.max_apt = best_move.attempt
+                best_res.select_pro = best_move.value
             elif self.ai_type == 'kataAmazon':
                 self.ai_type_engine.set_time_controls(0, 1, 1)
-                best_pos = amazon_ai.UctRes()
                 turn_tuple = self.ai_type_engine.get_best_turn(self.current_player)
                 start_pos, move_pos, arrow_pos = turn_tuple
+
+                if start_pos == "pass" or move_pos=="pass" or arrow_pos == "pass":
+                    error_result = -2
+                    self.finished.emit(error_result)
+                    return  # 直接返回，不执行后续逻辑
+
+                #print(f"引擎输出坐标 - 起始1: '{start_pos}', 移动: '{move_pos}', 射箭: '{arrow_pos}'")
                 start_pos = self.ai_type_engine._convert_coord(start_pos)
                 move_pos = self.ai_type_engine._convert_coord(move_pos)
                 arrow_pos = self.ai_type_engine._convert_coord(arrow_pos)
-                print(f"坐标 - 起始: '{start_pos}', 移动: '{move_pos}', 射箭: '{arrow_pos}'")
-                best_pos.From = start_pos[0]*self.board_size + start_pos[1]
-                best_pos.To = move_pos[0] * self.board_size + move_pos[1]
-                best_pos.Stone = arrow_pos[0] * self.board_size + arrow_pos[1]
-
+                #print(f"引擎输出坐标 - 起始2: '{start_pos}', 移动: '{move_pos}', 射箭: '{arrow_pos}'")
+                best_res.best_pos_from = start_pos[0]*self.board_size + start_pos[1]
+                best_res.best_pos_to = move_pos[0] * self.board_size + move_pos[1]
+                best_res.best_pos_stone = arrow_pos[0] * self.board_size + arrow_pos[1]
             else:
                 raise ValueError("Invalid AI type provided.")
 
-            # print(f"获胜概率: {winPro}")
-            #self.main_window.statusBar().showMessage(self.winPro)
-            result = (best_pos, win_pro, max_apt, select_pro)
+            result = best_res
             self.finished.emit(result)
         except Exception as e:
             print(f"AIWorker 线程错误: {e}")
-            error_result = (best_pos, win_pro, max_apt, select_pro)
+            error_result = best_res
             self.finished.emit(error_result)  # 发生错误时发送一个特殊值
 
 
@@ -91,7 +115,7 @@ class AmazonAIAgent(QObject):
     """
     负责管理 AI 落子逻辑的类，使用独立线程。
     """
-    move_calculated = pyqtSignal(tuple)
+    move_calculated = pyqtSignal(object)
 
     def __init__(self, main_window_instance):
         super().__init__()
@@ -160,8 +184,8 @@ class AmazonAIAgent(QObject):
         """加载AI引擎，并在成功后弹出提示窗口。"""
         # 先尝试关闭可能已存在的旧引擎实例
         if self.ai_engine:
-            # self.ai_engine.close()
-            # self.ai_engine = None
+            self.ai_engine.close()
+            self.ai_engine = None
             return
 
 
@@ -182,17 +206,17 @@ class AmazonAIAgent(QObject):
             self.main_window.show_ai_error(f"加载AI引擎失败: {e}")
 
 
-    def handle_ai_result(self, result: tuple):
+    def handle_ai_result(self, result):
         """
         处理从子线程返回的 AI 计算结果。
         此方法在主线程中运行。
         """
-        best_move, win_pro, maxApt, select_pro = result  # 解包元组
+        best_res = result  # 解包元组
 
-        if best_move == -1:
+        if best_res == -1:
             self.main_window.statusBar().showMessage("AI 计算失败。")
             # 即使计算失败也发送信号，方便主窗口处理
-            self.move_calculated.emit((-1, win_pro, maxApt, select_pro))
+            self.move_calculated.emit(-1)
             return
 
         # simulator = self.main_window.simulator
@@ -201,7 +225,7 @@ class AmazonAIAgent(QObject):
         # ai_move_pos = (row, col)
 
         # 只发送计算结果，不做任何其他处理
-        self.move_calculated.emit((best_move, win_pro, maxApt, select_pro))
+        self.move_calculated.emit(best_res)
 
     def cleanup_thread(self):
         """线程结束后清理引用"""
@@ -210,10 +234,13 @@ class AmazonAIAgent(QObject):
 
     def update_engine_board(self, player, start_pos, move_pos, arrow_pos):
         if self.ai_engine is not None:
+            print(f"传入引擎棋盘坐标1 - 起始: '{start_pos}', 移动: '{move_pos}', 射箭: '{arrow_pos}'")
             gpt_start_pos = self.ai_engine._convert_to_gtp_coord(start_pos[0],start_pos[1])
             gpt_move_pos = self.ai_engine._convert_to_gtp_coord(move_pos[0], move_pos[1])
             gpt_arrow_pos = self.ai_engine._convert_to_gtp_coord(arrow_pos[0], arrow_pos[1])
+            print(f"传入引擎棋盘坐标2 - 起始: '{gpt_start_pos}', 移动: '{gpt_move_pos}', 射箭: '{gpt_arrow_pos}'")
             self.ai_engine.play_turn(player, gpt_start_pos, gpt_move_pos, gpt_arrow_pos)
+
 
     def undo_board(self):
         if self.ai_engine is not None:
