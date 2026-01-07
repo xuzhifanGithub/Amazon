@@ -322,12 +322,6 @@ class AmazonsMainWindow(QMainWindow):
 
         game_menu.addSeparator()
 
-        self.settings_action = QAction("设置...", self)
-        self.settings_action.triggered.connect(self.open_settings)
-        game_menu.addAction(self.settings_action)
-
-        game_menu.addSeparator()
-
         exit_action = QAction("退出", self)
         exit_action.triggered.connect(self.close)
         exit_action.setShortcut("Ctrl+Q")
@@ -675,21 +669,6 @@ class AmazonsMainWindow(QMainWindow):
                                          QMessageBox.StandardButton.No)
             return reply == QMessageBox.StandardButton.Yes
         return True
-
-    def open_settings(self):
-        """打开设置对话框"""
-        # 更新菜单状态
-        scheme_names = {
-            'BW': '纸落云烟',
-            'RB': '桃蹊蒼茫',
-            'GS': '杳霭流玉',
-            'PS': '流绪微梦'
-        }
-        current_theme = scheme_names.get(self.current_color_scheme, '未知主题')
-        QMessageBox.information(self, "设置",
-                                f"当前主题：{current_theme}\n\n"
-                                f"您可以在「游戏」菜单的「主题设置」中切换不同的配色方案。\n\n"
-                                )
 
 
     def resign_game(self):
