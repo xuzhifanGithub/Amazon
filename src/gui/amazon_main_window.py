@@ -84,6 +84,31 @@ class AmazonsMainWindow(QMainWindow):
         if self.is_ai_turn():
             self.start_ai_turn()
 
+    def set_coord_display_mode(self, mode_key: str):
+        """
+        设置坐标显示模式并更新 UI。
+        :param mode_key: 'NONE', 'EDGE', 'GRID'
+        """
+        # 假设 BoardWidget 的常量已被引入或定义
+
+        mode_map = {
+            'NONE': self.board_widget.COORD_MODE_NONE,
+            'EDGE': self.board_widget.COORD_MODE_EDGE,
+            'GRID': self.board_widget.COORD_MODE_GRID,
+        }
+
+        mode_name_map = {
+            'NONE': '关闭',
+            'EDGE': '棋盘边缘',
+            'GRID': '棋盘格子',
+        }
+
+        mode_int = mode_map.get(mode_key, self.board_widget.COORD_MODE_NONE)
+
+        if self.board_widget:
+            self.board_widget.set_coord_mode(mode_int)
+            self.statusBar().showMessage(f"坐标显示模式已切换为：{mode_name_map.get(mode_key)}", 3000)
+
     def on_turn_made(self, start_pos, move_pos, arrow_pos):
         """
         """
@@ -196,7 +221,7 @@ class AmazonsMainWindow(QMainWindow):
         self.adjustSize()
 
     def create_menus(self):
-        """创建顶部菜单栏 - 模仿海克斯棋的菜单结构，并移除多余的 AI 选项。"""
+        """创建顶部菜单栏"""
         menu_bar = self.menuBar()
 
         # --- 游戏菜单 ---
@@ -224,19 +249,20 @@ class AmazonsMainWindow(QMainWindow):
         # AI 子菜单
         black_ai_menu = QMenu("AI", self)
         # 1. MCTS(c++)
-        black_ai_mcts_action = QAction("MCTS(c++)", self, checkable=True)
+        black_ai_mcts_action = QAction("MCTS★", self, checkable=True)
         black_ai_mcts_action.triggered.connect(lambda: self.set_player_mode(BLACK_AMAZON, self.PLAYER_TYPE_AI_MCTS))
         black_player_group.addAction(black_ai_mcts_action)
         black_ai_menu.addAction(black_ai_mcts_action)
 
         #  MCTS_test(c++)
-        black_ai_mcts_test_action = QAction("MCTS_test(c++)", self, checkable=True)
-        black_ai_mcts_test_action.triggered.connect(lambda: self.set_player_mode(BLACK_AMAZON, self.PLAYER_TYPE_AI_MCTS2))
+        black_ai_mcts_test_action = QAction("MCTS_test★", self, checkable=True)
+        black_ai_mcts_test_action.triggered.connect(
+            lambda: self.set_player_mode(BLACK_AMAZON, self.PLAYER_TYPE_AI_MCTS2))
         black_player_group.addAction(black_ai_mcts_test_action)
         black_ai_menu.addAction(black_ai_mcts_test_action)
 
         #  kataAmazon
-        black_ai_kataAmazon_action = QAction("kataAmazon", self, checkable=True)
+        black_ai_kataAmazon_action = QAction("kataAmazon★★", self, checkable=True)
         black_ai_kataAmazon_action.triggered.connect(
             lambda: self.set_player_mode(BLACK_AMAZON, self.PLAYER_TYPE_AI_KATAAMAZON))
         black_player_group.addAction(black_ai_kataAmazon_action)
@@ -259,18 +285,19 @@ class AmazonsMainWindow(QMainWindow):
         # AI 子菜单
         white_ai_menu = QMenu("AI", self)
         # 1. MCTS(c++)
-        white_ai_mcts_action = QAction("MCTS(c++)", self, checkable=True)
+        white_ai_mcts_action = QAction("MCTS★", self, checkable=True)
         white_ai_mcts_action.triggered.connect(lambda: self.set_player_mode(WHITE_AMAZON, self.PLAYER_TYPE_AI_MCTS))
         white_player_group.addAction(white_ai_mcts_action)
         white_ai_menu.addAction(white_ai_mcts_action)
 
         #
-        white_ai_mcts_test_action = QAction("MCTS_test(c++)", self, checkable=True)
-        white_ai_mcts_test_action.triggered.connect(lambda: self.set_player_mode(WHITE_AMAZON, self.PLAYER_TYPE_AI_MCTS2))
+        white_ai_mcts_test_action = QAction("MCTS_test★", self, checkable=True)
+        white_ai_mcts_test_action.triggered.connect(
+            lambda: self.set_player_mode(WHITE_AMAZON, self.PLAYER_TYPE_AI_MCTS2))
         white_player_group.addAction(white_ai_mcts_test_action)
         white_ai_menu.addAction(white_ai_mcts_test_action)
 
-        white_ai_kataAmazon_action = QAction("kataAmazon", self, checkable=True)
+        white_ai_kataAmazon_action = QAction("kataAmazon★★", self, checkable=True)
         white_ai_kataAmazon_action.triggered.connect(
             lambda: self.set_player_mode(WHITE_AMAZON, self.PLAYER_TYPE_AI_KATAAMAZON))
         white_player_group.addAction(white_ai_kataAmazon_action)
@@ -281,7 +308,35 @@ class AmazonsMainWindow(QMainWindow):
 
         game_menu.addSeparator()
 
-        # --- 主题设置子菜单 (保留主题切换，但去掉保存功能) ---
+
+        # --- 悔棋、认输 ---
+        self.undo_action = QAction("悔棋", self)
+        self.undo_action.triggered.connect(self.undo_move)
+        self.undo_action.setShortcut("Ctrl+Z")
+        game_menu.addAction(self.undo_action)
+
+        self.resign_action = QAction("认输", self)
+        self.resign_action.triggered.connect(self.resign_game)
+        self.resign_action.setShortcut("Ctrl+R")
+        game_menu.addAction(self.resign_action)
+
+        game_menu.addSeparator()
+
+        self.settings_action = QAction("设置...", self)
+        self.settings_action.triggered.connect(self.open_settings)
+        game_menu.addAction(self.settings_action)
+
+        game_menu.addSeparator()
+
+        exit_action = QAction("退出", self)
+        exit_action.triggered.connect(self.close)
+        exit_action.setShortcut("Ctrl+Q")
+        game_menu.addAction(exit_action)
+
+        # --------------------显示菜单 ---------------
+        display_menu = menu_bar.addMenu("显示(&V)")
+
+        # --- 主题设置子菜单 ---
         theme_menu = QMenu("主题设置(&T)", self)
         theme_group = QActionGroup(self)
         theme_group.setExclusive(True)
@@ -311,39 +366,221 @@ class AmazonsMainWindow(QMainWindow):
         theme_group.addAction(self.theme_ps_action)
         theme_menu.addAction(self.theme_ps_action)
 
-        game_menu.addMenu(theme_menu)
-        game_menu.addSeparator()
+        display_menu.addMenu(theme_menu)  # 添加主题设置到显示菜单
 
-        # --- 悔棋、认输 (保持不变) ---
-        self.undo_action = QAction("悔棋", self)
-        self.undo_action.triggered.connect(self.undo_move)
-        self.undo_action.setShortcut("Ctrl+Z")
-        game_menu.addAction(self.undo_action)
+        display_menu.addSeparator()
 
-        self.resign_action = QAction("认输", self)
-        self.resign_action.triggered.connect(self.resign_game)
-        self.resign_action.setShortcut("Ctrl+R")
-        game_menu.addAction(self.resign_action)
+        # --- 坐标显示子菜单 ---
+        coord_menu = QMenu("坐标显示", self)
+        coord_group = QActionGroup(self)
+        coord_group.setExclusive(True)
 
-        game_menu.addSeparator()
+        # 1. 关闭坐标
+        coord_none_action = QAction("关闭", self, checkable=True)
+        coord_none_action.triggered.connect(lambda: self.set_coord_display_mode('NONE'))
+        coord_none_action.setChecked(True)  # 默认选中
+        coord_group.addAction(coord_none_action)
+        coord_menu.addAction(coord_none_action)
 
-        self.settings_action = QAction("设置...", self)
-        self.settings_action.triggered.connect(self.open_settings)
-        game_menu.addAction(self.settings_action)
+        # 2. 边缘坐标 (默认选中)
+        coord_edge_action = QAction("棋盘边缘", self, checkable=True)
+        coord_edge_action.triggered.connect(lambda: self.set_coord_display_mode('EDGE'))
+        coord_group.addAction(coord_edge_action)
+        coord_menu.addAction(coord_edge_action)
 
-        game_menu.addSeparator()
+        # 3. 格子坐标
+        coord_grid_action = QAction("棋盘格子", self, checkable=True)
+        coord_grid_action.triggered.connect(lambda: self.set_coord_display_mode('GRID'))
+        coord_group.addAction(coord_grid_action)
+        coord_menu.addAction(coord_grid_action)
 
-        exit_action = QAction("退出", self)
-        exit_action.triggered.connect(self.close)
-        exit_action.setShortcut("Ctrl+Q")
-        game_menu.addAction(exit_action)
+        display_menu.addMenu(coord_menu)
+
+        # -------------------- 介绍菜单 --------------------
+        help_menu = menu_bar.addMenu("介绍(&I)")  # I for Introduction
+
+        # 1. 游戏介绍
+        intro_game_action = QAction("游戏介绍", self)
+        intro_game_action.triggered.connect(self.show_game_introduction)
+        help_menu.addAction(intro_game_action)
+
+        # 2. 规则说明
+        rules_action = QAction("游戏规则", self)
+        rules_action.triggered.connect(self.show_game_rules)
+        help_menu.addAction(rules_action)
+
+        help_menu.addSeparator()
+
+        # 3. AI算法说明
+        ai_intro_action = QAction("AI算法介绍", self)
+        ai_intro_action.triggered.connect(self.show_ai_introduction)
+        help_menu.addAction(ai_intro_action)
+
+        # 4. 快捷键说明
+        shortcut_action = QAction("快捷键", self)
+        shortcut_action.triggered.connect(self.show_shortcuts)
+        help_menu.addAction(shortcut_action)
+
+        help_menu.addSeparator()
+
+        # 5. 关于
+        about_action = QAction("关于", self)
+        about_action.triggered.connect(self.show_about_dialog)
+        help_menu.addAction(about_action)
+
+    # 在类中添加显示介绍信息的方法
+    def show_game_introduction(self):
+        """显示游戏介绍"""
+        introduction_text = """
+        <h2>亚马逊棋 (Game of the Amazons)</h2>
+
+        <h3>游戏简介</h3>
+        <p>亚马逊棋是一种双人完全信息博弈游戏，由Walter Zamkauskas于1988年发明。</p>
+        <p>游戏在10x10的棋盘上进行，每位玩家有4个亚马逊棋子。</p>
+        <p>目标是封锁对手的所有棋子，使其无法移动。</p>
+
+        <h3>游戏特点</h3>
+        <ul>
+            <li>完全信息博弈：双方都能看到完整的棋盘状态</li>
+            <li>零和博弈：一方胜利则另一方失败</li>
+            <li>高分支因子：每步棋的可能走法很多</li>
+            <li>公认的困难游戏：直到2000年才被证明是先手必胜</li>
+        </ul>
+        """
+
+        QMessageBox.information(self, "游戏介绍", introduction_text)
+
+    def show_game_rules(self):
+        """显示游戏规则"""
+        rules_text = """
+        <h2>游戏规则</h2>
+
+        <h3>棋盘和棋子</h3>
+        <p>• 10x10方格棋盘</p>
+        <p>• 黑方和白方各有4个亚马逊棋子</p>
+        <p>• 初始布局如图中所示</p>
+
+        <h3>走子规则</h3>
+        <p>每回合必须完成两个动作：</p>
+        <p><b>1. 移动棋子：</b></p>
+        <p>   • 可以像国际象棋的后（皇后）一样移动（横、竖、斜线任意距离）</p>
+        <p>   • 不能穿过其他棋子或障碍</p>
+
+        <p><b>2. 放置障碍：</b></p>
+        <p>   • 从移动后的位置，像皇后一样射出"箭"（放置障碍）</p>
+        <p>   • 障碍永久占据该格子，不能再被移动通过</p>
+
+        <h3>胜负条件</h3>
+        <p>• 当一方无法移动任何棋子时，该方输掉比赛</p>
+        <p>• 最后成功移动的一方获胜</p>
+        """
+
+        QMessageBox.information(self, "游戏规则", rules_text)
+
+    def show_ai_introduction(self):
+        """显示AI算法介绍"""
+        ai_text = """
+        <h2>AI算法介绍</h2>
+
+        <h3>MCTS (蒙特卡洛树搜索)★</h3>
+        <p>python版本要求:3.11.5/3.13.3/自行编译</p>
+        <p>• 通过随机模拟探索游戏树</p>
+        <p>• 平衡探索与利用</p>
+        <p>• 适合高分支因子的游戏</p>
+
+        <h3>KataAmazon (基于katago的AI)★★</h3>
+        <p>• 使用katago框架的专业AI</p>
+        <p>• 性能更强但计算更复杂</p>
+
+        <h3>AI难度等级</h3>
+        <p>★ 基础AI - 适合新手练习</p>
+        <p>★★ 中级AI - 有一定挑战性</p>
+        <p>★★★ 高级AI - 极具挑战性</p>
+        """
+
+        QMessageBox.information(self, "AI算法介绍", ai_text)
+
+    def show_shortcuts(self):
+        """显示快捷键"""
+        shortcuts_text = """
+        <h2>快捷键</h2>
+
+        <h3>游戏操作</h3>
+        <p><b>Ctrl+N</b> - 新游戏</p>
+        <p><b>Ctrl+Z</b> - 悔棋</p>
+        <p><b>Ctrl+R</b> - 认输</p>
+        <p><b>Ctrl+Q</b> - 退出游戏</p>
+
+        <h3>棋盘操作</h3>
+        <p><b>鼠标左键</b> - 选择棋子/放置障碍</p>
+        <p><b>鼠标右键</b> - 取消选择</p>
+        <p><b>ESC</b> - 返回主菜单</p>
+        """
+
+        QMessageBox.information(self, "快捷键", shortcuts_text)
+
+    def show_about_dialog(self):
+        """显示关于对话框"""
+        about_text = f"""
+        <h2>亚马逊棋AI对战平台</h2>
+
+        <p><b>版本：</b>1.0.0</p>
+        <p><b>开发:</b> Zhifan Xu, Lvxi Liu (徐志凡，刘律希)</p>
+        <p><b>团队:</b> Shenyang University of Technology (沈阳工业大学)</p>
+
+        <h3>功能特点</h3>
+        <p>• 支持人机对战和机机对战</p>
+        <p>• 多种AI算法可选</p>
+        <p>• 多种棋盘主题</p>
+
+        <p>© 2026. 保留所有权利。</p>
+        """
+
+        QMessageBox.about(self, "关于", about_text)
+
+    # 如果需要更美观的对话框，可以使用自定义对话框
+    def show_introduction_dialog(self):
+        """显示包含多个标签页的介绍对话框"""
+        from PyQt5.QtWidgets import QDialog, QTabWidget, QTextBrowser, QVBoxLayout
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("游戏介绍")
+        dialog.resize(600, 500)
+
+        # 创建标签页
+        tab_widget = QTabWidget()
+
+        # 游戏介绍标签
+        intro_browser = QTextBrowser()
+        intro_browser.setHtml(self.get_introduction_html())
+        tab_widget.addTab(intro_browser, "游戏介绍")
+
+        # 规则标签
+        rules_browser = QTextBrowser()
+        rules_browser.setHtml(self.get_rules_html())
+        tab_widget.addTab(rules_browser, "游戏规则")
+
+        # AI介绍标签
+        ai_browser = QTextBrowser()
+        ai_browser.setHtml(self.get_ai_intro_html())
+        tab_widget.addTab(ai_browser, "AI算法")
+
+        # 布局
+        layout = QVBoxLayout()
+        layout.addWidget(tab_widget)
+        dialog.setLayout(layout)
+
+        dialog.exec_()
+
+
+
 
     def set_player_mode(self, side, player_type):
         """
         设置某一边的玩家类型
         """
         if side == BLACK_AMAZON:
-            self.black_modes= player_type
+            self.black_modes = player_type
             side_text = "黑方"
             if player_type == self.PLAYER_TYPE_AI_KATAAMAZON:
                 self.black_ai_agent.init_ai_engine()
@@ -440,7 +677,7 @@ class AmazonsMainWindow(QMainWindow):
         return True
 
     def open_settings(self):
-        """打开设置对话框（简化版本）"""
+        """打开设置对话框"""
         # 更新菜单状态
         scheme_names = {
             'BW': '纸落云烟',
@@ -711,7 +948,6 @@ class AmazonsMainWindow(QMainWindow):
 
 
 if __name__ == '__main__':
-    # ... (保持不变) ...
     app = QApplication(sys.argv)
     try:
         print("正在初始化模拟器...")

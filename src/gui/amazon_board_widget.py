@@ -13,6 +13,8 @@ AWAITING_PIECE_SELECTION = 0
 AWAITING_MOVE_DESTINATION = 1
 AWAITING_ARROW_DESTINATION = 2
 
+SETTING_BOARD_COORDINATES = False
+
 # 定义配色方案
 COLOR_SCHEMES = {
     # 默认黑白配色
@@ -26,20 +28,18 @@ COLOR_SCHEMES = {
         'VALID_ARROW': QColor(251, 210, 106, 143),  # 射箭目标（橙黄色）
         'SELECTED_GLOW': QColor(80, 200, 120, 180),  # 选中棋子（绿色辉光）
         'HOVER_GLOW': QColor(150, 255, 150, 180),  # 悬停棋子（浅绿辉光）
-        'SCHEME_NAME': "经典黑白"
     },
-    # 红蓝配色
+    #
     'RB': {
-        'WHITE_PIECE': QColor("#4A7C9D"),  # 原白棋改为蓝色
+        'WHITE_PIECE': QColor("#4B5CC4"),  # 原白棋改为蓝色
         'BLACK_PIECE': QColor("#D9534F"),  # 原黑棋改为红色
-        'WHITE_PIECE_BORDER': QColor("#1C3A4A"),  # 蓝棋边框（深蓝）
-        'BLACK_PIECE_BORDER': QColor("#993A37"),  # 红棋边框（深红）
+        'WHITE_PIECE_BORDER': QColor("#000000"),  # 蓝棋边框（深蓝）
+        'BLACK_PIECE_BORDER': QColor("#000000"),  # 红棋边框（深红）
         'OBSTACLE': QColor("#333333"),  # 障碍物（棕色，与红蓝配色更协调）
         'VALID_MOVE': QColor(120, 226, 241, 143),  # 移动目标（青色/浅蓝）
         'VALID_ARROW': QColor(251, 210, 106, 143),  # 射箭目标（橙黄色）
         'SELECTED_GLOW': QColor(255, 255, 100, 180),  # 选中棋子（黄色辉光）
         'HOVER_GLOW': QColor(100, 200, 255, 180),  # 悬停棋子（浅蓝辉光）
-        'SCHEME_NAME': "红蓝对决"
     },
     'GS': {
         'WHITE_PIECE': QColor("#C2E2FA"),  # 白棋改为森林绿
@@ -52,7 +52,7 @@ COLOR_SCHEMES = {
         'SELECTED_GLOW': QColor(255, 215, 0, 180),  # 选中棋子（金色辉光）
         'HOVER_GLOW': QColor(144, 238, 144, 180),  # 悬停棋子（浅绿辉光）
     },
-    # 新增：紫色系配色 (梦幻紫韵)
+    #
     'PS': {
         'WHITE_PIECE': QColor("#A3485A"),  # 白棋改为紫色
         'BLACK_PIECE': QColor("#B7A3E3"),  # 黑棋改为深紫色
@@ -77,6 +77,10 @@ class BoardWidget(QWidget):
     mouse_genmove_completed = pyqtSignal(tuple, tuple, tuple)
     game_over_signal = pyqtSignal(str)
 
+    COORD_MODE_NONE = 0
+    COORD_MODE_EDGE = 1  # 边缘坐标
+    COORD_MODE_GRID = 2  # 格子内坐标
+
     def __init__(self, simulator, parent=None, color_scheme: str = DEFAULT_COLOR_SCHEME):  # <-- 增加 color_scheme 参数
         """
         初始化棋盘控件。
@@ -100,6 +104,8 @@ class BoardWidget(QWidget):
             self.color_scheme_key = DEFAULT_COLOR_SCHEME
         self.colors = COLOR_SCHEMES[self.color_scheme_key]
         # ------------------------
+
+        self.coord_mode = self.COORD_MODE_NONE
 
         # --- 启用鼠标跟踪以实现悬停效果 ---
         self.setMouseTracking(True)
@@ -182,13 +188,54 @@ class BoardWidget(QWidget):
         self._anim_glow_radius_factor = factor
         self.update()
 
+    def set_coord_mode(self, mode: int):
+        """
+        设置棋盘的坐标显示模式。
+        :param mode: COORD_MODE_NONE, COORD_MODE_EDGE, 或 COORD_MODE_GRID。
+        """
+        self.coord_mode = mode
+        self.update()
+
+    def draw_grid_coordinates(self, painter: QPainter):
+        """在每个棋盘格子的中心绘制其坐标 (如 A1, B2)"""
+        # 设置字体
+        font = QFont()
+        font.setPointSize(9)  # 较小的字体，适合放在格子内
+        font.setBold(False)
+        painter.setFont(font)
+        painter.setPen(QColor(100, 100, 100))  # 灰色字体
+
+        for r in range(self.board_dim):
+            for c in range(self.board_dim):
+                center = self.get_coord_from_row_col(r, c)
+
+                # 亚马逊棋的标准记法是 (列号 + 行号), 且行号是倒序
+                col_letter = chr(ord('A') + c)
+                row_number = str(self.board_dim - r)
+
+                coordinate_text = f"{col_letter}{row_number}"
+
+                # 在格子的中心绘制文本
+                text_rect = QRectF(center.x() - self.grid_size / 2,
+                                   center.y() - self.grid_size / 2,
+                                   self.grid_size,
+                                   self.grid_size)
+
+                painter.drawText(text_rect, Qt.AlignmentFlag.AlignCenter, coordinate_text)
+
+
     def paintEvent(self, event: "QPaintEvent"):
         """ 完整绘图事件 (含柔和阴影) """
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        # 1. 绘制棋盘、高亮和上一步指示 (不变)
+        # 1. 绘制棋盘、坐标、高亮和上一步指示
         self.draw_board_grid(painter)
+        # if SETTING_BOARD_COORDINATES: self.draw_board_coordinates(painter)
+        if self.coord_mode == self.COORD_MODE_EDGE:
+            self.draw_board_coordinates(painter)  # 边缘坐标 (A-J, 1-10)
+        elif self.coord_mode == self.COORD_MODE_GRID:
+            self.draw_grid_coordinates(painter)  # 格子坐标 (A1, B1, ...)
         self.draw_highlights(painter)
         self.draw_last_move_indicator(painter)
 
@@ -274,6 +321,43 @@ class BoardWidget(QWidget):
             painter.setBrush(self.colors['OBSTACLE'])
             painter.setPen(Qt.PenStyle.NoPen)
             painter.drawRect(arrow_rect)
+
+
+
+    def draw_board_coordinates(self, painter: QPainter):
+        """绘制棋盘周围的坐标标记"""
+        # 设置字体
+        font = QFont()
+        font.setPointSize(10)  # 从5改为10，增大字体
+        font.setBold(True)
+        painter.setFont(font)
+        painter.setPen(QColor(0, 0, 0))    #
+
+        # 绘制字母坐标 (A, B, C, ... 在顶部和底部)
+        for col in range(self.board_dim):
+            letter = chr(ord('A') + col)  # A, B, C, ...
+
+            # 顶部坐标
+            top_x = self.margin + col * self.grid_size + self.grid_size // 2
+            top_y = self.margin - 25
+            painter.drawText(top_x - 10, top_y, 20, 20, Qt.AlignmentFlag.AlignCenter, letter)
+
+            # 底部坐标
+            bottom_y = self.margin + self.board_dim * self.grid_size + 5
+            painter.drawText(top_x - 10, bottom_y, 20, 20, Qt.AlignmentFlag.AlignCenter, letter)
+
+        # 绘制数字坐标 (1, 2, 3, ... 在左侧和右侧)
+        for row in range(self.board_dim):
+            number = str(self.board_dim - row)  # 从大到小: 10, 9, 8, ...
+
+            # 左侧坐标
+            left_x = self.margin - 25
+            left_y = self.margin + row * self.grid_size + self.grid_size // 2 + 5
+            painter.drawText(left_x, left_y - 10, 20, 20, Qt.AlignmentFlag.AlignCenter, number)
+
+            # 右侧坐标
+            right_x = self.margin + self.board_dim * self.grid_size + 5
+            painter.drawText(right_x, left_y - 10, 20, 20, Qt.AlignmentFlag.AlignCenter, number)
 
     # --- 交互与状态更新 ---
     def mousePressEvent(self, event: "QMouseEvent"):
