@@ -22,8 +22,8 @@ from src.core.simulator import AmazonsSimulator, WHITE_AMAZON, BLACK_AMAZON, OBS
 from src.gui.amazon_board_widget import BoardWidget, AWAITING_PIECE_SELECTION, AWAITING_MOVE_DESTINATION, \
     AWAITING_ARROW_DESTINATION
 
-
 from src.ai.amazon_ai_agent import AmazonAIAgent
+
 
 class AmazonsMainWindow(QMainWindow):
     """
@@ -194,7 +194,7 @@ class AmazonsMainWindow(QMainWindow):
         left_v_layout = QVBoxLayout(self.left_controls_panel)
         self.left_controls_panel.setFixedWidth(220)
 
-        #添加状态标签的样式
+        # 添加状态标签的样式
         left_v_layout.addStretch(1)
         self.status_label = QLabel("欢迎！")
         font = QFont("Helvetica", 14)
@@ -307,7 +307,6 @@ class AmazonsMainWindow(QMainWindow):
         game_menu.addMenu(white_player_menu)
 
         game_menu.addSeparator()
-
 
         # --- 悔棋、认输 ---
         self.undo_action = QAction("悔棋", self)
@@ -566,9 +565,6 @@ class AmazonsMainWindow(QMainWindow):
 
         dialog.exec_()
 
-
-
-
     def set_player_mode(self, side, player_type):
         """
         设置某一边的玩家类型
@@ -589,9 +585,7 @@ class AmazonsMainWindow(QMainWindow):
         else:
             mode_text = "AI"
 
-
         self.statusBar().showMessage(f"已将 {side_text} 设置为 {mode_text} 玩家。", 3000)
-
 
         if self.simulator.game_over:
             self.show_game_over_message()
@@ -670,7 +664,6 @@ class AmazonsMainWindow(QMainWindow):
             return reply == QMessageBox.StandardButton.Yes
         return True
 
-
     def resign_game(self):
         """处理认输操作。"""
         # 检查是否在游戏中
@@ -699,7 +692,6 @@ class AmazonsMainWindow(QMainWindow):
         else:
             winner_name = "黑方" if self.simulator.winner == BLACK_AMAZON else "白方"
             self.show_game_over_message(f"游戏结束！{winner_name}获胜！")
-
 
     def post_animation_update(self, start_pos, move_pos, arrow_pos):
         """
@@ -900,7 +892,6 @@ class AmazonsMainWindow(QMainWindow):
             player_name = "黑方" if self.simulator.current_player == BLACK_AMAZON else "白方"
             self.handle_game_over(f"{player_name}已认输，{winner_name}获胜！")
             return
-
 
         start_pos = (best_res.best_pos_from // self.simulator.size, best_res.best_pos_from % self.simulator.size)
         move_pos = (best_res.best_pos_to // self.simulator.size, best_res.best_pos_to % self.simulator.size)

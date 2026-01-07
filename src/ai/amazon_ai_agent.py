@@ -73,9 +73,13 @@ class AIWorker(QObject):
                     1.0,  # 计算 1.0 秒
                     True
                 )
-                best_res.best_pos_from = (best_move.From // self.board_size, best_move.From % self.board_size)
-                best_res.best_pos_to = (best_move.To // self.board_size, best_move.To % self.board_size)
-                best_res.best_pos_stone = (best_move.Stone // self.board_size, best_move.Stone % self.board_size)
+                # best_res.best_pos_from = (best_move.From // self.board_size, best_move.From % self.board_size)
+                # best_res.best_pos_to = (best_move.To // self.board_size, best_move.To % self.board_size)
+                # best_res.best_pos_stone = (best_move.Stone // self.board_size, best_move.Stone % self.board_size)
+                best_res.best_pos_from = best_move.From
+                best_res.best_pos_to = best_move.To
+                best_res.best_pos_stone = best_move.Stone
+
                 best_res.best_pos = best_move
                 best_res.win_pro = best_move.pro
                 best_res.max_apt = best_move.attempt
