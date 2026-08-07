@@ -5,6 +5,7 @@ __pycache__/
 .pytest_cache/
 .coverage
 htmlcov/
+dist/
 
 gtp_logs/
 **/gtp_logs/

@@ -11,3 +11,6 @@ This directory contains the small prebuilt Windows modules used at runtime:
 Generated CMake build trees are intentionally excluded from the repository.
 To rebuild, use the `CMakeLists.txt` files in `src/ai/src` and `src/ai/src2`, then
 copy the resulting modules and runtime DLL here.
+
+The portable build selects only the two modules matching its build-time
+Python version and bundles them together with `libgomp_64-1.dll`.

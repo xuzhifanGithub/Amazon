@@ -16,5 +16,6 @@ jobs:
           python-version: '3.11'
       - run: python -m pip install -r requirements-dev.txt
       - run: python -m compileall -q main.py src tests
+      - run: python -m py_compile amazons_portable.spec scripts/check_portable.py
       - run: python -m pytest -q
       - run: python scripts/check_release.py

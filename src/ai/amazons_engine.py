@@ -12,11 +12,7 @@
 #   默认自动选择：若 gpu 引擎目录存在则用它，否则回退到 legacy。
 #
 #   所有路径都相对本文件（__file__）计算，项目整体复制到别处也能正常工作。
-#   可用环境变量覆盖：
-#     KATA_AMAZON_DIR    引擎目录（默认自动选择 kataAmazonEngineCuda / kataAmazonEngine）
-#     KATA_AMAZON_EXE    引擎可执行文件名（默认 amazons.exe）
-#     KATA_AMAZON_MODEL  模型文件路径（相对引擎目录，默认 gen012_model.bin.gz）
-#     KATA_AMAZON_CFG    配置文件名（默认 engine.cfg）
+#   正常运行始终使用项目内随附的引擎、模型和配置；构造函数的显式参数仅供开发测试。
 import logging
 import hashlib
 import os
@@ -151,6 +147,20 @@ def backend_available(backend: str) -> bool:
     return _backend_files_available(spec)
 
 
+def resolve_engine_resources(backend: str, engine_dir: str | None = None,
+                             engine_exe: str | None = None,
+                             model_file: str | None = None,
+                             config_file: str | None = None):
+    """Resolve normal runtime resources from the bundled backend directory."""
+    spec = engine_spec_for_backend(backend)
+    return (
+        os.path.abspath(engine_dir or spec['dir']),
+        engine_exe or spec['exe'],
+        model_file or spec['model'],
+        config_file or spec['cfg'],
+    )
+
+
 def profile_config_for_visits(backend: str, visits: int) -> str:
     """Return a generated config with an overridden ``maxVisits`` value.
 
@@ -217,16 +227,17 @@ class AmazonsKataGoEngine(QObject):
         spec = engine_spec_for_backend(backend) if backend else BACKENDS[_DEFAULT_BACKEND]
         self.backend = backend or _DEFAULT_BACKEND
 
-        engine_dir = engine_dir or os.environ.get('KATA_AMAZON_DIR', spec['dir'])
-        engine_exe = engine_exe or os.environ.get('KATA_AMAZON_EXE', spec['exe'])
-        model_file = model_file or os.environ.get('KATA_AMAZON_MODEL', spec['model'])
+        # Bundled resources are authoritative.  Ambient machine-level
+        # KATA_AMAZON_* variables must not redirect a portable build to files
+        # outside the application directory.  Explicit constructor arguments
+        # remain available for tests and engine development.
+        engine_dir, engine_exe, model_file, config_file = resolve_engine_resources(
+            self.backend, engine_dir, engine_exe, model_file, config_file)
         if max_visits is not None:
             config_file = profile_config_for_visits(self.backend, max_visits)
-        config_file = config_file or os.environ.get('KATA_AMAZON_CFG', spec['cfg'])
         self.max_visits = max_visits
 
         # 允许相对路径：以引擎目录为基准解析（引擎子进程也以此为工作目录）
-        engine_dir = os.path.abspath(engine_dir)
         engine_path = os.path.join(engine_dir, engine_exe)
 
         if not os.path.exists(engine_path):

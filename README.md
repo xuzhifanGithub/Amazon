@@ -16,6 +16,23 @@ setup_env.bat   :: 创建 .venv 并安装依赖（首次）
 run.bat         :: 启动游戏
 ```
 
+### 自包含便携版
+
+发布时可生成 `dist/Amazons/` 便携目录。该目录内包含 Python 运行时、PyQt6、NumPy、
+两个 MCTS 模块、KataGo 引擎、所需 DLL、gen012 模型和旧模型；目标电脑不需要另行安装
+Python，也不需要在项目目录之外配置模型或引擎文件。
+
+```bat
+setup_env.bat
+.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+build_portable.bat
+```
+
+构建完成后直接复制整个 `dist\Amazons` 文件夹并运行其中的 `Amazons.exe`。不要只复制
+单独的 exe，因为配套模型和引擎保存在同一便携目录内。GPU KataGo 仍需要目标 Windows
+系统安装可用的显卡/OpenCL 驱动；这是硬件驱动，不能由应用安全替代。没有可用驱动时，
+人类对局和项目内置的 MCTS 仍可使用。
+
 Linux / macOS 可运行纯 Python GUI 和人人对弈；MCTS 与 kataAmazon 需要在目标平台
 自行编译对应原生模块和引擎：
 
@@ -46,8 +63,8 @@ Linux / macOS 可运行纯 Python GUI 和人人对弈；MCTS 与 kataAmazon 需�
 - **通信**：以 GTP 子进程运行，用有超时边界的 `kata-genmove_analyze` 获取着法和胜率。
   对局着法只在规则层验证通过后提交到所有引擎；提示使用独立后台线程和当前历史快照，
   不会阻塞界面或继续分析旧棋盘。
-- **可移植**：`src/ai/amazons_engine.py` 中所有路径都相对该文件计算，可用环境变量覆盖：
-  `KATA_AMAZON_DIR` / `KATA_AMAZON_EXE` / `KATA_AMAZON_MODEL` / `KATA_AMAZON_CFG`。
+- **可移植**：`src/ai/amazons_engine.py` 中所有运行资源都相对该文件计算，正常运行固定使用
+  项目或便携目录内随附的引擎、模型与配置，不读取机器上的外部模型路径。
 
 > 注意：gen012 模型是服务器新版引擎的导出格式，**只能被配套的 `amazons.exe` 加载**。
 > CUDA 版 `katago.exe` 会报 `unknown activation type`，原始 `kataAmazon.exe` 同样无法加载。

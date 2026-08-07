@@ -4,7 +4,9 @@ import pytest
 from PyQt6.QtCore import QSettings
 
 from src.ai.ai_profile import AIProfile, load_profile, save_profile
-from src.ai.amazons_engine import BACKENDS, profile_config_for_visits
+from src.ai.amazons_engine import (
+    BACKENDS, profile_config_for_visits, resolve_engine_resources,
+)
 from src.ai.engine_manager import EngineManager
 from src.core.game_record import export_record, load_record
 from src.core.simulator import AmazonsSimulator
@@ -43,6 +45,20 @@ def test_visits_profile_cache_changes_when_base_config_changes(tmp_path, monkeyp
     assert first != second
     assert "foo = one" in first.read_text(encoding="utf-8")
     assert "foo = two" in second.read_text(encoding="utf-8")
+
+
+def test_runtime_engine_resources_ignore_machine_environment(monkeypatch):
+    monkeypatch.setenv("KATA_AMAZON_DIR", "Z:/external-engine")
+    monkeypatch.setenv("KATA_AMAZON_EXE", "external.exe")
+    monkeypatch.setenv("KATA_AMAZON_MODEL", "external.bin.gz")
+    monkeypatch.setenv("KATA_AMAZON_CFG", "external.cfg")
+
+    directory, executable, model, config = resolve_engine_resources("gpu")
+
+    assert Path(directory) == Path(BACKENDS["gpu"]["dir"]).resolve()
+    assert executable == BACKENDS["gpu"]["exe"]
+    assert model == BACKENDS["gpu"]["model"]
+    assert config == BACKENDS["gpu"]["cfg"]
 
 
 def test_game_record_round_trip_and_invalid_import_is_atomic(tmp_path):
