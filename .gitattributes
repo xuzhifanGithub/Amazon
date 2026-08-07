@@ -1,3 +1,4 @@
 src/ai/kataAmazonEngine/kataAmazon.exe filter=lfs diff=lfs merge=lfs -text
-src/ai/amazons_engine/weights/*.bin.gz filter=lfs diff=lfs merge=lfs -text
+src/ai/kataAmazonEngineCuda/*.exe filter=lfs diff=lfs merge=lfs -text
+src/ai/kataAmazonEngineV2/*.exe filter=lfs diff=lfs merge=lfs -text
 *.bin.gz filter=lfs diff=lfs merge=lfs -text

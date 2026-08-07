@@ -34,3 +34,9 @@ pybind11_add_module(amazon_ai_test ${SOURCE_FILES})
 
 # 链接 OpenMP 库。
 target_link_libraries(amazon_ai_test PRIVATE OpenMP::OpenMP_CXX)
+
+# Keep distributable modules separate from disposable CMake build trees.
+set_target_properties(amazon_ai_test PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../native"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../native"
+)
