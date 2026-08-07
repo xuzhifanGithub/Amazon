@@ -156,6 +156,30 @@ def test_info_panel_theme_changes_are_visible(qapp):
     window.close()
 
 
+def test_hint_progress_is_shown_in_right_panel(qapp):
+    window = AmazonsMainWindow(AmazonsSimulator())
+    window.show_hints_action.setChecked(True)
+    window._hint_request_id = 12
+
+    window._handle_hint_progress({
+        "request_id": 12,
+        "text": "候选 1/3：正在分析移动…",
+        "progress": 42,
+    })
+
+    assert window.info_panel.task_status_label.isVisibleTo(window.info_panel)
+    assert "候选 1/3" in window.info_panel.task_status_label.text()
+    assert window.info_panel.task_progress_bar.value() == 42
+
+    window._handle_hint_progress({
+        "request_id": 11,
+        "text": "过期任务",
+        "progress": 99,
+    })
+    assert "过期任务" not in window.info_panel.task_status_label.text()
+    window.close()
+
+
 def test_top_n_hint_candidates_keep_only_highest_rate_on_board(qapp):
     window = AmazonsMainWindow(AmazonsSimulator())
     window.show_hints_action.setChecked(True)

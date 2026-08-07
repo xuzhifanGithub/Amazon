@@ -106,6 +106,7 @@ class BoardWidget(QWidget):
             self.color_scheme_key = DEFAULT_COLOR_SCHEME
         self.colors = COLOR_SCHEMES[self.color_scheme_key]
         self._static_board_cache = None
+        self._static_board_cache_signature = None
         self._piece_layer_cache = None
         self._piece_layer_key = None
         # ------------------------
@@ -529,6 +530,21 @@ class BoardWidget(QWidget):
         self.update()
 
     # --- 绘图辅助方法 ---
+    def _cache_signature(self):
+        """Return the physical-pixel signature used by HiDPI pixmap caches."""
+        return (self.width(), self.height(), round(self.devicePixelRatioF(), 3))
+
+    def _new_cache_pixmap(self):
+        """Create a cache at the screen's native device-pixel resolution."""
+        dpr = max(1.0, self.devicePixelRatioF())
+        cache = QPixmap(
+            max(1, math.ceil(self.width() * dpr)),
+            max(1, math.ceil(self.height() * dpr)),
+        )
+        cache.setDevicePixelRatio(dpr)
+        cache.fill(Qt.GlobalColor.transparent)
+        return cache
+
     def draw_piece_layer(self, painter: QPainter):
         """Cache ordinary pieces when no interactive overlay can alter them."""
         can_cache = (not self.is_animating and not self.hidden_pieces
@@ -538,10 +554,10 @@ class BoardWidget(QWidget):
         board_key = None
         if can_cache:
             board_key = (self.color_scheme_key, self.grid_size, self.margin,
-                         self.simulator.board.tobytes())
+                          self._cache_signature(),
+                          self.simulator.board.tobytes())
             if self._piece_layer_cache is None or self._piece_layer_key != board_key:
-                cache = QPixmap(self.size())
-                cache.fill(Qt.GlobalColor.transparent)
+                cache = self._new_cache_pixmap()
                 cache_painter = QPainter(cache)
                 cache_painter.setRenderHint(QPainter.RenderHint.Antialiasing)
                 for r in range(self.board_dim):
@@ -573,9 +589,10 @@ class BoardWidget(QWidget):
             elif self.coord_mode == self.COORD_MODE_GRID:
                 self.draw_grid_coordinates(painter)
             return
-        if self._static_board_cache is None or self._static_board_cache.size() != self.size():
-            cache = QPixmap(self.size())
-            cache.fill(Qt.GlobalColor.transparent)
+        signature = self._cache_signature()
+        if (self._static_board_cache is None
+                or self._static_board_cache_signature != signature):
+            cache = self._new_cache_pixmap()
             cache_painter = QPainter(cache)
             cache_painter.setRenderHint(QPainter.RenderHint.Antialiasing)
             self.draw_board_grid(cache_painter)
@@ -585,6 +602,7 @@ class BoardWidget(QWidget):
                 self.draw_grid_coordinates(cache_painter)
             cache_painter.end()
             self._static_board_cache = cache
+            self._static_board_cache_signature = signature
         painter.drawPixmap(0, 0, self._static_board_cache)
 
     def draw_board_grid(self, painter: QPainter):

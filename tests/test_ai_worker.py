@@ -1,7 +1,9 @@
 from contextlib import contextmanager
 from types import SimpleNamespace
 
-from src.ai.amazon_ai_agent import AIWorker
+from unittest.mock import Mock
+
+from src.ai.amazon_ai_agent import AIWorker, HintWorker
 from src.ai.results import AIOutcome
 
 
@@ -74,3 +76,34 @@ def test_kata_worker_holds_snapshot_engine_context_for_complete_turn():
     assert outcomes[0].result.best_pos_to == 11
     assert outcomes[0].result.best_pos_stone == 22
     assert outcomes[0].result.win_pro == 63.0
+
+
+def test_hint_cancel_marks_queued_request_without_killing_idle_engine():
+    worker = HintWorker(10)
+    worker.engine = Mock()
+
+    worker.abort(17)
+
+    assert worker._was_cancelled(17)
+    worker.engine.abort.assert_not_called()
+
+    worker._active_request_id = 17
+    worker.abort(17)
+    worker.engine.abort.assert_called_once_with()
+
+
+def test_cancelled_queued_hint_does_not_start_engine():
+    worker = HintWorker(10)
+    worker._ensure_engine = Mock()
+    worker.abort(23)
+
+    worker.analyze({
+        "request_id": 23,
+        "backend": "gpu",
+        "player": 1,
+        "top_n": 1,
+        "history": (),
+    })
+
+    worker._ensure_engine.assert_not_called()
+    assert not worker.busy

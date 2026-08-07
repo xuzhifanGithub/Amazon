@@ -86,6 +86,19 @@ class AIInfoPanel(QWidget):
         status_row.addWidget(self.status_indicator, 0, Qt.AlignmentFlag.AlignTop)
         status_row.addWidget(self.status_label, 1)
         status_layout.addLayout(status_row)
+        self.task_status_label = QLabel()
+        self.task_status_label.setObjectName("taskStatus")
+        self.task_status_label.setWordWrap(True)
+        self.task_progress_bar = QProgressBar()
+        self.task_progress_bar.setObjectName("taskProgressBar")
+        self.task_progress_bar.setRange(0, 100)
+        self.task_progress_bar.setValue(0)
+        self.task_progress_bar.setTextVisible(True)
+        self.task_progress_bar.setFixedHeight(16)
+        self.task_status_label.hide()
+        self.task_progress_bar.hide()
+        status_layout.addWidget(self.task_status_label)
+        status_layout.addWidget(self.task_progress_bar)
         root.addWidget(status_card)
 
         win_card, win_layout = self._create_card("局面胜率", "winRateCard")
@@ -170,6 +183,11 @@ class AIInfoPanel(QWidget):
                 font-size: 11pt;
                 font-weight: 600;
             }}
+            QLabel#taskStatus {{
+                color: {theme['warning']};
+                font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+                font-size: 9pt;
+            }}
             QLabel#winRateValue {{
                 color: {theme['accent']};
                 font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
@@ -185,14 +203,20 @@ class AIInfoPanel(QWidget):
                 font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
                 font-size: 9pt;
             }}
-            QProgressBar#winRateBar {{
+            QProgressBar#winRateBar, QProgressBar#taskProgressBar {{
                 background: {theme['accent_soft']};
                 border: none;
                 border-radius: 3px;
             }}
-            QProgressBar#winRateBar::chunk {{
+            QProgressBar#winRateBar::chunk, QProgressBar#taskProgressBar::chunk {{
                 background: {theme['accent']};
                 border-radius: 3px;
+            }}
+            QProgressBar#taskProgressBar {{
+                color: {theme['text']};
+                font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+                font-size: 8pt;
+                text-align: center;
             }}
             QLabel#statusIndicator {{
                 background: {theme['success']};
@@ -217,6 +241,26 @@ class AIInfoPanel(QWidget):
         self.win_rate_context.setText(context or "当前行动方 AI 预测")
         self.win_rate_label.setText(f"{win_rate:.1f}%")
         self.win_rate_bar.setValue(max(0, min(100, round(win_rate))))
+
+    def set_task_progress(self, text: str = "", progress: int | None = None):
+        """Show a background hint-analysis stage without replacing turn status."""
+        if not text:
+            self.task_status_label.clear()
+            self.task_progress_bar.setRange(0, 100)
+            self.task_progress_bar.setValue(0)
+            self.task_status_label.hide()
+            self.task_progress_bar.hide()
+            return
+
+        self.task_status_label.setText(text)
+        self.task_status_label.show()
+        self.task_progress_bar.show()
+        if progress is None:
+            # Busy indicator while engine startup duration is unknown.
+            self.task_progress_bar.setRange(0, 0)
+        else:
+            self.task_progress_bar.setRange(0, 100)
+            self.task_progress_bar.setValue(max(0, min(100, round(progress))))
 
     def set_candidates(self, rows: list[str] | tuple[str, ...] | None = None):
         self.info_candidates.setText("候选：—" if not rows else "候选：\n" + "\n".join(rows))

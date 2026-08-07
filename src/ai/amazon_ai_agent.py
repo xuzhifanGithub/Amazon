@@ -143,6 +143,7 @@ class HintWorker(QObject):
     """Long-lived worker that owns the hint engine in one dedicated thread."""
 
     finished = pyqtSignal(object)
+    progress = pyqtSignal(object)
     stopped = pyqtSignal()
 
     def __init__(self, board_size: int):
@@ -153,11 +154,20 @@ class HintWorker(QObject):
         self.busy = False
         self._cancel_lock = threading.Lock()
         self._active_request_id = None
-        self._cancelled_request_id = None
+        self._last_finished_request_id = None
+        self._cancelled_request_ids = set()
+        self._aborted_request_ids = set()
 
     def _was_cancelled(self, request_id: int) -> bool:
         with self._cancel_lock:
-            return self._cancelled_request_id == request_id
+            return request_id in self._cancelled_request_ids
+
+    def _emit_progress(self, request_id: int, text: str, progress=None):
+        self.progress.emit({
+            'request_id': request_id,
+            'text': text,
+            'progress': progress,
+        })
 
     def _close_engine(self):
         if self.engine is not None:
@@ -186,6 +196,9 @@ class HintWorker(QObject):
             self._active_request_id = request_id
         self.busy = True
         try:
+            if self._was_cancelled(request_id):
+                return
+            self._emit_progress(request_id, "正在启动胜率提示模型…")
             engine = self._ensure_engine(request['backend'])
             if self._was_cancelled(request_id):
                 return
@@ -203,12 +216,42 @@ class HintWorker(QObject):
                 )
 
             candidates = []
-            for start, start_win, start_visits in engine.ranked_start_candidates(
-                    request['player'], request.get('top_n', 1)):
+            self._emit_progress(request_id, "正在分析候选棋子…")
+            ranked = engine.ranked_start_candidates(
+                request['player'], request.get('top_n', 1))
+            total_candidates = len(ranked)
+            total_steps = max(1, 1 + total_candidates * 2)
+            self._emit_progress(
+                request_id,
+                f"已找到 {total_candidates} 个候选，准备分析完整回合…",
+                round(100 / total_steps),
+            )
+            for candidate_index, (start, start_win, start_visits) in enumerate(ranked, 1):
                 if self._was_cancelled(request_id):
                     return
+
+                def report_stage(stage, rate, _visits, *, index=candidate_index,
+                                 start_coord=start):
+                    base = 1 + (index - 1) * 2
+                    rate_text = "—" if rate is None else f"{rate:.1f}%"
+                    if stage == "piece":
+                        text = (f"候选 {index}/{total_candidates}：棋子 {start_coord} "
+                                f"胜率 {rate_text}，正在分析移动…")
+                        completed = base
+                    elif stage == "move":
+                        text = (f"候选 {index}/{total_candidates}：移动胜率 {rate_text}，"
+                                "正在分析射箭…")
+                        completed = base + 1
+                    else:
+                        text = (f"候选 {index}/{total_candidates}：射箭胜率 {rate_text}，"
+                                "完整回合分析完成")
+                        completed = base + 2
+                    self._emit_progress(
+                        request_id, text, round(completed * 100 / total_steps))
+
                 turn, rates, visits = engine.analyze_turn_for_start(
-                    request['player'], start, start_win, start_visits)
+                    request['player'], start, start_win, start_visits,
+                    progress_callback=report_stage)
                 if self._was_cancelled(request_id):
                     return
                 if turn is None or rates is None:
@@ -221,6 +264,7 @@ class HintWorker(QObject):
                 self.finished.emit(HintOutcome(request_id, error="引擎没有返回合法候选。"))
                 return
             best = candidates[0]
+            self._emit_progress(request_id, "胜率提示分析完成", 100)
             self.finished.emit(HintOutcome(
                 request_id=request_id,
                 candidates=tuple(candidates),
@@ -238,25 +282,32 @@ class HintWorker(QObject):
             self.busy = False
             cancelled = self._was_cancelled(request_id)
             with self._cancel_lock:
+                aborted = request_id in self._aborted_request_ids
                 if self._active_request_id == request_id:
                     self._active_request_id = None
-                if self._cancelled_request_id == request_id:
-                    self._cancelled_request_id = None
+                self._last_finished_request_id = request_id
+                self._cancelled_request_ids.discard(request_id)
+                self._aborted_request_ids.discard(request_id)
             # abort() kills the process to interrupt a blocking GTP read.  Do
             # not retain that dead engine for the next hint request.
-            if cancelled:
+            if cancelled and aborted:
                 self._close_engine()
 
     def shutdown(self):
         self._close_engine()
         self.stopped.emit()
 
-    def abort(self):
+    def abort(self, request_id=None):
         with self._cancel_lock:
-            if self._active_request_id is not None:
-                self._cancelled_request_id = self._active_request_id
-        if self.engine is not None:
-            self.engine.abort()
+            target = request_id if request_id is not None else self._active_request_id
+            if target is not None and target != self._last_finished_request_id:
+                self._cancelled_request_ids.add(target)
+            should_abort = target is not None and target == self._active_request_id
+            engine = self.engine if should_abort else None
+            if engine is not None:
+                self._aborted_request_ids.add(target)
+        if engine is not None:
+            engine.abort()
 
 
 
@@ -269,6 +320,7 @@ class AmazonAIAgent(QObject):
     hint_requested = pyqtSignal(object)
     hint_shutdown_requested = pyqtSignal()
     hint_calculated = pyqtSignal(object)
+    hint_progress = pyqtSignal(object)
     calculation_finished = pyqtSignal()
 
     def __init__(self, main_window_instance, engine_manager: EngineManager | None = None):
@@ -290,6 +342,7 @@ class AmazonAIAgent(QObject):
         # 提示引擎由长生命周期 HintWorker 独占，避免在 GUI 线程中初始化或搜索。
         self.hint_thread = None
         self.hint_worker = None
+        self._pending_hint_request_id = None
 
 
     def start_thread_ai_calculation(self, ai_type, profile: AIProfile | None = None):
@@ -408,7 +461,8 @@ class AmazonAIAgent(QObject):
         self.hint_worker.moveToThread(self.hint_thread)
         self.hint_requested.connect(self.hint_worker.analyze)
         self.hint_shutdown_requested.connect(self.hint_worker.shutdown)
-        self.hint_worker.finished.connect(self.hint_calculated)
+        self.hint_worker.finished.connect(self._forward_hint_outcome)
+        self.hint_worker.progress.connect(self.hint_progress)
         self.hint_worker.stopped.connect(self.hint_worker.deleteLater)
         self.hint_worker.stopped.connect(self.hint_thread.quit)
         self.hint_thread.finished.connect(self.hint_thread.deleteLater)
@@ -417,6 +471,7 @@ class AmazonAIAgent(QObject):
 
     def start_hint_analysis(self, request_id: int, player: int, backend: str, top_n: int = 1):
         self._ensure_hint_worker()
+        self._pending_hint_request_id = request_id
         self.hint_requested.emit({
             'request_id': request_id,
             'player': player,
@@ -427,8 +482,15 @@ class AmazonAIAgent(QObject):
 
     def cancel_hint_analysis(self):
         """Abort a stale search so a newer queued request can start promptly."""
-        if self.hint_worker is not None and self.hint_worker.busy:
-            self.hint_worker.abort()
+        request_id = self._pending_hint_request_id
+        self._pending_hint_request_id = None
+        if self.hint_worker is not None and request_id is not None:
+            self.hint_worker.abort(request_id)
+
+    def _forward_hint_outcome(self, outcome):
+        if getattr(outcome, 'request_id', None) == self._pending_hint_request_id:
+            self._pending_hint_request_id = None
+        self.hint_calculated.emit(outcome)
 
     def _cleanup_hint_thread(self):
         self.hint_worker = None

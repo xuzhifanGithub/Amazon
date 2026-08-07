@@ -76,6 +76,8 @@ class AmazonsMainWindow(QMainWindow):
             lambda result: self.execute_ai_move(result, WHITE_AMAZON))
         self.black_ai_agent.hint_calculated.connect(self._handle_hint_outcome)
         self.white_ai_agent.hint_calculated.connect(self._handle_hint_outcome)
+        self.black_ai_agent.hint_progress.connect(self._handle_hint_progress)
+        self.white_ai_agent.hint_progress.connect(self._handle_hint_progress)
         self.black_ai_agent.calculation_finished.connect(self._on_ai_worker_idle)
         self.white_ai_agent.calculation_finished.connect(self._on_ai_worker_idle)
         # 主题设置
@@ -127,6 +129,8 @@ class AmazonsMainWindow(QMainWindow):
         self._active_ai_request = None
         self.black_ai_agent.cancel_hint_analysis()
         self.white_ai_agent.cancel_hint_analysis()
+        if hasattr(self, 'info_panel'):
+            self.info_panel.set_task_progress()
         self._cancel_current_animation()
 
     def start_new_game(self):
@@ -303,6 +307,7 @@ class AmazonsMainWindow(QMainWindow):
             self.white_ai_agent.cancel_hint_analysis()
             self.board_widget.set_hints([], self.hint_side)
             self.info_panel.set_candidates()
+            self.info_panel.set_task_progress()
             return
 
         # 用对应方的 AI agent 查询（使用独立的提示引擎，不影响对局引擎）
@@ -314,7 +319,18 @@ class AmazonsMainWindow(QMainWindow):
         self.board_widget.set_hints([], self.hint_side)
         self.info_panel.set_candidates()
         self.statusBar().showMessage("正在后台计算 AI 提示...")
+        self.info_panel.set_task_progress("正在启动胜率提示模型…")
         agent.start_hint_analysis(request_id, self.hint_side, self.hint_source, self.hint_count)
+
+    def _handle_hint_progress(self, update):
+        """Display progress only for the newest hint request and position."""
+        if (self._closing or update.get('request_id') != self._hint_request_id
+                or not self.show_hints_action.isChecked()
+                or self.simulator.game_over
+                or self.simulator.current_player != self.hint_side):
+            return
+        self.info_panel.set_task_progress(
+            update.get('text', '正在分析胜率…'), update.get('progress'))
 
     def _handle_hint_outcome(self, outcome: HintOutcome):
         """Apply only the newest hint response for the current game position."""
@@ -327,6 +343,7 @@ class AmazonsMainWindow(QMainWindow):
         if outcome.error:
             self.board_widget.set_hints([], self.hint_side)
             self.info_panel.set_candidates()
+            self.info_panel.set_task_progress("胜率提示分析失败", 0)
             self.statusBar().showMessage(f"AI 提示不可用：{outcome.error}")
             return
 
@@ -366,6 +383,7 @@ class AmazonsMainWindow(QMainWindow):
             rate_text = "—" if rate is None else f"{rate:.1f}%"
             candidate_rows.append(f"{index}. {start} → {move} → {arrow}  {rate_text}")
         self.info_panel.set_candidates(candidate_rows)
+        self.info_panel.set_task_progress("胜率提示分析完成", 100)
         if hints and stage_win_rates:
             labels = ("选子", "移动", "射箭")
             rate_text = " → ".join(

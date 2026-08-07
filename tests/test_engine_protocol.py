@@ -114,3 +114,35 @@ def test_candidate_turn_restores_board_and_keeps_original_player_view():
     assert rates == (60.0, 70.0, 65.0)
     assert visits == (10, 20, 30)
     assert engine.commands == ["play b A1", "undo", "undo", "undo"]
+
+
+def test_candidate_turn_reports_all_three_progress_stages():
+    engine = FakeCandidateEngine()
+    stages = []
+
+    engine.analyze_turn_for_start(
+        BLACK_AMAZON, "A1", 60.0, 10,
+        progress_callback=lambda stage, rate, visits: stages.append(
+            (stage, rate, visits)),
+    )
+
+    assert stages == [
+        ("piece", 60.0, 10),
+        ("move", 70.0, 20),
+        ("arrow", 65.0, 30),
+    ]
+
+
+def test_restore_skips_undo_after_engine_input_is_closed():
+    commands = []
+    engine = SimpleNamespace(
+        process=SimpleNamespace(
+            poll=lambda: None,
+            stdin=SimpleNamespace(closed=True),
+        ),
+        _execute_sync_command=lambda command: commands.append(command),
+    )
+
+    AmazonsKataGoEngine._restore_temporary_moves(engine, 3)
+
+    assert commands == []

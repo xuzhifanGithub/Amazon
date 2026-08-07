@@ -337,7 +337,8 @@ class AmazonsKataGoEngine(QObject):
     def _send_command(self, command: str):
         if self.process.poll() is not None:
             raise RuntimeError(f"AI 引擎已经退出（退出码：{self.process.returncode}）。")
-        if not self.process.stdin:
+        if (not self.process.stdin
+                or getattr(self.process.stdin, 'closed', False)):
             raise RuntimeError("AI 引擎标准输入不可用。")
         logger.debug("TO ENGINE: %s", command)
         self.command_sent.emit(command)
@@ -412,6 +413,25 @@ class AmazonsKataGoEngine(QObject):
             return played, None, None
         return played, win_pct, visits
 
+    def _restore_temporary_moves(self, count: int):
+        """Undo temporary analysis moves only while the subprocess is writable.
+
+        Hint cancellation intentionally kills a blocking engine.  Attempting an
+        ``undo`` after that point only masks the original cancellation with a
+        secondary broken-pipe error.
+        """
+        process = getattr(self, "process", None)
+        if process is not None:
+            stdin = getattr(process, "stdin", None)
+            if (process.poll() is not None or stdin is None
+                    or getattr(stdin, 'closed', False)):
+                return
+        for _ in range(max(0, count)):
+            try:
+                self._execute_sync_command("undo")
+            except (RuntimeError, TimeoutError, OSError, ValueError):
+                break
+
     def get_best_turn(self, player: int) -> tuple[str, str, str]:
         """分析完整回合，但不永久推进引擎棋盘。
 
@@ -432,11 +452,7 @@ class AmazonsKataGoEngine(QObject):
             self.last_visits = visits
             return (start_pos_str, move_pos_str, arrow_pos_str)
         finally:
-            for _ in range(played_count):
-                try:
-                    self._execute_sync_command("undo")
-                except (RuntimeError, TimeoutError):
-                    break
+            AmazonsKataGoEngine._restore_temporary_moves(self, played_count)
 
     def get_move_arrow_for_start(self, player: int, start_coord: str) -> tuple[str, str]:
         """给定已落下的起点坐标，查询引擎后续的移动目标和射箭目标。
@@ -494,11 +510,7 @@ class AmazonsKataGoEngine(QObject):
             )
         finally:
             # kata-genmove_analyze 会实际落下一手；分析完成后必须完整恢复局面。
-            for _ in range(played_count):
-                try:
-                    self._execute_sync_command("undo")
-                except (RuntimeError, OSError, ValueError):
-                    break
+            AmazonsKataGoEngine._restore_temporary_moves(self, played_count)
 
     def analyze_candidates(self, player: int, top_n: int = 3) -> list[tuple[str, float]]:
         """
@@ -518,10 +530,7 @@ class AmazonsKataGoEngine(QObject):
 
         # 撤销 kata-genmove_analyze 实际落下的一手，保持局面不变
         if played is not None and played != "pass":
-            try:
-                self._execute_sync_command("undo")
-            except RuntimeError:
-                pass
+            AmazonsKataGoEngine._restore_temporary_moves(self, 1)
 
         return [(move, winrate) for move, winrate, _ in ranked[:top_n]
                 if winrate is not None]
@@ -532,18 +541,14 @@ class AmazonsKataGoEngine(QObject):
         response = self._execute_sync_command(f"kata-genmove_analyze {player_char}")
         played, _winrate, _visits, ranked = parse_genmove_analyze(response)
         if played is not None and played.lower() not in ('pass', 'resign'):
-            try:
-                self._execute_sync_command("undo")
-            except (RuntimeError, OSError, ValueError):
-                # The hint worker may have cancelled the subprocess while the
-                # temporary candidate position was being restored.
-                pass
+            AmazonsKataGoEngine._restore_temporary_moves(self, 1)
         return [(move, rate, visits) for move, rate, visits in ranked[:top_n]
                 if move.lower() not in ('pass', 'resign')]
 
     def analyze_turn_for_start(self, player: int, start: str,
                                start_win: float | None = None,
-                               start_visits: int | None = None):
+                               start_visits: int | None = None,
+                               progress_callback=None):
         """Analyse move and arrow after a chosen first-stage move.
 
         GTP encodes an Amazons turn as player / opponent / player.  The
@@ -555,24 +560,26 @@ class AmazonsKataGoEngine(QObject):
         try:
             self._execute_sync_command(f"play {player_char} {start}")
             played_count += 1
+            if progress_callback is not None:
+                progress_callback("piece", start_win, start_visits)
             move, opponent_rate, move_visits = self._genmove_analyze(opponent_char)
             played_count += 1
             if str(move).strip().lower() in ('pass', 'resign'):
                 return None, None, None
+            move_rate = None if opponent_rate is None else 100.0 - opponent_rate
+            if progress_callback is not None:
+                progress_callback("move", move_rate, move_visits)
             arrow, arrow_rate, arrow_visits = self._genmove_analyze(player_char)
             played_count += 1
             if str(arrow).strip().lower() in ('pass', 'resign'):
                 return None, None, None
-            move_rate = None if opponent_rate is None else 100.0 - opponent_rate
+            if progress_callback is not None:
+                progress_callback("arrow", arrow_rate, arrow_visits)
             return ((start, move, arrow),
                     (start_win, move_rate, arrow_rate),
                     (start_visits, move_visits, arrow_visits))
         finally:
-            for _ in range(played_count):
-                try:
-                    self._execute_sync_command("undo")
-                except (RuntimeError, OSError, ValueError):
-                    break
+            AmazonsKataGoEngine._restore_temporary_moves(self, played_count)
 
     def clear_board(self):
         """向引擎发送 clear_board 命令。"""

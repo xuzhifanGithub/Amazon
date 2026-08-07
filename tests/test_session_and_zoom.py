@@ -1,5 +1,8 @@
 import threading
 
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QPainter, QPixmap
+
 from src.core.game_session import GameSessionController, SessionState
 from src.core.simulator import AmazonsSimulator
 from src.gui.amazon_board_widget import BoardWidget
@@ -29,6 +32,20 @@ def test_board_zoom_updates_geometry_and_resets_cache(qapp):
     assert board._piece_layer_cache is None
     board.set_zoom_percent(77)
     assert board.zoom_percent == 100
+
+
+def test_piece_cache_uses_native_device_pixel_ratio(qapp, monkeypatch):
+    board = BoardWidget(AmazonsSimulator())
+    monkeypatch.setattr(board, "devicePixelRatioF", lambda: 2.0)
+    target = QPixmap(board.size())
+    target.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(target)
+    board.draw_piece_layer(painter)
+    painter.end()
+
+    assert board._piece_layer_cache.devicePixelRatio() == 2.0
+    assert board._piece_layer_cache.width() == board.width() * 2
+    assert board._piece_layer_cache.height() == board.height() * 2
 
 
 def test_shared_engine_manager_skips_duplicate_sync():
