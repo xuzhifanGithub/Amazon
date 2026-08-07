@@ -2,6 +2,7 @@ import sys
 import os
 import logging
 import threading
+from contextlib import contextmanager, nullcontext
 from PyQt6.QtCore import QObject, QThread, pyqtSignal
 logger = logging.getLogger(__name__)
 # 确保项目根目录在 sys.path 中
@@ -54,7 +55,8 @@ class AIWorker(QObject):
 
     def __init__(self, board_size, board, queen_pos, current_player, ai_type,
                  ai_type_engine=None, engine_provider=None, engine_backend=None,
-                 mcts_seconds: float = 1.0, kata_visits: int | None = None):
+                 mcts_seconds: float = 1.0, kata_visits: int | None = None,
+                 history=()):
         super().__init__()
         self.board_size = board_size
         self.board = board
@@ -66,6 +68,7 @@ class AIWorker(QObject):
         self.engine_backend = engine_backend
         self.mcts_seconds = mcts_seconds
         self.kata_visits = kata_visits
+        self.history = tuple(history)
 
 
 
@@ -94,40 +97,39 @@ class AIWorker(QObject):
                 best_res.max_apt = best_move.attempt
                 best_res.select_pro = best_move.value
             elif self.ai_type == 'kataAmazon':
-                if self.engine_provider is not None:
-                    self.ai_type_engine = self.engine_provider(self.engine_backend, self.kata_visits)
-                if self.ai_type_engine is None:
-                    raise RuntimeError("kataAmazon 引擎不可用。")
-                # 不发送 time_settings：任何时间控制都会让 CPU 引擎按时间搜索，
-                # 时间为 0 时只有 1 次访问、胜率无意义。改由 engine.cfg 的 maxVisits 控制。
-                turn_tuple = self.ai_type_engine.get_best_turn(self.current_player)
-                start_pos, move_pos, arrow_pos = turn_tuple
+                engine_context = (
+                    self.engine_provider(
+                        self.engine_backend, self.kata_visits, self.history)
+                    if self.engine_provider is not None
+                    else nullcontext(self.ai_type_engine)
+                )
+                # Hold the manager lease across all three GTP stages.  A new
+                # game, undo, or import can invalidate this lease without
+                # inserting commands into the middle of the search.
+                with engine_context as engine:
+                    self.ai_type_engine = engine
+                    if engine is None:
+                        raise RuntimeError("kataAmazon 引擎不可用。")
+                    start_pos, move_pos, arrow_pos = engine.get_best_turn(
+                        self.current_player)
+                    non_moves = ('pass', 'resign')
+                    if any(str(p).strip().lower() in non_moves
+                           for p in (start_pos, move_pos, arrow_pos)):
+                        self.finished.emit(AIOutcome.resignation())
+                        return
 
-                # 引擎放弃/认输：一个亚马逊棋回合由 3 次 GTP genmove 组成，
-                # 其中任意一段返回 pass 或 resign 都表示引擎不再给出合法着法，
-                # 一律按「当前行动方认输」处理（-2 由主窗口显示认输结算）。
-                non_moves = ('pass', 'resign')
-                if any(str(p).strip().lower() in non_moves
-                       for p in (start_pos, move_pos, arrow_pos)):
-                    self.finished.emit(AIOutcome.resignation())
-                    return  # 直接返回，不执行后续逻辑
+                    start_pos = engine._convert_coord(start_pos)
+                    move_pos = engine._convert_coord(move_pos)
+                    arrow_pos = engine._convert_coord(arrow_pos)
+                    best_res.best_pos_from = start_pos[0] * self.board_size + start_pos[1]
+                    best_res.best_pos_to = move_pos[0] * self.board_size + move_pos[1]
+                    best_res.best_pos_stone = arrow_pos[0] * self.board_size + arrow_pos[1]
 
-                #print(f"引擎输出坐标 - 起始1: '{start_pos}', 移动: '{move_pos}', 射箭: '{arrow_pos}'")
-                start_pos = self.ai_type_engine._convert_coord(start_pos)
-                move_pos = self.ai_type_engine._convert_coord(move_pos)
-                arrow_pos = self.ai_type_engine._convert_coord(arrow_pos)
-                #print(f"引擎输出坐标 - 起始2: '{start_pos}', 移动: '{move_pos}', 射箭: '{arrow_pos}'")
-                best_res.best_pos_from = start_pos[0]*self.board_size + start_pos[1]
-                best_res.best_pos_to = move_pos[0] * self.board_size + move_pos[1]
-                best_res.best_pos_stone = arrow_pos[0] * self.board_size + arrow_pos[1]
-
-                # 从引擎带回的胜率(%)与搜索次数，供 GUI 显示。
-                win = getattr(self.ai_type_engine, 'last_winrate', None)
-                visits = getattr(self.ai_type_engine, 'last_visits', None)
-                best_res.win_pro = win
-                best_res.max_apt = visits
-                # kataAmazon 没有单独的“选择概率”，用胜率占位以复用状态栏格式。
-                best_res.select_pro = (win / 100.0) if win is not None else None
+                    win = getattr(engine, 'last_winrate', None)
+                    visits = getattr(engine, 'last_visits', None)
+                    best_res.win_pro = win
+                    best_res.max_apt = visits
+                    best_res.select_pro = (win / 100.0) if win is not None else None
             else:
                 raise ValueError("Invalid AI type provided.")
 
@@ -274,7 +276,6 @@ class AmazonAIAgent(QObject):
         self.main_window = main_window_instance
         self.thread = None
         self.worker = None
-        self._clear_board_pending = False
         self._engine_lock = threading.RLock()
         self.size = self.main_window.simulator.size
         self.ai = amazon_ai.AmazonasAI() if amazon_ai is not None else None
@@ -336,10 +337,11 @@ class AmazonAIAgent(QObject):
             simulator.current_player,
             worker_ai_type,
             ai_type_engine,
-            engine_provider=self.ensure_kata_engine if worker_ai_type == 'kataAmazon' else None,
+            engine_provider=self.acquire_kata_engine if worker_ai_type == 'kataAmazon' else None,
             engine_backend=backend if worker_ai_type == 'kataAmazon' else None,
             mcts_seconds=profile.mcts_seconds,
             kata_visits=profile.kata_visits,
+            history=tuple(simulator.history_do_chess),
         )
         # 将工作者移动到线程中
         self.worker.moveToThread(self.thread)
@@ -381,6 +383,18 @@ class AmazonAIAgent(QObject):
                 return engine
             except Exception:
                 raise
+
+    @contextmanager
+    def acquire_kata_engine(self, backend='gpu', visits=None, history=()):
+        """Lease a gameplay engine for one complete, snapshot-based search."""
+        visits = int(visits or (400 if backend == 'legacy' else 600))
+        with self._engine_manager.game_engine(
+                backend, visits, tuple(history), self._play_turn_on_engine,
+                mode="gameplay") as engine:
+            with self._engine_lock:
+                self.ai_engine = engine
+                self.kata_backend = backend
+            yield engine
 
     # 兼容旧调用名
     def init_ai_engine(self, backend='gpu', visits=None):
@@ -432,9 +446,6 @@ class AmazonAIAgent(QObject):
         """线程结束后清理引用"""
         self.thread = None
         self.worker = None
-        if self._clear_board_pending:
-            self._clear_board_pending = False
-            self._clear_engines_board()
         self.calculation_finished.emit()
 
 
@@ -466,38 +477,23 @@ class AmazonAIAgent(QObject):
 
 
     def undo_board(self):
+        # Rebuilding from simulator history is both safer and simpler than
+        # issuing undo while another side may still hold the shared engine.
         with self._engine_lock:
-            if not self._engine_pool:
-                return
-            try:
-                self._engine_manager.undo_turn(
-                    len(self.main_window.simulator.history_do_chess))
-            except Exception:
-                logger.exception("回退对局引擎失败；下次使用时将从历史重建")
-                self._drop_ai_engine_locked()
+            self._drop_ai_engine_locked()
 
     def clear_board(self):
-        # Avoid interleaving clear_board with GTP commands from a worker thread.
-        if self.is_busy():
-            self._clear_board_pending = True
-            return False
-
-        self._clear_engines_board()
-        return True
-
-    def _clear_engines_board(self):
+        # close_all() is non-blocking while a search is active; the manager
+        # closes the invalidated pool as soon as the complete search ends.
         with self._engine_lock:
-            if self._engine_pool:
-                try:
-                    self._engine_manager.clear_board()
-                except Exception:
-                    logger.exception("清空对局引擎失败")
-                    self._drop_ai_engine_locked()
+            return self._drop_ai_engine_locked()
 
     def _drop_ai_engine_locked(self):
-        self._engine_manager.close_all()
-        self.ai_engine = None
-        self.kata_backend = None
+        closed = self._engine_manager.close_all()
+        if closed:
+            self.ai_engine = None
+            self.kata_backend = None
+        return closed
 
     def move_win_rates(self, player, top_n=3, backend=None):
         """

@@ -260,9 +260,20 @@ class AmazonsMainWindow(QMainWindow):
         self.board_widget.reset_selection()
         self.board_widget.set_last_turn(turns[-1] if turns else None)
         self.board_widget.set_hints([], self.hint_side)
-        self.board_widget.setEnabled(True)
         self.update_status()
         self.board_widget.update()
+        if self.simulator.game_over:
+            self.session.finish_turn(True)
+            self.board_widget.setEnabled(False)
+        elif self.is_ai_turn():
+            if self.black_ai_agent.is_busy() or self.white_ai_agent.is_busy():
+                self._resume_ai_after_worker = True
+                self.board_widget.setEnabled(False)
+            else:
+                self.start_ai_turn()
+        else:
+            self.session.finish_turn()
+            self.board_widget.setEnabled(True)
         self.statusBar().showMessage("棋谱已导入。", 3000)
 
     def set_hint_source(self, source):
@@ -1047,27 +1058,28 @@ class AmazonsMainWindow(QMainWindow):
 
         # A result from a just-replaced AI must not leave the board disabled.
         # Wait for that worker to release its engine, then start the selected AI.
-        if side == self.simulator.current_player and self._active_ai_request is not None:
-            self._active_ai_request = None
-            self._ai_turn_pending = False
-            self._resume_ai_after_worker = True
+        if (side == self.simulator.current_player
+                and (self._active_ai_request is not None or self._ai_turn_pending)):
+            worker_busy = (self.black_ai_agent.is_busy()
+                           or self.white_ai_agent.is_busy())
+            self._invalidate_position()
+            self._resume_ai_after_worker = worker_busy
             self.board_widget.setEnabled(True)
-            self._on_ai_worker_idle()
+            if worker_busy:
+                self._on_ai_worker_idle()
 
         if self.simulator.game_over:
             self.show_game_over_message()
         else:
             # 检查是否需要触发 AI 下棋
-            if self.is_ai_turn():
+            if self.is_ai_turn() and not self._resume_ai_after_worker:
                 self.start_ai_turn()
 
     def _on_ai_worker_idle(self):
         """Resume a mode-switched AI turn only after its old worker ended."""
         if not self._resume_ai_after_worker or self._closing:
             return
-        agent = (self.black_ai_agent if self.simulator.current_player == BLACK_AMAZON
-                 else self.white_ai_agent)
-        if agent.is_busy():
+        if self.black_ai_agent.is_busy() or self.white_ai_agent.is_busy():
             return
         self._resume_ai_after_worker = False
         if not self.simulator.game_over and self.is_ai_turn():
@@ -1466,7 +1478,8 @@ class AmazonsMainWindow(QMainWindow):
         raw_positions = (best_res.best_pos_from, best_res.best_pos_to, best_res.best_pos_stone)
         if not all(isinstance(p, int) and 0 <= p < size * size for p in raw_positions):
             logger.warning("AI 返回非法坐标: %s", raw_positions)
-            self.statusBar().showMessage("AI 计算失败：返回了非法坐标。")
+            self._recover_from_ai_failure(
+                f"AI 返回了非法坐标：{raw_positions}", request[1])
             return
 
         start_pos = (best_res.best_pos_from // self.simulator.size, best_res.best_pos_from % self.simulator.size)

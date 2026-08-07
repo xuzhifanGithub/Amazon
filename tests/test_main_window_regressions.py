@@ -2,7 +2,9 @@ from unittest.mock import Mock
 
 from PyQt6.QtWidgets import QFrame
 
-from src.ai.results import AIOutcome, HintCandidate, HintOutcome
+from src.ai.results import AIOutcome, BestResult, HintCandidate, HintOutcome
+from src.core.game_record import export_record
+from src.core.game_session import SessionState
 from src.core.simulator import AmazonsSimulator, BLACK_AMAZON
 from src.gui.ai_info_panel import PANEL_THEMES
 from src.gui.amazon_main_window import AmazonsMainWindow
@@ -64,6 +66,54 @@ def test_ai_failure_returns_control_to_human(qapp):
     assert window.black_modes == window.PLAYER_TYPE_HUMAN
     assert window.board_widget.isEnabled()
     assert "boom" in window.statusBar().currentMessage()
+    window.close()
+
+
+def test_out_of_range_ai_move_returns_control_to_human(qapp):
+    window = AmazonsMainWindow(AmazonsSimulator())
+    window.black_modes = window.PLAYER_TYPE_AI_MCTS
+    window.board_widget.setEnabled(False)
+    window.session.begin_ai()
+    window._active_ai_request = (window.game_generation, BLACK_AMAZON, 'mcts')
+
+    window.execute_ai_move(
+        AIOutcome.success(BestResult(100, 1, 2)), BLACK_AMAZON)
+
+    assert window.black_modes == window.PLAYER_TYPE_HUMAN
+    assert window.board_widget.isEnabled()
+    assert window.session.state is SessionState.IDLE
+    window.close()
+
+
+def test_switching_pending_ai_to_human_unlocks_board(qapp):
+    window = AmazonsMainWindow(AmazonsSimulator())
+    window.black_modes = window.PLAYER_TYPE_AI_MCTS
+    window._ai_turn_pending = True
+    window.session.begin_ai()
+    window.board_widget.setEnabled(False)
+
+    window.set_player_mode(BLACK_AMAZON, window.PLAYER_TYPE_HUMAN)
+
+    assert not window._ai_turn_pending
+    assert window.board_widget.isEnabled()
+    assert window.session.state is SessionState.IDLE
+    window.close()
+
+
+def test_import_resumes_configured_ai_side(qapp, tmp_path, monkeypatch):
+    record = tmp_path / "game.amazons.json"
+    export_record(str(record), AmazonsSimulator())
+    monkeypatch.setattr(
+        "src.gui.amazon_main_window.QFileDialog.getOpenFileName",
+        lambda *_args, **_kwargs: (str(record), ""))
+
+    window = AmazonsMainWindow(AmazonsSimulator())
+    window.black_modes = window.PLAYER_TYPE_AI_MCTS
+    window.start_ai_turn = Mock()
+
+    window.import_game_record()
+
+    window.start_ai_turn.assert_called_once_with()
     window.close()
 
 
