@@ -234,8 +234,9 @@ class AmazonAIAgent(QObject):
     hint_requested = pyqtSignal(object)
     hint_shutdown_requested = pyqtSignal()
     hint_calculated = pyqtSignal(object)
+    calculation_finished = pyqtSignal()
 
-    def __init__(self, main_window_instance):
+    def __init__(self, main_window_instance, engine_manager: EngineManager | None = None):
         super().__init__()
         self.main_window = main_window_instance
         self.thread = None
@@ -248,7 +249,7 @@ class AmazonAIAgent(QObject):
         # kataAmazon 引擎：可选 'gpu'(CUDA,新权重) / 'legacy'(OpenCL,旧模型)。
         # Gameplay engines are reused per (backend, visits) profile.
         self.ai_engine = None
-        self._engine_manager = EngineManager()
+        self._engine_manager = engine_manager or EngineManager()
         self._engine_pool = self._engine_manager.engines
         self.kata_backend = None    # 当前已加载引擎的后端标识（'gpu' / 'legacy' / None）
 
@@ -341,7 +342,7 @@ class AmazonAIAgent(QObject):
             try:
                 engine = self._engine_manager.get_game_engine(
                     backend, visits, self.main_window.simulator.history_do_chess,
-                    self._play_turn_on_engine)
+                    self._play_turn_on_engine, mode="gameplay")
                 self.ai_engine = engine
                 self.kata_backend = backend
                 return engine
@@ -401,6 +402,7 @@ class AmazonAIAgent(QObject):
         if self._clear_board_pending:
             self._clear_board_pending = False
             self._clear_engines_board()
+        self.calculation_finished.emit()
 
 
     def update_engine_board(self, player, start_pos, move_pos, arrow_pos):
@@ -422,9 +424,9 @@ class AmazonAIAgent(QObject):
             if not self._engine_pool:
                 return
             try:
-                for engine in tuple(self._engine_pool.values()):
-                    self._play_turn_on_engine(
-                        engine, player, start_pos, move_pos, arrow_pos)
+                self._engine_manager.sync_turn(
+                    player, start_pos, move_pos, arrow_pos, self._play_turn_on_engine,
+                    len(self.main_window.simulator.history_do_chess))
             except Exception:
                 logger.exception("同步对局引擎失败；下次使用时将从历史重建")
                 self._drop_ai_engine_locked()
@@ -435,8 +437,8 @@ class AmazonAIAgent(QObject):
             if not self._engine_pool:
                 return
             try:
-                for engine in tuple(self._engine_pool.values()):
-                    engine.undo()
+                self._engine_manager.undo_turn(
+                    len(self.main_window.simulator.history_do_chess))
             except Exception:
                 logger.exception("回退对局引擎失败；下次使用时将从历史重建")
                 self._drop_ai_engine_locked()
@@ -454,8 +456,7 @@ class AmazonAIAgent(QObject):
         with self._engine_lock:
             if self._engine_pool:
                 try:
-                    for engine in tuple(self._engine_pool.values()):
-                        engine.clear_board()
+                    self._engine_manager.clear_board()
                 except Exception:
                     logger.exception("清空对局引擎失败")
                     self._drop_ai_engine_locked()

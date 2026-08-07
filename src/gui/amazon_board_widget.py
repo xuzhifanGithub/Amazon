@@ -92,12 +92,13 @@ class BoardWidget(QWidget):
         super().__init__(parent)
         self.simulator = simulator
 
-        self.grid_size = 60
-        self.margin = 40
+        self.base_grid_size = 60
+        self.base_margin = 40
+        self.zoom_percent = 100
+        self.grid_size = self.base_grid_size
+        self.margin = self.base_margin
         self.board_dim = simulator.size
-
-        board_pixel_size = self.board_dim * self.grid_size + 2 * self.margin
-        self.setFixedSize(board_pixel_size, board_pixel_size)
+        self._apply_board_size()
 
         # --- 引入配色方案变量 ---
         self.color_scheme_key = color_scheme.upper()
@@ -105,12 +106,15 @@ class BoardWidget(QWidget):
             self.color_scheme_key = DEFAULT_COLOR_SCHEME
         self.colors = COLOR_SCHEMES[self.color_scheme_key]
         self._static_board_cache = None
+        self._piece_layer_cache = None
+        self._piece_layer_key = None
         # ------------------------
 
         self.coord_mode = self.COORD_MODE_NONE
 
         # --- 启用鼠标跟踪以实现悬停效果 ---
         self.setMouseTracking(True)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
         # 游戏交互状态
         self.game_phase = AWAITING_PIECE_SELECTION
@@ -206,6 +210,34 @@ class BoardWidget(QWidget):
         self._static_board_cache = None
         self.update()
 
+    def _apply_board_size(self):
+        board_pixel_size = self.board_dim * self.grid_size + 2 * self.margin
+        self.setFixedSize(board_pixel_size, board_pixel_size)
+
+    def set_zoom_percent(self, percent: int):
+        """Scale all board geometry while preserving coordinate semantics."""
+        percent = int(percent)
+        if percent not in (80, 100, 120, 140):
+            percent = 100
+        if percent == self.zoom_percent:
+            return
+        self.zoom_percent = percent
+        self.grid_size = max(24, round(self.base_grid_size * percent / 100))
+        self.margin = max(20, round(self.base_margin * percent / 100))
+        self._apply_board_size()
+        self._static_board_cache = None
+        self._piece_layer_cache = None
+        self._piece_layer_key = None
+        self.updateGeometry()
+        self.update()
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key.Key_Escape:
+            self.reset_selection()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
     def draw_grid_coordinates(self, painter: QPainter):
         """在每个棋盘格子的中心绘制其坐标 (如 A1, B2)"""
         # 设置字体
@@ -262,14 +294,8 @@ class BoardWidget(QWidget):
         self.draw_highlights(painter)
         self.draw_last_move_indicator(painter)
 
-        # 2. 绘制所有不在动画中、且不被隐藏的棋子 (不变)
-        for r in range(self.board_dim):
-            for c in range(self.board_dim):
-                if (r, c) in self.hidden_pieces:
-                    continue
-                piece = self.simulator.board[r, c]
-                if piece != 0:
-                    self.draw_piece_with_shape(painter, r, c, piece)
+        # 2. 绘制所有不在动画中、且不被隐藏的棋子。
+        self.draw_piece_layer(painter)
 
         # 2.5 绘制 AI 推荐着法提示（叠加在棋子层之上）
         if self.hint_moves and not self.is_animating:
@@ -391,6 +417,7 @@ class BoardWidget(QWidget):
     # --- 交互与状态更新 ---
     def mousePressEvent(self, event: "QMouseEvent"):
         """处理用户的鼠标点击事件，驱动游戏状态机。"""
+        self.setFocus()
         if self.is_animating or self.simulator.game_over:
             return
 
@@ -481,6 +508,8 @@ class BoardWidget(QWidget):
             self.color_scheme_key = scheme_key
             self.colors = COLOR_SCHEMES[scheme_key]
             self._static_board_cache = None
+            self._piece_layer_cache = None
+            self._piece_layer_key = None
             self.update()
 
     def set_last_turn(self, turn_details: tuple | None):
@@ -500,6 +529,39 @@ class BoardWidget(QWidget):
         self.update()
 
     # --- 绘图辅助方法 ---
+    def draw_piece_layer(self, painter: QPainter):
+        """Cache ordinary pieces when no interactive overlay can alter them."""
+        can_cache = (not self.is_animating and not self.hidden_pieces
+                     and self.selected_piece_pos is None
+                     and self.hovered_piece_pos is None
+                     and self.last_turn is None)
+        board_key = None
+        if can_cache:
+            board_key = (self.color_scheme_key, self.grid_size, self.margin,
+                         self.simulator.board.tobytes())
+            if self._piece_layer_cache is None or self._piece_layer_key != board_key:
+                cache = QPixmap(self.size())
+                cache.fill(Qt.GlobalColor.transparent)
+                cache_painter = QPainter(cache)
+                cache_painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+                for r in range(self.board_dim):
+                    for c in range(self.board_dim):
+                        piece = self.simulator.board[r, c]
+                        if piece != 0:
+                            self.draw_piece_with_shape(cache_painter, r, c, piece)
+                cache_painter.end()
+                self._piece_layer_cache = cache
+                self._piece_layer_key = board_key
+            painter.drawPixmap(0, 0, self._piece_layer_cache)
+            return
+        for r in range(self.board_dim):
+            for c in range(self.board_dim):
+                if (r, c) in self.hidden_pieces:
+                    continue
+                piece = self.simulator.board[r, c]
+                if piece != 0:
+                    self.draw_piece_with_shape(painter, r, c, piece)
+
     def draw_static_board(self, painter: QPainter):
         """Reuse the board background and coordinate layer between repaints."""
         # Hovered cells intentionally grow, so that one interactive frame is

@@ -7,7 +7,7 @@ import datetime
 import logging
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QMessageBox, QVBoxLayout, QPushButton, QLabel,
                              QFileDialog, QHBoxLayout, QInputDialog, QListWidget, QApplication, QMenu, QSlider,
-                             QTextEdit, QLineEdit)
+                             QTextEdit, QLineEdit, QDialog, QDialogButtonBox)
 from PyQt6.QtGui import QFont, QAction, QActionGroup
 from PyQt6.QtCore import Qt, QTimer, QUrl, QPropertyAnimation, QEasingCurve, QSequentialAnimationGroup, \
     QParallelAnimationGroup, QObject, pyqtSignal
@@ -21,16 +21,19 @@ project_root = os.path.join(current_dir, '..', '..')
 sys.path.append(project_root)
 from src.core.simulator import AmazonsSimulator, WHITE_AMAZON, BLACK_AMAZON, OBSTACLE, EMPTY
 from src.core.game_record import export_record, load_record
+from src.core.game_session import GameSessionController, SessionState
 from src.gui.amazon_board_widget import BoardWidget, AWAITING_PIECE_SELECTION, AWAITING_MOVE_DESTINATION, \
     AWAITING_ARROW_DESTINATION
 from src.gui.ai_info_panel import AIInfoPanel
 
 from src.ai.amazon_ai_agent import AmazonAIAgent, mcts_available
+from src.ai.engine_manager import EngineManager
 from src.ai.amazons_engine import backend_available
 from src.ai.ai_profile import AIProfile, load_profile, save_profile
 from src.ai.results import AIOutcome, HintCandidate, HintOutcome
 from src.config import create_settings
 from src.gui.ai_settings_dialog import AISettingsDialog
+from src.logging_setup import log_file_path
 
 
 logger = logging.getLogger(__name__)
@@ -52,26 +55,29 @@ class AmazonsMainWindow(QMainWindow):
         super().__init__()
         self.simulator = simulator
         self.animation_group = None
-        self.game_generation = 0
+        self.session = GameSessionController()
         self._ai_turn_pending = False
         self._active_ai_request = None
         self._hint_request_id = 0
         self._closing = False
+        self._resume_ai_after_worker = False
 
-        self.move_history = []  # 正确：初始化为空列表
         self.board_widget = None  # 将在init_ui中初始化
 
         self.black_modes = self.PLAYER_TYPE_HUMAN
         self.white_modes = self.PLAYER_TYPE_HUMAN
         # AI
-        self.black_ai_agent = AmazonAIAgent(self)
-        self.white_ai_agent = AmazonAIAgent(self)
+        self.engine_manager = EngineManager()
+        self.black_ai_agent = AmazonAIAgent(self, self.engine_manager)
+        self.white_ai_agent = AmazonAIAgent(self, self.engine_manager)
         self.black_ai_agent.move_calculated.connect(
             lambda result: self.execute_ai_move(result, BLACK_AMAZON))
         self.white_ai_agent.move_calculated.connect(
             lambda result: self.execute_ai_move(result, WHITE_AMAZON))
         self.black_ai_agent.hint_calculated.connect(self._handle_hint_outcome)
         self.white_ai_agent.hint_calculated.connect(self._handle_hint_outcome)
+        self.black_ai_agent.calculation_finished.connect(self._on_ai_worker_idle)
+        self.white_ai_agent.calculation_finished.connect(self._on_ai_worker_idle)
         # 主题设置
         self.settings = create_settings()
         self.black_ai_profile = load_profile(self.settings, "black")
@@ -79,6 +85,9 @@ class AmazonsMainWindow(QMainWindow):
         self.current_color_scheme = self.settings.value("display/theme", "BW", type=str)
         if self.current_color_scheme not in ('BW', 'RB', 'GS', 'PS'):
             self.current_color_scheme = 'BW'
+        self.board_zoom = self.settings.value("display/board_zoom", 100, type=int)
+        if self.board_zoom not in (80, 100, 120, 140):
+            self.board_zoom = 100
         self.setWindowTitle("亚马逊棋")
 
         # --- AI 提示设置：显示最佳“选子 → 移动 → 射箭”的三阶段胜率 ---
@@ -103,18 +112,27 @@ class AmazonsMainWindow(QMainWindow):
             self.restoreGeometry(geometry)
         self.start_new_game()
 
+    @property
+    def game_generation(self):
+        """Compatibility name for the revision attached to async requests."""
+        return self.session.revision
+
+    def _invalidate_position(self):
+        """Cancel position-bound work before reset/import/undo/mode changes."""
+        self.session.invalidate()
+        self._hint_request_id += 1
+        self._ai_turn_pending = False
+        self._active_ai_request = None
+        self.black_ai_agent.cancel_hint_analysis()
+        self.white_ai_agent.cancel_hint_analysis()
+        self._cancel_current_animation()
+
     def start_new_game(self):
         if not self.confirm_action("开始新游戏"):
             return
 
         # Invalidate every delayed callback and result that belongs to the old game.
-        self.game_generation += 1
-        self._hint_request_id += 1
-        self.black_ai_agent.cancel_hint_analysis()
-        self.white_ai_agent.cancel_hint_analysis()
-        self._ai_turn_pending = False
-        self._active_ai_request = None
-        self._cancel_current_animation()
+        self._invalidate_position()
 
         self.simulator.reset()
         self.board_widget.reset_selection()
@@ -123,7 +141,6 @@ class AmazonsMainWindow(QMainWindow):
         self.board_widget.set_hints([], self.hint_side)  # 清除 AI 提示
         self.update_win_rate_display(None)               # 清除胜率显示
         self.update_ai_info_panel(None, None)             # 清除右侧 AI 分析面板
-        self.move_history.clear()
         self.board_widget.update()
         self.board_widget.setEnabled(True)
 
@@ -194,6 +211,13 @@ class AmazonsMainWindow(QMainWindow):
         self.settings.setValue("hints/count", self.hint_count)
         self.update_hints()
 
+    def set_board_zoom(self, percent: int):
+        self.board_zoom = percent if percent in (80, 100, 120, 140) else 100
+        self.board_widget.set_zoom_percent(self.board_zoom)
+        self.settings.setValue("display/board_zoom", self.board_zoom)
+        self.statusBar().showMessage(f"棋盘缩放已设置为 {self.board_zoom}%", 2500)
+        self.adjustSize()
+
     def show_ai_settings(self):
         """Edit per-side profiles; an already-running worker keeps its snapshot."""
         dialog = AISettingsDialog(self.black_ai_profile, self.white_ai_profile, self)
@@ -229,17 +253,10 @@ class AmazonsMainWindow(QMainWindow):
             QMessageBox.warning(self, "导入失败", str(exc))
             return
         # Validation above leaves the current board intact; mutate only now.
-        self.game_generation += 1
-        self._hint_request_id += 1
-        self._active_ai_request = None
-        self._ai_turn_pending = False
-        self.black_ai_agent.cancel_hint_analysis()
-        self.white_ai_agent.cancel_hint_analysis()
-        self._cancel_current_animation()
+        self._invalidate_position()
         self.black_ai_agent.clear_board()
         self.white_ai_agent.clear_board()
         self.simulator.load_turns(turns)
-        self.move_history = list(turns)
         self.board_widget.reset_selection()
         self.board_widget.set_last_turn(turns[-1] if turns else None)
         self.board_widget.set_hints([], self.hint_side)
@@ -435,6 +452,8 @@ class AmazonsMainWindow(QMainWindow):
             self.statusBar().showMessage("游戏已结束，无法悔棋。")
             return
 
+        self._invalidate_position()
+
         # 判断是否为人人
         is_human_vs_human = (
                 self.black_modes == self.PLAYER_TYPE_HUMAN and
@@ -443,19 +462,14 @@ class AmazonsMainWindow(QMainWindow):
 
         # ========== 执行第一次悔棋 ==========
         if self.simulator.undo():
-            if self.move_history:
-                self.move_history.pop()
-                # 每个已加载的对局引擎都保存完整局面，因此必须一起回退。
-                self.black_ai_agent.undo_board()
-                self.white_ai_agent.undo_board()
+            self.black_ai_agent.undo_board()
+            self.white_ai_agent.undo_board()
 
             # ====== 如果是人机对战，要再悔一步跳过 AI ======
             if not is_human_vs_human:
                 if self.simulator.undo():
-                    if self.move_history:
-                        self.move_history.pop()
-                        self.black_ai_agent.undo_board()
-                        self.white_ai_agent.undo_board()
+                    self.black_ai_agent.undo_board()
+                    self.white_ai_agent.undo_board()
 
                     self.statusBar().showMessage("已连续悔棋，跳过 AI 回合。")
                 else:
@@ -468,13 +482,10 @@ class AmazonsMainWindow(QMainWindow):
 
         # ========= UI 更新 ==========
         self.board_widget.reset_selection()
-        self._hint_request_id += 1
-        self.black_ai_agent.cancel_hint_analysis()
-        self.white_ai_agent.cancel_hint_analysis()
         self.update_ai_info_panel(None, None)       # 悔棋时清除 AI 分析面板
 
-        if self.move_history:
-            self.board_widget.set_last_turn(self.move_history[-1])
+        if self.simulator.history_do_chess:
+            self.board_widget.set_last_turn(self.simulator.history_do_chess[-1])
         else:
             self.board_widget.set_last_turn(None)
 
@@ -498,6 +509,7 @@ class AmazonsMainWindow(QMainWindow):
         board_layout = QVBoxLayout(board_panel)
         board_layout.setContentsMargins(0, 0, 0, 0)
         self.board_widget = BoardWidget(self.simulator, color_scheme=self.current_color_scheme)
+        self.board_widget.set_zoom_percent(self.board_zoom)
         self.board_widget.mouse_genmove_completed.connect(self.on_turn_made)
         self.board_widget.game_over_signal.connect(self.show_game_over_message)
         board_layout.addWidget(self.board_widget)
@@ -698,6 +710,21 @@ class AmazonsMainWindow(QMainWindow):
 
         display_menu.addMenu(theme_menu)  # 添加主题设置到显示菜单
 
+        zoom_menu = QMenu("棋盘缩放", self)
+        zoom_group = QActionGroup(self)
+        zoom_group.setExclusive(True)
+        for percent in (80, 100, 120, 140):
+            action = QAction(f"{percent}%", self, checkable=True)
+            action.setChecked(percent == self.board_zoom)
+            action.triggered.connect(lambda _, percent=percent: self.set_board_zoom(percent))
+            zoom_group.addAction(action)
+            zoom_menu.addAction(action)
+            if percent == 120:
+                action.setShortcut("Ctrl++")
+            elif percent == 80:
+                action.setShortcut("Ctrl+-")
+        display_menu.addMenu(zoom_menu)
+
         display_menu.addSeparator()
 
         # --- 坐标显示子菜单 ---
@@ -806,6 +833,10 @@ class AmazonsMainWindow(QMainWindow):
         about_action = QAction("关于", self)
         about_action.triggered.connect(self.show_about_dialog)
         help_menu.addAction(about_action)
+
+        diagnostics_action = QAction("查看诊断日志", self)
+        diagnostics_action.triggered.connect(self.show_diagnostics_log)
+        help_menu.addAction(diagnostics_action)
 
     # 在类中添加显示介绍信息的方法
     def show_game_introduction(self):
@@ -951,6 +982,26 @@ class AmazonsMainWindow(QMainWindow):
 
         dialog.exec_()
 
+    def show_diagnostics_log(self):
+        path = log_file_path()
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")[-20_000:]
+        except OSError:
+            text = "暂无诊断日志。"
+        dialog = QDialog(self)
+        dialog.setWindowTitle(f"诊断日志：{path}")
+        dialog.resize(760, 480)
+        layout = QVBoxLayout(dialog)
+        viewer = QTextEdit(dialog)
+        viewer.setReadOnly(True)
+        viewer.setPlainText(text or "暂无诊断日志。")
+        layout.addWidget(viewer)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, dialog)
+        buttons.rejected.connect(dialog.reject)
+        buttons.accepted.connect(dialog.accept)
+        layout.addWidget(buttons)
+        dialog.exec()
+
     def set_player_mode(self, side, player_type):
         """
         设置某一边的玩家类型
@@ -988,8 +1039,9 @@ class AmazonsMainWindow(QMainWindow):
         if side == self.simulator.current_player and self._active_ai_request is not None:
             self._active_ai_request = None
             self._ai_turn_pending = False
+            self._resume_ai_after_worker = True
             self.board_widget.setEnabled(True)
-            QTimer.singleShot(0, self._resume_ai_after_mode_change)
+            self._on_ai_worker_idle()
 
         if self.simulator.game_over:
             self.show_game_over_message()
@@ -998,15 +1050,17 @@ class AmazonsMainWindow(QMainWindow):
             if self.is_ai_turn():
                 self.start_ai_turn()
 
-    def _resume_ai_after_mode_change(self):
-        if self.simulator.game_over or not self.is_ai_turn():
+    def _on_ai_worker_idle(self):
+        """Resume a mode-switched AI turn only after its old worker ended."""
+        if not self._resume_ai_after_worker or self._closing:
             return
         agent = (self.black_ai_agent if self.simulator.current_player == BLACK_AMAZON
                  else self.white_ai_agent)
         if agent.is_busy():
-            QTimer.singleShot(100, self._resume_ai_after_mode_change)
             return
-        self.start_ai_turn()
+        self._resume_ai_after_worker = False
+        if not self.simulator.game_over and self.is_ai_turn():
+            self.start_ai_turn()
 
     def set_color_scheme(self, scheme_key: str):
         """
@@ -1063,6 +1117,7 @@ class AmazonsMainWindow(QMainWindow):
 
     def show_game_over_message(self, message=None):
         """显示游戏结束消息"""
+        self.session.finish_turn(True)
         self.board_widget.setEnabled(False)  # 游戏结束，禁用棋盘
         self.update_status()
         if message:
@@ -1083,7 +1138,7 @@ class AmazonsMainWindow(QMainWindow):
     def resign_game(self):
         """处理认输操作。"""
         # 检查是否在游戏中
-        if self.simulator.game_over or len(self.move_history) == 0:
+        if self.simulator.game_over or len(self.simulator.history_do_chess) == 0:
             QMessageBox.information(self, "提示", "游戏尚未开始或已结束，无法认输。")
             return
 
@@ -1120,13 +1175,13 @@ class AmazonsMainWindow(QMainWindow):
                 player_who_moved, start_pos, move_pos, arrow_pos)
             self.white_ai_agent.sync_committed_turn(
                 player_who_moved, start_pos, move_pos, arrow_pos)
-            self.move_history.append((start_pos, move_pos, arrow_pos))
             self.board_widget.set_last_turn((start_pos, move_pos, arrow_pos))
 
             self.update_status()
             self.board_widget.update()  # 确保在动画结束后立即刷新
 
             if self.simulator.game_over:
+                self.session.finish_turn(True)
                 self.board_widget.set_hints([], self.hint_side)
                 return 'GAME_OVER'
 
@@ -1140,10 +1195,12 @@ class AmazonsMainWindow(QMainWindow):
             self.update_hints()
 
             self.board_widget.setEnabled(True)  # 恢复人类输入
+            self.session.finish_turn()
             return 'HUMAN_TURN'
         else:
             QMessageBox.warning(self, "无效操作", "此操作不符合规则!")
             self.board_widget.setEnabled(True)  # 恢复人类输入
+            self.session.finish_turn()
             return 'MOVE_FAILED'
 
     def run_full_turn_animation_sequence(self, start_pos, move_pos, arrow_pos, piece_type, on_finished_callback):
@@ -1169,6 +1226,7 @@ class AmazonsMainWindow(QMainWindow):
 
         self.board_widget.setEnabled(False)
         self.board_widget.is_animating = True
+        self.session.begin_animation()
         self.board_widget.hidden_pieces.add(start_pos)
         # 明确告知控件正在移动的是哪一方的棋子，避免它从 hidden_pieces 反推。
         self.board_widget.anim_piece_type = piece_type
@@ -1292,6 +1350,7 @@ class AmazonsMainWindow(QMainWindow):
         generation = self.game_generation
         player = self.simulator.current_player
         self._ai_turn_pending = True
+        self.session.begin_ai()
         QTimer.singleShot(
             100, lambda: self.start_ai_calculation(generation, player))
 
@@ -1446,15 +1505,14 @@ class AmazonsMainWindow(QMainWindow):
         self._ai_turn_pending = False
         self._active_ai_request = None
         self.board_widget.setEnabled(True)
+        self.session.finish_turn()
         self.update_status()
         self.statusBar().showMessage(f"AI 失败，{side_name}已切换为人类：{message}")
 
     def closeEvent(self, event):
         """Invalidate callbacks and release engine subprocesses before exit."""
         self._closing = True
-        self.game_generation += 1
-        self._hint_request_id += 1
-        self._cancel_current_animation()
+        self._invalidate_position()
         self.settings.setValue("window/geometry", self.saveGeometry())
         self.settings.sync()
         self.black_ai_agent.shutdown()

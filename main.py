@@ -7,12 +7,14 @@ from PyQt6.QtWidgets import QApplication
 # 从 src 目录导入核心组件
 from src.core.simulator import AmazonsSimulator
 from src.gui.amazon_main_window import AmazonsMainWindow
+from src.logging_setup import configure_logging
 
 
 def main():
     """
     主函数，用于初始化并运行亚马逊棋（Game of the Amazons）游戏应用。
     """
+    configure_logging()
     # 初始化 PyQt6 应用程序
     app = QApplication(sys.argv)
 
