@@ -102,7 +102,9 @@ class AmazonsMainWindow(QMainWindow):
         self.hint_side = self.settings.value("hints/side", BLACK_AMAZON, type=int)
         if self.hint_side not in (BLACK_AMAZON, WHITE_AMAZON):
             self.hint_side = BLACK_AMAZON
-        self._show_hints_default = self.settings.value("hints/enabled", False, type=bool)
+        # 完整回合胜率会立即启动后台模型分析。每次启动均保持关闭，
+        # 避免沿用上次会话的勾选状态而在用户未主动选择时占用引擎资源。
+        self._show_hints_default = False
         # 最近一次 AI 胜率(%)，用于左侧信息面板显示
         self.last_win_rate = None
 
@@ -782,8 +784,6 @@ class AmazonsMainWindow(QMainWindow):
         self.show_hints_action.setChecked(self._show_hints_default)
         self.show_hints_action.setShortcut("Ctrl+H")
         self.show_hints_action.triggered.connect(self.update_hints)
-        self.show_hints_action.toggled.connect(
-            lambda enabled: self.settings.setValue("hints/enabled", enabled))
         display_menu.addAction(self.show_hints_action)
 
         # 提示数量子菜单

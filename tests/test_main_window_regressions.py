@@ -56,6 +56,18 @@ def test_stale_hint_result_is_ignored(qapp):
     window.close()
 
 
+def test_full_turn_win_rate_is_disabled_on_every_start(qapp):
+    previous_window = AmazonsMainWindow(AmazonsSimulator())
+    previous_window.settings.setValue("hints/enabled", True)
+    previous_window.settings.sync()
+    previous_window.close()
+
+    window = AmazonsMainWindow(AmazonsSimulator())
+
+    assert not window.show_hints_action.isChecked()
+    window.close()
+
+
 def test_ai_failure_returns_control_to_human(qapp):
     window = AmazonsMainWindow(AmazonsSimulator())
     window.black_modes = window.PLAYER_TYPE_AI_MCTS
