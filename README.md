@@ -71,8 +71,8 @@ Linux / macOS 可运行纯 Python GUI 和人人对弈；MCTS 与 kataAmazon 需�
 > 目录名 `kataAmazonEngineCuda` 是历史遗留，当前其中放的是 OpenCL 版引擎。
 >
 > 棋力参考：gen012 是该自博弈训练线截至 gen012 的最强冠军（对上一代 gen011 为 31:9），
-> 但明显弱于原发布包中的原始强模型（对其 0:20）。旧模型仍保留在
-> `src/ai/amazon18-s1699072-d2052785/` 与 `src/ai/kataAmazonEngineV2/` 中以便对比。
+> 但明显弱于原发布包中的原始强模型（对其 0:20）。项目只保留界面中实际可选的
+> gen012 与原始强模型后端，不再携带未接入运行流程的试验引擎和重复权重。
 
 ## 功能
 
@@ -110,8 +110,6 @@ src/
     native/                     发布用预编译 MCTS 模块（不含 CMake 临时文件）
     kataAmazonEngineCuda/       gen012 引擎 amazons.exe(OpenCL) + gen012_model.bin.gz + dll + engine.cfg（默认）
     kataAmazonEngine/           原始引擎 kataAmazon.exe(OpenCL) + weights/ + engine.cfg（后备）
-    kataAmazonEngineV2/         CPU 版 katago.exe + dll + engine.cfg（备用对比）
-    amazon18-s1699072-d2052785/ 旧模型权重 model.bin.gz（备用对比）
   gui/
     amazon_board_widget.py      棋盘绘制（含提示圆环）
     amazon_main_window.py       主窗口（菜单 / 胜率显示 / 提示）

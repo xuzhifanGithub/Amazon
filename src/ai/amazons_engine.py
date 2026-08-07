@@ -8,7 +8,6 @@
 #
 #   本项目还保留两套后备引擎：
 #     - kataAmazonEngine/     原始引擎（kataAmazon.exe, OpenCL）+ 旧模型 weights/amazons10x10.bin.gz
-#     - kataAmazonEngineV2/   Eigen(CPU) 后端 + amazon18 旧模型，无需 GPU。
 #   默认自动选择：若 gpu 引擎目录存在则用它，否则回退到 legacy。
 #
 #   所有路径都相对本文件（__file__）计算，项目整体复制到别处也能正常工作。
