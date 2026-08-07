@@ -40,6 +40,9 @@ class AmazonsSimulator:
         self.current_player = BLACK_AMAZON
         # 历史记录只保存棋盘状态，开局时保存一次
         self.history = [self.board.copy()]
+        # Clear per-game move history; AI engines replay it to restore their board.
+        # Keeping moves from the previous game desynchronizes AI and GUI state.
+        self.history_do_chess.clear()
         self.game_over = False
         self.winner = 0
 
@@ -58,7 +61,9 @@ class AmazonsSimulator:
     def get_valid_moves(self, r, c, board_state=None):
         """获取一个棋子在(r, c)位置所有合法的移动或射击位置。"""
         current_board = self.board if board_state is None else board_state
-        if current_board[r, c] == 0:
+        if not (0 <= r < self.size and 0 <= c < self.size):
+            return []
+        if current_board[r, c] not in (BLACK_AMAZON, WHITE_AMAZON):
             return []
         moves = []
         directions = [(-1, -1), (-1, 0), (-1, 1), (0, -1),
@@ -84,19 +89,32 @@ class AmazonsSimulator:
         self.winner = -self.current_player
         return True
 
-    def execute_turn(self, start_pos, move_pos, arrow_pos):
-        """执行一个完整的行棋回合：移动棋子 -> 释放障碍。"""
-        if self.game_over: return False
-
-        # --- 验证阶段 (此处代码保持不变) ---
+    def is_legal_turn(self, start_pos, move_pos, arrow_pos):
+        """Return whether a complete turn is legal without changing state."""
+        positions = (start_pos, move_pos, arrow_pos)
+        if self.game_over or not all(
+                isinstance(pos, tuple) and len(pos) == 2
+                and all(isinstance(value, (int, np.integer)) for value in pos)
+                and 0 <= pos[0] < self.size and 0 <= pos[1] < self.size
+                for pos in positions):
+            return False
         player_piece = self.board[start_pos]
-        if player_piece != self.current_player: return False
-        if move_pos not in self.get_valid_moves(start_pos[0], start_pos[1]): return False
+        if player_piece != self.current_player:
+            return False
+        if move_pos not in self.get_valid_moves(start_pos[0], start_pos[1]):
+            return False
         temp_board = self.board.copy()
         temp_board[move_pos] = player_piece
         temp_board[start_pos] = EMPTY
-        if arrow_pos not in self.get_valid_moves(move_pos[0], move_pos[1], board_state=temp_board): return False
-        # --- 验证结束 ---
+        return arrow_pos in self.get_valid_moves(
+            move_pos[0], move_pos[1], board_state=temp_board)
+
+    def execute_turn(self, start_pos, move_pos, arrow_pos):
+        """执行一个完整的行棋回合：移动棋子 -> 释放障碍。"""
+        if not self.is_legal_turn(start_pos, move_pos, arrow_pos):
+            return False
+
+        player_piece = self.board[start_pos]
 
         # 执行移动
         self.board[move_pos] = player_piece
@@ -113,6 +131,31 @@ class AmazonsSimulator:
         self.check_game_over()
 
         return True
+
+    def validate_turns(self, turns):
+        """Validate serialised turns without mutating this game."""
+        candidate = AmazonsSimulator(self.size)
+        normalized = []
+        for turn in turns:
+            if not isinstance(turn, (list, tuple)) or len(turn) != 3:
+                raise ValueError("棋谱回合格式无效")
+            try:
+                points = tuple(tuple(point) for point in turn)
+            except TypeError as exc:
+                raise ValueError("棋谱坐标格式无效") from exc
+            if not candidate.execute_turn(*points):
+                raise ValueError("棋谱包含非法着法")
+            normalized.append(points)
+        return tuple(normalized)
+
+    def load_turns(self, turns):
+        """Atomically replace this game with a validated move sequence."""
+        normalized = self.validate_turns(turns)
+        self.reset()
+        for turn in normalized:
+            if not self.execute_turn(*turn):  # defensive: validation already succeeded
+                raise RuntimeError("棋谱加载失败")
+        return normalized
 
     def get_ai_data(self):
         """
