@@ -1,0 +1,101 @@
+# 亚马逊棋 (Game of the Amazons)
+
+基于 PyQt6 的 10×10 亚马逊棋对弈程序，支持人机 / 机机对战，内置多种 AI：
+MCTS(C++)、MCTS_test(C++)，以及基于 **KataGo Amazons 分支**（KataGo 训练方法）的
+神经网络引擎 **kataAmazon**，可显示实时胜率与候选着法提示。
+
+## 快速开始
+
+项目自带环境脚本。包含预编译 AI 与 OpenCL 引擎的完整功能版本目前正式支持
+**Windows x64 + Python 3.11 / 3.13**：
+
+Windows：
+
+```bat
+setup_env.bat   :: 创建 .venv 并安装依赖（首次）
+run.bat         :: 启动游戏
+```
+
+Linux / macOS 可运行纯 Python GUI 和人人对弈；MCTS 与 kataAmazon 需要在目标平台
+自行编译对应原生模块和引擎：
+
+```bash
+./setup_env.sh
+./run.sh
+```
+
+需要本机已安装 Python 3.11—3.13（推荐 3.11 或 3.13，与预编译的 C++ MCTS 模块匹配）。
+缺少某个原生模块、模型或配置时，对应 AI 菜单会自动禁用，程序仍可进行人人对弈。
+
+## AI 引擎说明（kataAmazon）
+
+- **引擎**（两套，均支持 `kata-genmove_analyze`）：
+  - `src/ai/kataAmazonEngineCuda/amazons.exe`（**OpenCL/GPU**，**默认优先**）。搭配
+    **gen012** 模型 `gen012_model.bin.gz`。需要支持 OpenCL 的显卡及正确安装的驱动；
+    随目录附带 `OpenCL.dll` / `libz.dll` / `libzip.dll` / `zlib.dll` / `zip.dll` /
+    MSVC 运行库与 `engine.cfg`。首次运行会做一次 OpenCL 自动调优，结果缓存在
+    目录内的 `KataGoData/opencltuning/`。
+  - `src/ai/kataAmazonEngine/kataAmazon.exe`（原始 **OpenCL/GPU** 引擎，后备）。搭配旧模型
+    `weights/amazons10x10.bin.gz`。
+  - **默认自动选择**：`amazons_engine.py` 检测到 `kataAmazonEngineCuda/amazons.exe` 存在则用它，
+    否则回退到原始引擎。GUI 菜单也可手动切换两者。
+- **模型**：`src/ai/kataAmazonEngineCuda/gen012_model.bin.gz`
+  （架构 `b20c256legacyv10`，20 残差块 / 256 通道，约 2341 万参数；内部模型名
+  `candidate_gen012`；SHA-256 `637abf40a932637538de1fd970baf23ab835178271d03479f06bf6291ee8c56c`）。
+  训练自博弈与正式评测均使用 600 visits，`engine.cfg` 中 `maxVisits` 与之一致。
+- **通信**：以 GTP 子进程运行，用有超时边界的 `kata-genmove_analyze` 获取着法和胜率。
+  对局着法只在规则层验证通过后提交到所有引擎；提示使用独立后台线程和当前历史快照，
+  不会阻塞界面或继续分析旧棋盘。
+- **可移植**：`src/ai/amazons_engine.py` 中所有路径都相对该文件计算，可用环境变量覆盖：
+  `KATA_AMAZON_DIR` / `KATA_AMAZON_EXE` / `KATA_AMAZON_MODEL` / `KATA_AMAZON_CFG`。
+
+> 注意：gen012 模型是服务器新版引擎的导出格式，**只能被配套的 `amazons.exe` 加载**。
+> CUDA 版 `katago.exe` 会报 `unknown activation type`，原始 `kataAmazon.exe` 同样无法加载。
+> 目录名 `kataAmazonEngineCuda` 是历史遗留，当前其中放的是 OpenCL 版引擎。
+>
+> 棋力参考：gen012 是该自博弈训练线截至 gen012 的最强冠军（对上一代 gen011 为 31:9），
+> 但明显弱于原发布包中的原始强模型（对其 0:20）。旧模型仍保留在
+> `src/ai/amazon18-s1699072-d2052785/` 与 `src/ai/kataAmazonEngineV2/` 中以便对比。
+
+## 功能
+
+1. **集成新模型**：菜单「游戏 → 黑方/白方 → AI → kataAmazon★★」即可让其对弈。
+2. **显示胜率**（仿照参考 Hex 项目）：
+   - 左侧信息面板实时显示当前行动方的 AI 胜率百分比；
+   - 状态栏显示胜率 / 搜索次数 / 局面估值。
+3. **AI 提示**：菜单「显示 → 显示完整回合胜率」(Ctrl+H)，沿最佳着法显示
+   `S（选子）→ M（移动）→ A（射箭）` 三个阶段的胜率；三个数值统一为原行动方视角。
+   交互提示使用独立的低延迟配置（150/120 visits），正式对局仍使用 600/400 visits。
+
+## 开发与测试
+
+```bash
+python -m pip install -r requirements-dev.txt
+python -m pytest -q
+```
+
+测试覆盖规则执行与悔棋、GTP 分析解析、三阶段视角换算、分析后棋盘恢复、
+合法提交广播、过期提示丢弃以及 AI 失败回退。CMake 的临时 `build/` 目录不纳入仓库，
+发布用预编译模块放在 `src/ai/native/`。
+
+## 目录结构
+
+```
+main.py                         入口
+requirements.txt                依赖
+setup_env.(bat|sh) / run.(bat|sh)  自带环境脚本
+src/
+  core/simulator.py             亚马逊棋规则
+  ai/
+    amazons_engine.py           KataGo 引擎桥接（GTP + 胜率）
+    amazon_ai_agent.py          AI 线程调度 + 异步提示查询
+    results.py                  跨线程的类型化 AI/提示结果
+    native/                     发布用预编译 MCTS 模块（不含 CMake 临时文件）
+    kataAmazonEngineCuda/       gen012 引擎 amazons.exe(OpenCL) + gen012_model.bin.gz + dll + engine.cfg（默认）
+    kataAmazonEngine/           原始引擎 kataAmazon.exe(OpenCL) + weights/ + engine.cfg（后备）
+    kataAmazonEngineV2/         CPU 版 katago.exe + dll + engine.cfg（备用对比）
+    amazon18-s1699072-d2052785/ 旧模型权重 model.bin.gz（备用对比）
+  gui/
+    amazon_board_widget.py      棋盘绘制（含提示圆环）
+    amazon_main_window.py       主窗口（菜单 / 胜率显示 / 提示）
+```
