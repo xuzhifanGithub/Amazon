@@ -25,7 +25,7 @@ def collect_backend(source: Path, destination: str, model: Path):
 binaries = []
 datas = []
 for folder, destination, model in (
-    (AI / "kataAmazonEngineCuda", "src/ai/kataAmazonEngineCuda", Path("gen012_model.bin.gz")),
+    (AI / "kataAmazonEngineCuda", "src/ai/kataAmazonEngineCuda", Path("amazon10x10_xzf.bin.gz")),
     (AI / "kataAmazonEngine", "src/ai/kataAmazonEngine", Path("weights/amazons10x10.bin.gz")),
 ):
     folder_binaries, folder_datas = collect_backend(folder, destination, model)

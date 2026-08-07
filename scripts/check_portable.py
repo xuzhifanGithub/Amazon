@@ -16,7 +16,7 @@ def main(argv=None) -> int:
         root / "Amazons.exe",
         ai / "native" / "libgomp_64-1.dll",
         ai / "kataAmazonEngineCuda" / "amazons.exe",
-        ai / "kataAmazonEngineCuda" / "gen012_model.bin.gz",
+        ai / "kataAmazonEngineCuda" / "amazon10x10_xzf.bin.gz",
         ai / "kataAmazonEngineCuda" / "engine.cfg",
         ai / "kataAmazonEngineCuda" / "hint.cfg",
         ai / "kataAmazonEngine" / "kataAmazon.exe",

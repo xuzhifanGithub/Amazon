@@ -2,7 +2,8 @@
 # 亚马逊棋 KataGo (Amazons 分支) 引擎桥接。
 #
 # 说明（重要）：
-#   gpu 后端使用 gen012 模型（b20c256legacyv10, 20 残差块 256 通道），配合 OpenCL 版
+#   gpu 后端使用 amazon10x10_xzf 当前正式冠军 gen028 模型
+#   （b20c256legacyv10, 20 残差块 256 通道），配合 OpenCL 版
 #   amazons.exe（KataGo v1.10.0 定制版）。该模型格式与 CUDA 版 katago.exe 不兼容，
 #   必须使用 kataAmazonEngineCuda/ 目录内的 amazons.exe。
 #
@@ -86,7 +87,7 @@ def parse_genmove_analyze(response: str):
 
 # --- 引擎后端表（相对本文件，保证可移植）----------------------------------------
 # 本项目提供两个 kataAmazon 引擎选项，每个是一套 (目录, 可执行文件, 模型, 配置)：
-#   'gpu'    -> kataAmazonEngineCuda ：gen012 模型 + OpenCL 版 amazons.exe。
+#   'gpu'    -> kataAmazonEngineCuda ：XZF-gen028 模型 + OpenCL 版 amazons.exe。
 #               需要支持 OpenCL 的显卡及正确安装的驱动。
 #   'legacy' -> kataAmazonEngine     ：原始引擎（KataGo v1.10.0 OpenCL/GPU）+ 旧模型
 #               weights/amazons10x10.bin.gz。项目最初就带的选项。
@@ -95,10 +96,10 @@ BACKENDS = {
     'gpu': {
         'dir': os.path.normpath(os.path.join(current_dir, 'kataAmazonEngineCuda')),
         'exe': 'amazons.exe',
-        'model': 'gen012_model.bin.gz',
+        'model': 'amazon10x10_xzf.bin.gz',
         'cfg': 'engine.cfg',
         'hint_cfg': 'hint.cfg',
-        'label': 'gen012（OpenCL/GPU）',
+        'label': 'XZF-gen028（OpenCL/GPU）',
     },
     'legacy': {
         'dir': os.path.normpath(os.path.join(current_dir, 'kataAmazonEngine')),

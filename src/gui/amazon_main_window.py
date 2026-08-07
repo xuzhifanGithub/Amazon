@@ -48,7 +48,7 @@ class AmazonsMainWindow(QMainWindow):
     PLAYER_TYPE_AI_MCTS = 'mcts'  # 保留 MCTS
     PLAYER_TYPE_AI_MCTS2 = 'mcts_test'  # 保留 MCTS
     PLAYER_TYPE_AI_KATAAMAZON = 'kataAmazon'          # 兼容旧引用
-    PLAYER_TYPE_AI_KATAAMAZON_GPU = 'kataAmazon_gpu'  # gen012 模型 + OpenCL(GPU) 引擎
+    PLAYER_TYPE_AI_KATAAMAZON_GPU = 'kataAmazon_gpu'  # XZF-gen028 模型 + OpenCL(GPU) 引擎
     PLAYER_TYPE_AI_KATAAMAZON_LEGACY = 'kataAmazon_legacy'  # 原始引擎（OpenCL/GPU）+ 旧模型
 
     def __init__(self, simulator: AmazonsSimulator):
@@ -432,7 +432,7 @@ class AmazonsMainWindow(QMainWindow):
             'mcts': 'MCTS (C++)',
             'mcts_test': 'MCTS_test (C++)',
             'kataAmazon': 'kataAmazon',
-            'kataAmazon_gpu': 'kataAmazon-gen012（GPU）',
+            'kataAmazon_gpu': 'XZF-gen028（GPU）',
             'kataAmazon_legacy': 'kataAmazon-原始（旧模型）',
         }
         model_label = model_names.get(ai_type_key, ai_type_key or "AI")
@@ -616,8 +616,8 @@ class AmazonsMainWindow(QMainWindow):
         black_player_group.addAction(self.black_ai_mcts_test_action)
         black_ai_menu.addAction(self.black_ai_mcts_test_action)
 
-        #  kataAmazon（gen012 模型，OpenCL/GPU）
-        self.black_ai_kata_gpu_action = QAction("kataAmazon-GPU★★", self, checkable=True)
+        #  kataAmazon（XZF-gen028 模型，OpenCL/GPU）
+        self.black_ai_kata_gpu_action = QAction("XZF-gen028（GPU）★★", self, checkable=True)
         self.black_ai_kata_gpu_action.setEnabled(backend_available('gpu'))
         self.black_ai_kata_gpu_action.triggered.connect(
             lambda: self.set_player_mode(BLACK_AMAZON, self.PLAYER_TYPE_AI_KATAAMAZON_GPU))
@@ -663,8 +663,8 @@ class AmazonsMainWindow(QMainWindow):
         white_player_group.addAction(self.white_ai_mcts_test_action)
         white_ai_menu.addAction(self.white_ai_mcts_test_action)
 
-        #  kataAmazon（gen012 模型，OpenCL/GPU）
-        self.white_ai_kata_gpu_action = QAction("kataAmazon-GPU★★", self, checkable=True)
+        #  kataAmazon（XZF-gen028 模型，OpenCL/GPU）
+        self.white_ai_kata_gpu_action = QAction("XZF-gen028（GPU）★★", self, checkable=True)
         self.white_ai_kata_gpu_action.setEnabled(backend_available('gpu'))
         self.white_ai_kata_gpu_action.triggered.connect(
             lambda: self.set_player_mode(WHITE_AMAZON, self.PLAYER_TYPE_AI_KATAAMAZON_GPU))
@@ -828,11 +828,11 @@ class AmazonsMainWindow(QMainWindow):
             hint_side_menu.addAction(action)
         display_menu.addMenu(hint_side_menu)
 
-        # 提示模型子菜单（用哪个引擎后端评估胜率：gen012 / 原始旧模型）
+        # 提示模型子菜单（用哪个引擎后端评估胜率：XZF-gen028 / 原始旧模型）
         hint_source_menu = QMenu("提示模型", self)
         hint_source_group = QActionGroup(self)
         hint_source_group.setExclusive(True)
-        for key, label in (('gpu', 'kataAmazon-gen012（GPU）'),
+        for key, label in (('gpu', 'XZF-gen028（GPU）'),
                            ('legacy', 'kataAmazon-原始（旧模型）')):
             action = QAction(label, self, checkable=True)
             action.setEnabled(backend_available(key))

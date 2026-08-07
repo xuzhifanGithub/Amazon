@@ -19,7 +19,7 @@ run.bat         :: 启动游戏
 ### 自包含便携版
 
 发布时可生成 `dist/Amazons/` 便携目录。该目录内包含 Python 运行时、PyQt6、NumPy、
-两个 MCTS 模块、KataGo 引擎、所需 DLL、gen012 模型和旧模型；目标电脑不需要另行安装
+两个 MCTS 模块、KataGo 引擎、所需 DLL、XZF-gen028 模型和旧模型；目标电脑不需要另行安装
 Python，也不需要在项目目录之外配置模型或引擎文件。
 
 ```bat
@@ -48,7 +48,7 @@ Linux / macOS 可运行纯 Python GUI 和人人对弈；MCTS 与 kataAmazon 需�
 
 - **引擎**（两套，均支持 `kata-genmove_analyze`）：
   - `src/ai/kataAmazonEngineCuda/amazons.exe`（**OpenCL/GPU**，**默认优先**）。搭配
-    **gen012** 模型 `gen012_model.bin.gz`。需要支持 OpenCL 的显卡及正确安装的驱动；
+    **XZF 正式冠军 gen028** 模型 `amazon10x10_xzf.bin.gz`。需要支持 OpenCL 的显卡及正确安装的驱动；
     随目录附带 `OpenCL.dll` / `libz.dll` / `libzip.dll` / `zlib.dll` / `zip.dll` /
     MSVC 运行库与 `engine.cfg`。首次运行会做一次 OpenCL 自动调优，结果缓存在
     目录内的 `KataGoData/opencltuning/`。
@@ -56,29 +56,29 @@ Linux / macOS 可运行纯 Python GUI 和人人对弈；MCTS 与 kataAmazon 需�
     `weights/amazons10x10.bin.gz`。
   - **默认自动选择**：`amazons_engine.py` 检测到 `kataAmazonEngineCuda/amazons.exe` 存在则用它，
     否则回退到原始引擎。GUI 菜单也可手动切换两者。
-- **模型**：`src/ai/kataAmazonEngineCuda/gen012_model.bin.gz`
-  （架构 `b20c256legacyv10`，20 残差块 / 256 通道，约 2341 万参数；内部模型名
-  `candidate_gen012`；SHA-256 `637abf40a932637538de1fd970baf23ab835178271d03479f06bf6291ee8c56c`）。
-  训练自博弈与正式评测均使用 600 visits，`engine.cfg` 中 `maxVisits` 与之一致。
+- **模型**：`src/ai/kataAmazonEngineCuda/amazon10x10_xzf.bin.gz`
+  （当前装入服务器正式冠军 `gen028`；架构 `b20c256legacyv10`，20 残差块 / 256 通道；
+  SHA-256 `bd2c04f20ce7c597269c62ac2d1ddf6c6acdafc5a5d8d913998f37efd681fac6`）。
+  `gen028` 门控结果为对 `gen027` 23 胜 17 负；训练、门控与默认搜索均使用 600 visits。
 - **通信**：以 GTP 子进程运行，用有超时边界的 `kata-genmove_analyze` 获取着法和胜率。
   对局着法只在规则层验证通过后提交到所有引擎；提示使用独立后台线程和当前历史快照，
   不会阻塞界面或继续分析旧棋盘。
 - **可移植**：`src/ai/amazons_engine.py` 中所有运行资源都相对该文件计算，正常运行固定使用
   项目或便携目录内随附的引擎、模型与配置，不读取机器上的外部模型路径。
 
-> 注意：gen012 模型是服务器新版引擎的导出格式，**只能被配套的 `amazons.exe` 加载**。
+> 注意：XZF-gen028 模型由服务器导出模型兼容转换而来，**只能被配套的 `amazons.exe` 加载**。
 > CUDA 版 `katago.exe` 会报 `unknown activation type`，原始 `kataAmazon.exe` 同样无法加载。
 > 目录名 `kataAmazonEngineCuda` 是历史遗留，当前其中放的是 OpenCL 版引擎。
 >
-> 棋力参考：gen012 是该自博弈训练线截至 gen012 的最强冠军（对上一代 gen011 为 31:9），
-> 但明显弱于原发布包中的原始强模型（对其 0:20）。项目只保留界面中实际可选的
-> gen012 与原始强模型后端，不再携带未接入运行流程的试验引擎和重复权重。
+> 棋力参考：gen028 是该迭代训练线当前通过门控的正式冠军，但尚未单独完成与原始强模型的
+> 基准对局；最近一次基准中 gen027 对原始强模型为 0:20。项目只保留界面中实际可选的
+> XZF-gen028 与原始强模型后端，不携带未接入运行流程的试验引擎和重复权重。
 
 ## 功能
 
-1. **集成新模型**：菜单「游戏 → 黑方/白方 → AI → kataAmazon★★」即可让其对弈。
+1. **集成新模型**：菜单「游戏 → 黑方/白方 → AI → XZF-gen028（GPU）★★」即可让其对弈。
 2. **显示胜率**（仿照参考 Hex 项目）：
-   - 左侧信息面板实时显示当前行动方的 AI 胜率百分比；
+   - 右侧信息面板实时显示当前行动方的 AI 胜率百分比；
    - 状态栏显示胜率 / 搜索次数 / 局面估值。
 3. **AI 提示**：菜单「显示 → 显示完整回合胜率」(Ctrl+H)，沿最佳着法显示
    `S（选子）→ M（移动）→ A（射箭）` 三个阶段的胜率；三个数值统一为原行动方视角。
@@ -108,7 +108,7 @@ src/
     amazon_ai_agent.py          AI 线程调度 + 异步提示查询
     results.py                  跨线程的类型化 AI/提示结果
     native/                     发布用预编译 MCTS 模块（不含 CMake 临时文件）
-    kataAmazonEngineCuda/       gen012 引擎 amazons.exe(OpenCL) + gen012_model.bin.gz + dll + engine.cfg（默认）
+    kataAmazonEngineCuda/       XZF-gen028 + amazons.exe(OpenCL) + amazon10x10_xzf.bin.gz + dll + 配置（默认）
     kataAmazonEngine/           原始引擎 kataAmazon.exe(OpenCL) + weights/ + engine.cfg（后备）
   gui/
     amazon_board_widget.py      棋盘绘制（含提示圆环）
