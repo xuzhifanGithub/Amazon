@@ -7,6 +7,7 @@ from PyQt6.QtGui import (QPainter, QPixmap, QColor, QFont, QPen, QPolygon,
 from PyQt6.QtCore import Qt, pyqtSignal, QPoint, QRect, QPointF, pyqtProperty, QRectF
 
 from src.core.simulator import BLACK_AMAZON, WHITE_AMAZON, OBSTACLE
+from src.gui.hint_overlay import draw_hint_overlay
 
 # 定义游戏操作的各个阶段（状态）
 AWAITING_PIECE_SELECTION = 0
@@ -103,6 +104,7 @@ class BoardWidget(QWidget):
         if self.color_scheme_key not in COLOR_SCHEMES:
             self.color_scheme_key = DEFAULT_COLOR_SCHEME
         self.colors = COLOR_SCHEMES[self.color_scheme_key]
+        self._static_board_cache = None
         # ------------------------
 
         self.coord_mode = self.COORD_MODE_NONE
@@ -121,9 +123,16 @@ class BoardWidget(QWidget):
         self.hovered_piece_pos = None  # 悬停在哪个棋子上
         self.hovered_path_pos = None  # 悬停在哪条路径格子上
 
+        # --- AI 提示：最佳完整回合及“选子/移动/射箭”三个阶段的胜率 ---
+        self.hint_moves = []
+        self.hint_side = BLACK_AMAZON  # 提示对应的落子方，决定提示环颜色
+        self.hint_best_turn = None     # 最佳着法的完整回合：(start_1d, move_1d, arrow_1d) 或 None
+        self.hint_stage_win_rates = None  # (选子胜率, 移动胜率, 射箭胜率)，原行动方视角
+
         # 简化的动画属性
         self.is_animating = False
         self.hidden_pieces = set()
+        self.anim_piece_type = 0       # 动画中正在移动的棋子类型（由主窗口设置）
         self._anim_piece_pos = QPointF(0, 0)
         self._anim_arrow_pos = QPointF(0, 0)
         self._anim_piece_scale = 1.0  # 棋子缩放
@@ -194,6 +203,7 @@ class BoardWidget(QWidget):
         :param mode: COORD_MODE_NONE, COORD_MODE_EDGE, 或 COORD_MODE_GRID。
         """
         self.coord_mode = mode
+        self._static_board_cache = None
         self.update()
 
     def draw_grid_coordinates(self, painter: QPainter):
@@ -224,18 +234,31 @@ class BoardWidget(QWidget):
                 painter.drawText(text_rect, Qt.AlignmentFlag.AlignCenter, coordinate_text)
 
 
+    def set_hints(self, hints, side=BLACK_AMAZON, best_turn=None, stage_win_rates=None):
+        """设置要在棋盘上显示的 AI 推荐着法（空列表则清除）。
+
+        hints: [(r, c, 胜率百分比), ...]，按胜率降序（第一个为最佳）。
+        side: 提示对应的落子方（BLACK_AMAZON / WHITE_AMAZON），决定提示环颜色。
+        best_turn: (start_1d, move_1d, arrow_1d) 最佳着法的完整回合，或 None。
+        stage_win_rates: (选子胜率, 移动胜率, 射箭胜率)，均为原行动方视角。
+        """
+        self.hint_moves = hints or []
+        self.hint_side = side
+        self.hint_best_turn = best_turn
+        self.hint_stage_win_rates = stage_win_rates
+        self.update()
+
+    def draw_hints(self, painter: QPainter):
+        """绘制选子、移动、射箭三阶段胜率覆盖层。"""
+        draw_hint_overlay(self, painter)
+
     def paintEvent(self, event: "QPaintEvent"):
         """ 完整绘图事件 (含柔和阴影) """
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
         # 1. 绘制棋盘、坐标、高亮和上一步指示
-        self.draw_board_grid(painter)
-        # if SETTING_BOARD_COORDINATES: self.draw_board_coordinates(painter)
-        if self.coord_mode == self.COORD_MODE_EDGE:
-            self.draw_board_coordinates(painter)  # 边缘坐标 (A-J, 1-10)
-        elif self.coord_mode == self.COORD_MODE_GRID:
-            self.draw_grid_coordinates(painter)  # 格子坐标 (A1, B1, ...)
+        self.draw_static_board(painter)
         self.draw_highlights(painter)
         self.draw_last_move_indicator(painter)
 
@@ -248,10 +271,16 @@ class BoardWidget(QWidget):
                 if piece != 0:
                     self.draw_piece_with_shape(painter, r, c, piece)
 
+        # 2.5 绘制 AI 推荐着法提示（叠加在棋子层之上）
+        if self.hint_moves and not self.is_animating:
+            self.draw_hints(painter)
+
         # 3. 如果正在播放动画，则绘制运动中的元素
         if self.is_animating:
             # ==================== [绘制移动的棋子] ====================
-            piece_type = self.simulator.board[self.hidden_pieces.copy().pop()] if self.hidden_pieces else 0
+            # 直接用主窗口设置的棋子类型；不再从 hidden_pieces 反推
+            # （其中存的是 (row, col) 元组，一旦存进非法值就会导致棋盘数组越界）。
+            piece_type = self.anim_piece_type
             if piece_type in [WHITE_AMAZON, BLACK_AMAZON]:
                 center = self._anim_piece_pos
                 radius = int(self.grid_size * 0.4)
@@ -451,6 +480,7 @@ class BoardWidget(QWidget):
         if scheme_key in COLOR_SCHEMES:
             self.color_scheme_key = scheme_key
             self.colors = COLOR_SCHEMES[scheme_key]
+            self._static_board_cache = None
             self.update()
 
     def set_last_turn(self, turn_details: tuple | None):
@@ -470,6 +500,31 @@ class BoardWidget(QWidget):
         self.update()
 
     # --- 绘图辅助方法 ---
+    def draw_static_board(self, painter: QPainter):
+        """Reuse the board background and coordinate layer between repaints."""
+        # Hovered cells intentionally grow, so that one interactive frame is
+        # rendered live instead of using the cache.
+        if self.hovered_path_pos is not None:
+            self.draw_board_grid(painter)
+            if self.coord_mode == self.COORD_MODE_EDGE:
+                self.draw_board_coordinates(painter)
+            elif self.coord_mode == self.COORD_MODE_GRID:
+                self.draw_grid_coordinates(painter)
+            return
+        if self._static_board_cache is None or self._static_board_cache.size() != self.size():
+            cache = QPixmap(self.size())
+            cache.fill(Qt.GlobalColor.transparent)
+            cache_painter = QPainter(cache)
+            cache_painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            self.draw_board_grid(cache_painter)
+            if self.coord_mode == self.COORD_MODE_EDGE:
+                self.draw_board_coordinates(cache_painter)
+            elif self.coord_mode == self.COORD_MODE_GRID:
+                self.draw_grid_coordinates(cache_painter)
+            cache_painter.end()
+            self._static_board_cache = cache
+        painter.drawPixmap(0, 0, self._static_board_cache)
+
     def draw_board_grid(self, painter: QPainter):
         """
         绘制棋盘网格背景。如果某个格子是悬停的路径点，则将其放大绘制。

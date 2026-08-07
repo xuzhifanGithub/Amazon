@@ -4,11 +4,12 @@ import os
 import sys
 
 import datetime
+import logging
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QMessageBox, QVBoxLayout, QPushButton, QLabel,
                              QFileDialog, QHBoxLayout, QInputDialog, QListWidget, QApplication, QMenu, QSlider,
                              QTextEdit, QLineEdit)
 from PyQt6.QtGui import QFont, QAction, QActionGroup
-from PyQt6.QtCore import Qt, QTimer, QUrl, QSettings, QPropertyAnimation, QEasingCurve, QSequentialAnimationGroup, \
+from PyQt6.QtCore import Qt, QTimer, QUrl, QPropertyAnimation, QEasingCurve, QSequentialAnimationGroup, \
     QParallelAnimationGroup, QObject, pyqtSignal
 
 from PyQt6.QtMultimedia import QSoundEffect
@@ -19,10 +20,20 @@ project_root = os.path.join(current_dir, '..', '..')
 # 将项目的根目录添加到 sys.path
 sys.path.append(project_root)
 from src.core.simulator import AmazonsSimulator, WHITE_AMAZON, BLACK_AMAZON, OBSTACLE, EMPTY
+from src.core.game_record import export_record, load_record
 from src.gui.amazon_board_widget import BoardWidget, AWAITING_PIECE_SELECTION, AWAITING_MOVE_DESTINATION, \
     AWAITING_ARROW_DESTINATION
+from src.gui.ai_info_panel import AIInfoPanel
 
-from src.ai.amazon_ai_agent import AmazonAIAgent
+from src.ai.amazon_ai_agent import AmazonAIAgent, mcts_available
+from src.ai.amazons_engine import backend_available
+from src.ai.ai_profile import AIProfile, load_profile, save_profile
+from src.ai.results import AIOutcome, HintCandidate, HintOutcome
+from src.config import create_settings
+from src.gui.ai_settings_dialog import AISettingsDialog
+
+
+logger = logging.getLogger(__name__)
 
 
 class AmazonsMainWindow(QMainWindow):
@@ -33,12 +44,19 @@ class AmazonsMainWindow(QMainWindow):
     PLAYER_TYPE_HUMAN = 'human'
     PLAYER_TYPE_AI_MCTS = 'mcts'  # 保留 MCTS
     PLAYER_TYPE_AI_MCTS2 = 'mcts_test'  # 保留 MCTS
-    PLAYER_TYPE_AI_KATAAMAZON = 'kataAmazon'  #
+    PLAYER_TYPE_AI_KATAAMAZON = 'kataAmazon'          # 兼容旧引用
+    PLAYER_TYPE_AI_KATAAMAZON_GPU = 'kataAmazon_gpu'  # gen012 模型 + OpenCL(GPU) 引擎
+    PLAYER_TYPE_AI_KATAAMAZON_LEGACY = 'kataAmazon_legacy'  # 原始引擎（OpenCL/GPU）+ 旧模型
 
     def __init__(self, simulator: AmazonsSimulator):
         super().__init__()
         self.simulator = simulator
         self.animation_group = None
+        self.game_generation = 0
+        self._ai_turn_pending = False
+        self._active_ai_request = None
+        self._hint_request_id = 0
+        self._closing = False
 
         self.move_history = []  # 正确：初始化为空列表
         self.board_widget = None  # 将在init_ui中初始化
@@ -48,23 +66,63 @@ class AmazonsMainWindow(QMainWindow):
         # AI
         self.black_ai_agent = AmazonAIAgent(self)
         self.white_ai_agent = AmazonAIAgent(self)
-        self.black_ai_agent.move_calculated.connect(self.execute_ai_move)
-        self.white_ai_agent.move_calculated.connect(self.execute_ai_move)
+        self.black_ai_agent.move_calculated.connect(
+            lambda result: self.execute_ai_move(result, BLACK_AMAZON))
+        self.white_ai_agent.move_calculated.connect(
+            lambda result: self.execute_ai_move(result, WHITE_AMAZON))
+        self.black_ai_agent.hint_calculated.connect(self._handle_hint_outcome)
+        self.white_ai_agent.hint_calculated.connect(self._handle_hint_outcome)
         # 主题设置
-        self.current_color_scheme = 'BW'  # 默认经典黑白主题
+        self.settings = create_settings()
+        self.black_ai_profile = load_profile(self.settings, "black")
+        self.white_ai_profile = load_profile(self.settings, "white")
+        self.current_color_scheme = self.settings.value("display/theme", "BW", type=str)
+        if self.current_color_scheme not in ('BW', 'RB', 'GS', 'PS'):
+            self.current_color_scheme = 'BW'
         self.setWindowTitle("亚马逊棋")
 
+        # --- AI 提示设置：显示最佳“选子 → 移动 → 射箭”的三阶段胜率 ---
+        self.hint_count = self.settings.value("hints/count", 1, type=int)
+        if self.hint_count not in (1, 3, 5):
+            self.hint_count = 1
+        self.hint_source = self.settings.value("hints/source", "gpu", type=str)
+        if self.hint_source not in ('gpu', 'legacy'):
+            self.hint_source = 'gpu'
+        if not backend_available(self.hint_source):
+            self.hint_source = 'gpu' if backend_available('gpu') else 'legacy'
+        self.hint_side = self.settings.value("hints/side", BLACK_AMAZON, type=int)
+        if self.hint_side not in (BLACK_AMAZON, WHITE_AMAZON):
+            self.hint_side = BLACK_AMAZON
+        self._show_hints_default = self.settings.value("hints/enabled", False, type=bool)
+        # 最近一次 AI 胜率(%)，用于左侧信息面板显示
+        self.last_win_rate = None
+
         self.init_ui()
+        geometry = self.settings.value("window/geometry")
+        if geometry is not None:
+            self.restoreGeometry(geometry)
         self.start_new_game()
 
     def start_new_game(self):
         if not self.confirm_action("开始新游戏"):
             return
 
+        # Invalidate every delayed callback and result that belongs to the old game.
+        self.game_generation += 1
+        self._hint_request_id += 1
+        self.black_ai_agent.cancel_hint_analysis()
+        self.white_ai_agent.cancel_hint_analysis()
+        self._ai_turn_pending = False
+        self._active_ai_request = None
+        self._cancel_current_animation()
+
         self.simulator.reset()
         self.board_widget.reset_selection()
         self.board_widget.set_last_turn(None)
         self.board_widget.set_color_scheme(self.current_color_scheme)
+        self.board_widget.set_hints([], self.hint_side)  # 清除 AI 提示
+        self.update_win_rate_display(None)               # 清除胜率显示
+        self.update_ai_info_panel(None, None)             # 清除右侧 AI 分析面板
         self.move_history.clear()
         self.board_widget.update()
         self.board_widget.setEnabled(True)
@@ -83,6 +141,27 @@ class AmazonsMainWindow(QMainWindow):
         # 检查是否轮到 AI 先手，如果是则触发AI下棋
         if self.is_ai_turn():
             self.start_ai_turn()
+
+    def _cancel_current_animation(self):
+        """Stop an old-game animation and restore the board's idle state."""
+        group = self.animation_group
+        if group is not None:
+            try:
+                group.finished.disconnect()
+            except (TypeError, RuntimeError):
+                pass
+            try:
+                group.stop()
+            except RuntimeError:
+                pass
+
+        self.animation_group = None
+        if self.board_widget is not None:
+            self.board_widget.animation_group = None
+            self.board_widget.is_animating = False
+            self.board_widget.hidden_pieces.clear()
+            self.board_widget.anim_piece_type = 0
+            self.board_widget.anim_arrow_scale = 1.0
 
     def set_coord_display_mode(self, mode_key: str):
         """
@@ -108,6 +187,231 @@ class AmazonsMainWindow(QMainWindow):
         if self.board_widget:
             self.board_widget.set_coord_mode(mode_int)
             self.statusBar().showMessage(f"坐标显示模式已切换为：{mode_name_map.get(mode_key)}", 3000)
+
+    def set_hint_count(self, n):
+        """设置 AI 提示显示的着法数量。"""
+        self.hint_count = n if n in (1, 3, 5) else 1
+        self.settings.setValue("hints/count", self.hint_count)
+        self.update_hints()
+
+    def show_ai_settings(self):
+        """Edit per-side profiles; an already-running worker keeps its snapshot."""
+        dialog = AISettingsDialog(self.black_ai_profile, self.white_ai_profile, self)
+        if dialog.exec():
+            black, white = dialog.profiles()
+            self.black_ai_profile = save_profile(self.settings, "black", black)
+            self.white_ai_profile = save_profile(self.settings, "white", white)
+            self.settings.sync()
+            self.statusBar().showMessage("AI 参数已保存，将在下一次 AI 回合生效。", 3500)
+
+    def export_game_record(self):
+        path, _ = QFileDialog.getSaveFileName(
+            self, "导出棋谱", "", "Amazons 棋谱 (*.amazons.json)")
+        if not path:
+            return
+        if not path.lower().endswith(".amazons.json"):
+            path += ".amazons.json"
+        try:
+            export_record(path, self.simulator)
+        except OSError as exc:
+            QMessageBox.warning(self, "导出失败", str(exc))
+            return
+        self.statusBar().showMessage("棋谱已导出。", 3000)
+
+    def import_game_record(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "导入棋谱", "", "Amazons 棋谱 (*.amazons.json)")
+        if not path:
+            return
+        try:
+            turns = load_record(path, self.simulator)
+        except ValueError as exc:
+            QMessageBox.warning(self, "导入失败", str(exc))
+            return
+        # Validation above leaves the current board intact; mutate only now.
+        self.game_generation += 1
+        self._hint_request_id += 1
+        self._active_ai_request = None
+        self._ai_turn_pending = False
+        self.black_ai_agent.cancel_hint_analysis()
+        self.white_ai_agent.cancel_hint_analysis()
+        self._cancel_current_animation()
+        self.black_ai_agent.clear_board()
+        self.white_ai_agent.clear_board()
+        self.simulator.load_turns(turns)
+        self.move_history = list(turns)
+        self.board_widget.reset_selection()
+        self.board_widget.set_last_turn(turns[-1] if turns else None)
+        self.board_widget.set_hints([], self.hint_side)
+        self.board_widget.setEnabled(True)
+        self.update_status()
+        self.board_widget.update()
+        self.statusBar().showMessage("棋谱已导入。", 3000)
+
+    def set_hint_source(self, source):
+        """设置 AI 提示使用的引擎后端（'gpu' / 'legacy'）。"""
+        self.hint_source = source
+        self.settings.setValue("hints/source", source)
+        self.update_hints()
+
+    def set_hint_side(self, side):
+        """设置提示对应的落子方。"""
+        self.hint_side = side
+        self.settings.setValue("hints/side", side)
+        self.update_hints()
+
+    def update_hints(self):
+        """显示 kataAmazon 最佳完整回合的选子、移动、射箭阶段胜率。
+
+        三个数字统一为原行动方视角；仅当轮到所选提示方（hint_side）落子时
+        显示，非该方回合时清空。
+        """
+        if (not self.show_hints_action.isChecked() or self.simulator.game_over
+                or self.simulator.current_player != self.hint_side):
+            self._hint_request_id += 1
+            self.black_ai_agent.cancel_hint_analysis()
+            self.white_ai_agent.cancel_hint_analysis()
+            self.board_widget.set_hints([], self.hint_side)
+            self.info_panel.set_candidates()
+            return
+
+        # 用对应方的 AI agent 查询（使用独立的提示引擎，不影响对局引擎）
+        agent = self.black_ai_agent if self.hint_side == BLACK_AMAZON else self.white_ai_agent
+        self._hint_request_id += 1
+        self.black_ai_agent.cancel_hint_analysis()
+        self.white_ai_agent.cancel_hint_analysis()
+        request_id = self._hint_request_id
+        self.board_widget.set_hints([], self.hint_side)
+        self.info_panel.set_candidates()
+        self.statusBar().showMessage("正在后台计算 AI 提示...")
+        agent.start_hint_analysis(request_id, self.hint_side, self.hint_source, self.hint_count)
+
+    def _handle_hint_outcome(self, outcome: HintOutcome):
+        """Apply only the newest hint response for the current game position."""
+        if (self._closing or outcome.request_id != self._hint_request_id
+                or not self.show_hints_action.isChecked()
+                or self.simulator.game_over
+                or self.simulator.current_player != self.hint_side):
+            return
+
+        if outcome.error:
+            self.board_widget.set_hints([], self.hint_side)
+            self.info_panel.set_candidates()
+            self.statusBar().showMessage(f"AI 提示不可用：{outcome.error}")
+            return
+
+        normalized = []
+        for candidate in outcome.candidates:
+            if isinstance(candidate, HintCandidate):
+                normalized.append(candidate)
+            elif isinstance(candidate, tuple) and len(candidate) >= 2:
+                normalized.append(HintCandidate(candidate[0], stage_win_rates=(candidate[1], None, None)))
+        hints = normalized
+        best_turn = outcome.best_turn
+        stage_win_rates = outcome.stage_win_rates
+        size = self.simulator.size
+        self.board_widget.set_hints(
+            [(candidate.start // size, candidate.start % size, candidate.stage_win_rates[0])
+             for candidate in hints],
+            self.hint_side,
+            best_turn=best_turn,
+            stage_win_rates=stage_win_rates)
+        candidate_rows = []
+        for index, candidate in enumerate(hints, 1):
+            start = self._pos_to_display(candidate.start, size)
+            move = self._pos_to_display(candidate.move, size) if candidate.move is not None else "—"
+            arrow = self._pos_to_display(candidate.arrow, size) if candidate.arrow is not None else "—"
+            rate = candidate.stage_win_rates[0]
+            rate_text = "—" if rate is None else f"{rate:.1f}%"
+            candidate_rows.append(f"{index}. {start} → {move} → {arrow}  {rate_text}")
+        self.info_panel.set_candidates(candidate_rows)
+        if hints and stage_win_rates:
+            labels = ("选子", "移动", "射箭")
+            rate_text = " → ".join(
+                f"{label} {rate:.1f}%" if rate is not None else f"{label} —"
+                for label, rate in zip(labels, stage_win_rates))
+            self.statusBar().showMessage(f"AI 提示：{rate_text}")
+        else:
+            self.statusBar().showMessage("AI 提示不可用（引擎未返回候选）。")
+
+    def update_win_rate_display(self, win_rate=None, player=None):
+        """更新左侧面板的 AI 胜率显示。win_rate 为百分比(0..100)，player 为行动方。"""
+        self.last_win_rate = win_rate
+        who = "黑方" if player == BLACK_AMAZON else ("白方" if player == WHITE_AMAZON else "")
+        context = f"{who} AI 预测" if who else "当前行动方 AI 预测"
+        self.info_panel.set_win_rate(win_rate, context)
+
+    @staticmethod
+    def _pos_to_display(pos_1d: int, size: int = 10) -> str:
+        """将 1D 坐标转为棋盘显示坐标（如 0→'A10', 9→'J10', 90→'A1', 99→'J1'）。"""
+        row = pos_1d // size
+        col = pos_1d % size
+        col_letter = chr(ord('A') + col)
+        row_number = size - row
+        return f"{col_letter}{row_number}"
+
+    def update_ai_info_panel(self, best_res, player, ai_type_key: str = ""):
+        """更新右侧 AI 分析信息面板。
+
+        best_res: BestResult 或 None（None 时清空面板）。
+        player: 当前行动方（BLACK_AMAZON / WHITE_AMAZON）。
+        ai_type_key: AI 类型标识（如 'mcts' / 'kataAmazon_gpu' 等）。
+        """
+        if best_res is None:
+            self.info_ai_model.setText("模型：—")
+            self.info_move_detail.setText("棋步：—")
+            self.info_win_rate.setText("胜率：—")
+            self.info_visits.setText("搜索次数：—")
+            self.info_eval.setText("局面估值：—")
+            self.info_panel.set_candidates()
+            return
+
+        who = "黑方" if player == BLACK_AMAZON else "白方"
+
+        # 模型名称
+        model_names = {
+            'mcts': 'MCTS (C++)',
+            'mcts_test': 'MCTS_test (C++)',
+            'kataAmazon': 'kataAmazon',
+            'kataAmazon_gpu': 'kataAmazon-gen012（GPU）',
+            'kataAmazon_legacy': 'kataAmazon-原始（旧模型）',
+        }
+        model_label = model_names.get(ai_type_key, ai_type_key or "AI")
+        profile = self.black_ai_profile if player == BLACK_AMAZON else self.white_ai_profile
+        strength = (f"{profile.mcts_seconds:.1f} 秒" if ai_type_key.startswith("mcts")
+                    else f"{profile.kata_visits} visits")
+        self.info_ai_model.setText(f"模型：{model_label}\n（{who}，{strength}）")
+
+        # 棋步详情
+        size = self.simulator.size
+        try:
+            start_str = self._pos_to_display(best_res.best_pos_from, size)
+            move_str = self._pos_to_display(best_res.best_pos_to, size)
+            arrow_str = self._pos_to_display(best_res.best_pos_stone, size)
+            self.info_move_detail.setText(
+                f"选子：{start_str}\n"
+                f"移动：{start_str} → {move_str}\n"
+                f"射箭：{arrow_str}")
+        except Exception:
+            self.info_move_detail.setText("棋步：解析失败")
+
+        # 胜率
+        if best_res.win_pro is not None:
+            self.info_win_rate.setText(f"胜率：{best_res.win_pro:.2f}%")
+        else:
+            self.info_win_rate.setText("胜率：—")
+
+        # 搜索次数
+        if best_res.max_apt is not None:
+            self.info_visits.setText(f"搜索次数：{int(best_res.max_apt)}")
+        else:
+            self.info_visits.setText("搜索次数：—")
+
+        # 局面估值 / 选择概率
+        if best_res.select_pro is not None:
+            self.info_eval.setText(f"局面估值：{best_res.select_pro:.4f}")
+        else:
+            self.info_eval.setText("局面估值：—")
 
     def on_turn_made(self, start_pos, move_pos, arrow_pos):
         """
@@ -140,25 +444,18 @@ class AmazonsMainWindow(QMainWindow):
         # ========== 执行第一次悔棋 ==========
         if self.simulator.undo():
             if self.move_history:
-                last_turn = self.move_history.pop()
-
-                # 根据悔掉的是谁的回合，回退对应 AI 的内部棋盘
-                last_player = -self.simulator.current_player  # undo 后 current_player 已反转
-                if last_player == BLACK_AMAZON:
-                    self.black_ai_agent.undo_board()
-                else:
-                    self.white_ai_agent.undo_board()
+                self.move_history.pop()
+                # 每个已加载的对局引擎都保存完整局面，因此必须一起回退。
+                self.black_ai_agent.undo_board()
+                self.white_ai_agent.undo_board()
 
             # ====== 如果是人机对战，要再悔一步跳过 AI ======
             if not is_human_vs_human:
                 if self.simulator.undo():
                     if self.move_history:
-                        last_turn = self.move_history.pop()
-                        last_player = -self.simulator.current_player
-                        if last_player == BLACK_AMAZON:
-                            self.black_ai_agent.undo_board()
-                        else:
-                            self.white_ai_agent.undo_board()
+                        self.move_history.pop()
+                        self.black_ai_agent.undo_board()
+                        self.white_ai_agent.undo_board()
 
                     self.statusBar().showMessage("已连续悔棋，跳过 AI 回合。")
                 else:
@@ -171,6 +468,10 @@ class AmazonsMainWindow(QMainWindow):
 
         # ========= UI 更新 ==========
         self.board_widget.reset_selection()
+        self._hint_request_id += 1
+        self.black_ai_agent.cancel_hint_analysis()
+        self.white_ai_agent.cancel_hint_analysis()
+        self.update_ai_info_panel(None, None)       # 悔棋时清除 AI 分析面板
 
         if self.move_history:
             self.board_widget.set_last_turn(self.move_history[-1])
@@ -187,34 +488,32 @@ class AmazonsMainWindow(QMainWindow):
     def init_ui(self):
         """初始化主窗口的用户界面布局和控件。"""
         central_widget = QWidget()
+        central_widget.setObjectName("gameCentralWidget")
         self.setCentralWidget(central_widget)
         main_h_layout = QHBoxLayout(central_widget)
+        main_h_layout.setContentsMargins(10, 8, 10, 8)
+        main_h_layout.setSpacing(12)
 
-        self.left_controls_panel = QWidget()
-        left_v_layout = QVBoxLayout(self.left_controls_panel)
-        self.left_controls_panel.setFixedWidth(220)
-
-        # 添加状态标签的样式
-        left_v_layout.addStretch(1)
-        self.status_label = QLabel("欢迎！")
-        font = QFont("Helvetica", 14)
-        font.setBold(True)
-        self.status_label.setFont(font)
-        self.status_label.setWordWrap(True)
-        self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)  # 文本居中
-        left_v_layout.addWidget(self.status_label, stretch=5)
-        left_v_layout.addStretch(1)
-        # ----------------------------------
-
-        right_board_panel = QWidget()
-        right_v_layout = QVBoxLayout(right_board_panel)
+        board_panel = QWidget()
+        board_layout = QVBoxLayout(board_panel)
+        board_layout.setContentsMargins(0, 0, 0, 0)
         self.board_widget = BoardWidget(self.simulator, color_scheme=self.current_color_scheme)
         self.board_widget.mouse_genmove_completed.connect(self.on_turn_made)
         self.board_widget.game_over_signal.connect(self.show_game_over_message)
-        right_v_layout.addWidget(self.board_widget)
+        board_layout.addWidget(self.board_widget)
 
-        main_h_layout.addWidget(right_board_panel)
-        main_h_layout.addWidget(self.left_controls_panel)
+        self.info_panel = AIInfoPanel(color_scheme=self.current_color_scheme)
+        # 保留主窗口原有属性，避免影响状态更新和 AI 结果处理接口。
+        self.status_label = self.info_panel.status_label
+        self.win_rate_label = self.info_panel.win_rate_label
+        self.info_ai_model = self.info_panel.info_ai_model
+        self.info_move_detail = self.info_panel.info_move_detail
+        self.info_win_rate = self.info_panel.info_win_rate
+        self.info_visits = self.info_panel.info_visits
+        self.info_eval = self.info_panel.info_eval
+
+        main_h_layout.addWidget(board_panel, 1)
+        main_h_layout.addWidget(self.info_panel, 0)
 
         self.create_menus()
         self.statusBar().showMessage("欢迎来到亚马逊棋！")
@@ -249,24 +548,35 @@ class AmazonsMainWindow(QMainWindow):
         # AI 子菜单
         black_ai_menu = QMenu("AI", self)
         # 1. MCTS(c++)
-        black_ai_mcts_action = QAction("MCTS★", self, checkable=True)
-        black_ai_mcts_action.triggered.connect(lambda: self.set_player_mode(BLACK_AMAZON, self.PLAYER_TYPE_AI_MCTS))
-        black_player_group.addAction(black_ai_mcts_action)
-        black_ai_menu.addAction(black_ai_mcts_action)
+        self.black_ai_mcts_action = QAction("MCTS★", self, checkable=True)
+        self.black_ai_mcts_action.setEnabled(mcts_available('mcts'))
+        self.black_ai_mcts_action.triggered.connect(lambda: self.set_player_mode(BLACK_AMAZON, self.PLAYER_TYPE_AI_MCTS))
+        black_player_group.addAction(self.black_ai_mcts_action)
+        black_ai_menu.addAction(self.black_ai_mcts_action)
 
         #  MCTS_test(c++)
-        black_ai_mcts_test_action = QAction("MCTS_test★", self, checkable=True)
-        black_ai_mcts_test_action.triggered.connect(
+        self.black_ai_mcts_test_action = QAction("MCTS_test★", self, checkable=True)
+        self.black_ai_mcts_test_action.setEnabled(mcts_available('mcts_test'))
+        self.black_ai_mcts_test_action.triggered.connect(
             lambda: self.set_player_mode(BLACK_AMAZON, self.PLAYER_TYPE_AI_MCTS2))
-        black_player_group.addAction(black_ai_mcts_test_action)
-        black_ai_menu.addAction(black_ai_mcts_test_action)
+        black_player_group.addAction(self.black_ai_mcts_test_action)
+        black_ai_menu.addAction(self.black_ai_mcts_test_action)
 
-        #  kataAmazon
-        black_ai_kataAmazon_action = QAction("kataAmazon★★", self, checkable=True)
-        black_ai_kataAmazon_action.triggered.connect(
-            lambda: self.set_player_mode(BLACK_AMAZON, self.PLAYER_TYPE_AI_KATAAMAZON))
-        black_player_group.addAction(black_ai_kataAmazon_action)
-        black_ai_menu.addAction(black_ai_kataAmazon_action)
+        #  kataAmazon（gen012 模型，OpenCL/GPU）
+        self.black_ai_kata_gpu_action = QAction("kataAmazon-GPU★★", self, checkable=True)
+        self.black_ai_kata_gpu_action.setEnabled(backend_available('gpu'))
+        self.black_ai_kata_gpu_action.triggered.connect(
+            lambda: self.set_player_mode(BLACK_AMAZON, self.PLAYER_TYPE_AI_KATAAMAZON_GPU))
+        black_player_group.addAction(self.black_ai_kata_gpu_action)
+        black_ai_menu.addAction(self.black_ai_kata_gpu_action)
+
+        # 原始 kataAmazon（OpenCL/GPU + 旧模型 amazons10x10），项目最初就带的选项
+        self.black_ai_kata_legacy_action = QAction("kataAmazon(原始)★★", self, checkable=True)
+        self.black_ai_kata_legacy_action.setEnabled(backend_available('legacy'))
+        self.black_ai_kata_legacy_action.triggered.connect(
+            lambda: self.set_player_mode(BLACK_AMAZON, self.PLAYER_TYPE_AI_KATAAMAZON_LEGACY))
+        black_player_group.addAction(self.black_ai_kata_legacy_action)
+        black_ai_menu.addAction(self.black_ai_kata_legacy_action)
 
         black_player_menu.addMenu(black_ai_menu)
         game_menu.addMenu(black_player_menu)
@@ -285,26 +595,50 @@ class AmazonsMainWindow(QMainWindow):
         # AI 子菜单
         white_ai_menu = QMenu("AI", self)
         # 1. MCTS(c++)
-        white_ai_mcts_action = QAction("MCTS★", self, checkable=True)
-        white_ai_mcts_action.triggered.connect(lambda: self.set_player_mode(WHITE_AMAZON, self.PLAYER_TYPE_AI_MCTS))
-        white_player_group.addAction(white_ai_mcts_action)
-        white_ai_menu.addAction(white_ai_mcts_action)
+        self.white_ai_mcts_action = QAction("MCTS★", self, checkable=True)
+        self.white_ai_mcts_action.setEnabled(mcts_available('mcts'))
+        self.white_ai_mcts_action.triggered.connect(lambda: self.set_player_mode(WHITE_AMAZON, self.PLAYER_TYPE_AI_MCTS))
+        white_player_group.addAction(self.white_ai_mcts_action)
+        white_ai_menu.addAction(self.white_ai_mcts_action)
 
         #
-        white_ai_mcts_test_action = QAction("MCTS_test★", self, checkable=True)
-        white_ai_mcts_test_action.triggered.connect(
+        self.white_ai_mcts_test_action = QAction("MCTS_test★", self, checkable=True)
+        self.white_ai_mcts_test_action.setEnabled(mcts_available('mcts_test'))
+        self.white_ai_mcts_test_action.triggered.connect(
             lambda: self.set_player_mode(WHITE_AMAZON, self.PLAYER_TYPE_AI_MCTS2))
-        white_player_group.addAction(white_ai_mcts_test_action)
-        white_ai_menu.addAction(white_ai_mcts_test_action)
+        white_player_group.addAction(self.white_ai_mcts_test_action)
+        white_ai_menu.addAction(self.white_ai_mcts_test_action)
 
-        white_ai_kataAmazon_action = QAction("kataAmazon★★", self, checkable=True)
-        white_ai_kataAmazon_action.triggered.connect(
-            lambda: self.set_player_mode(WHITE_AMAZON, self.PLAYER_TYPE_AI_KATAAMAZON))
-        white_player_group.addAction(white_ai_kataAmazon_action)
-        white_ai_menu.addAction(white_ai_kataAmazon_action)
+        #  kataAmazon（gen012 模型，OpenCL/GPU）
+        self.white_ai_kata_gpu_action = QAction("kataAmazon-GPU★★", self, checkable=True)
+        self.white_ai_kata_gpu_action.setEnabled(backend_available('gpu'))
+        self.white_ai_kata_gpu_action.triggered.connect(
+            lambda: self.set_player_mode(WHITE_AMAZON, self.PLAYER_TYPE_AI_KATAAMAZON_GPU))
+        white_player_group.addAction(self.white_ai_kata_gpu_action)
+        white_ai_menu.addAction(self.white_ai_kata_gpu_action)
+
+        # 原始 kataAmazon（OpenCL/GPU + 旧模型 amazons10x10），项目最初就带的选项
+        self.white_ai_kata_legacy_action = QAction("kataAmazon(原始)★★", self, checkable=True)
+        self.white_ai_kata_legacy_action.setEnabled(backend_available('legacy'))
+        self.white_ai_kata_legacy_action.triggered.connect(
+            lambda: self.set_player_mode(WHITE_AMAZON, self.PLAYER_TYPE_AI_KATAAMAZON_LEGACY))
+        white_player_group.addAction(self.white_ai_kata_legacy_action)
+        white_ai_menu.addAction(self.white_ai_kata_legacy_action)
 
         white_player_menu.addMenu(white_ai_menu)
         game_menu.addMenu(white_player_menu)
+
+        ai_settings_action = QAction("AI 参数设置…", self)
+        ai_settings_action.triggered.connect(self.show_ai_settings)
+        game_menu.addAction(ai_settings_action)
+
+        export_action = QAction("导出棋谱…", self)
+        export_action.triggered.connect(self.export_game_record)
+        game_menu.addAction(export_action)
+
+        import_action = QAction("导入棋谱…", self)
+        import_action.triggered.connect(self.import_game_record)
+        game_menu.addAction(import_action)
 
         game_menu.addSeparator()
 
@@ -336,25 +670,28 @@ class AmazonsMainWindow(QMainWindow):
 
         # 经典黑白主题
         self.theme_bw_action = QAction("纸落云烟", self, checkable=True)
-        self.theme_bw_action.setChecked(True)
+        self.theme_bw_action.setChecked(self.current_color_scheme == 'BW')
         self.theme_bw_action.triggered.connect(lambda: self.set_color_scheme('BW'))
         theme_group.addAction(self.theme_bw_action)
         theme_menu.addAction(self.theme_bw_action)
 
         # 红蓝对决主题
         self.theme_rb_action = QAction("桃蹊蒼茫", self, checkable=True)
+        self.theme_rb_action.setChecked(self.current_color_scheme == 'RB')
         self.theme_rb_action.triggered.connect(lambda: self.set_color_scheme('RB'))
         theme_group.addAction(self.theme_rb_action)
         theme_menu.addAction(self.theme_rb_action)
 
         # 主题
         self.theme_gs_action = QAction("杳霭流玉", self, checkable=True)
+        self.theme_gs_action.setChecked(self.current_color_scheme == 'GS')
         self.theme_gs_action.triggered.connect(lambda: self.set_color_scheme('GS'))
         theme_group.addAction(self.theme_gs_action)
         theme_menu.addAction(self.theme_gs_action)
 
         # 主题
         self.theme_ps_action = QAction("流绪微梦", self, checkable=True)
+        self.theme_ps_action.setChecked(self.current_color_scheme == 'PS')
         self.theme_ps_action.triggered.connect(lambda: self.set_color_scheme('PS'))
         theme_group.addAction(self.theme_ps_action)
         theme_menu.addAction(self.theme_ps_action)
@@ -388,6 +725,55 @@ class AmazonsMainWindow(QMainWindow):
         coord_menu.addAction(coord_grid_action)
 
         display_menu.addMenu(coord_menu)
+
+        display_menu.addSeparator()
+
+        # --- AI 提示（kataAmazon 胜率）---
+        self.show_hints_action = QAction("显示完整回合胜率", self, checkable=True)
+        self.show_hints_action.setChecked(self._show_hints_default)
+        self.show_hints_action.setShortcut("Ctrl+H")
+        self.show_hints_action.triggered.connect(self.update_hints)
+        self.show_hints_action.toggled.connect(
+            lambda enabled: self.settings.setValue("hints/enabled", enabled))
+        display_menu.addAction(self.show_hints_action)
+
+        # 提示数量子菜单
+        hint_count_menu = QMenu("提示数量", self)
+        hint_count_group = QActionGroup(self)
+        hint_count_group.setExclusive(True)
+        for n in (1, 3, 5):
+            action = QAction(f"前 {n} 个候选", self, checkable=True)
+            action.setChecked(n == self.hint_count)
+            action.triggered.connect(lambda _, n=n: self.set_hint_count(n))
+            hint_count_group.addAction(action)
+            hint_count_menu.addAction(action)
+        display_menu.addMenu(hint_count_menu)
+
+        # 提示视角子菜单（提示哪一方的候选着法）
+        hint_side_menu = QMenu("提示视角", self)
+        hint_side_group = QActionGroup(self)
+        hint_side_group.setExclusive(True)
+        for side, name in ((BLACK_AMAZON, "黑方"), (WHITE_AMAZON, "白方")):
+            action = QAction(name, self, checkable=True)
+            action.setChecked(side == self.hint_side)
+            action.triggered.connect(lambda _, side=side: self.set_hint_side(side))
+            hint_side_group.addAction(action)
+            hint_side_menu.addAction(action)
+        display_menu.addMenu(hint_side_menu)
+
+        # 提示模型子菜单（用哪个引擎后端评估胜率：gen012 / 原始旧模型）
+        hint_source_menu = QMenu("提示模型", self)
+        hint_source_group = QActionGroup(self)
+        hint_source_group.setExclusive(True)
+        for key, label in (('gpu', 'kataAmazon-gen012（GPU）'),
+                           ('legacy', 'kataAmazon-原始（旧模型）')):
+            action = QAction(label, self, checkable=True)
+            action.setEnabled(backend_available(key))
+            action.setChecked(key == self.hint_source)
+            action.triggered.connect(lambda _, key=key: self.set_hint_source(key))
+            hint_source_group.addAction(action)
+            hint_source_menu.addAction(action)
+        display_menu.addMenu(hint_source_menu)
 
         # -------------------- 介绍菜单 --------------------
         help_menu = menu_bar.addMenu("介绍(&I)")  # I for Introduction
@@ -569,16 +955,26 @@ class AmazonsMainWindow(QMainWindow):
         """
         设置某一边的玩家类型
         """
+        availability = {
+            self.PLAYER_TYPE_AI_MCTS: mcts_available('mcts'),
+            self.PLAYER_TYPE_AI_MCTS2: mcts_available('mcts_test'),
+            self.PLAYER_TYPE_AI_KATAAMAZON_GPU: backend_available('gpu'),
+            self.PLAYER_TYPE_AI_KATAAMAZON_LEGACY: backend_available('legacy'),
+        }
+        if player_type != self.PLAYER_TYPE_HUMAN and not availability.get(player_type, False):
+            QMessageBox.warning(self, "AI 不可用", "所选 AI 的模块、引擎或模型文件不完整。")
+            if side == BLACK_AMAZON:
+                self.black_human_action.setChecked(True)
+            else:
+                self.white_human_action.setChecked(True)
+            return
+
         if side == BLACK_AMAZON:
             self.black_modes = player_type
             side_text = "黑方"
-            if player_type == self.PLAYER_TYPE_AI_KATAAMAZON:
-                self.black_ai_agent.init_ai_engine()
         else:
             self.white_modes = player_type
             side_text = "白方"
-            if player_type == self.PLAYER_TYPE_AI_KATAAMAZON:
-                self.white_ai_agent.init_ai_engine()
 
         if player_type == self.PLAYER_TYPE_HUMAN:
             mode_text = "人类"
@@ -587,6 +983,14 @@ class AmazonsMainWindow(QMainWindow):
 
         self.statusBar().showMessage(f"已将 {side_text} 设置为 {mode_text} 玩家。", 3000)
 
+        # A result from a just-replaced AI must not leave the board disabled.
+        # Wait for that worker to release its engine, then start the selected AI.
+        if side == self.simulator.current_player and self._active_ai_request is not None:
+            self._active_ai_request = None
+            self._ai_turn_pending = False
+            self.board_widget.setEnabled(True)
+            QTimer.singleShot(0, self._resume_ai_after_mode_change)
+
         if self.simulator.game_over:
             self.show_game_over_message()
         else:
@@ -594,13 +998,25 @@ class AmazonsMainWindow(QMainWindow):
             if self.is_ai_turn():
                 self.start_ai_turn()
 
+    def _resume_ai_after_mode_change(self):
+        if self.simulator.game_over or not self.is_ai_turn():
+            return
+        agent = (self.black_ai_agent if self.simulator.current_player == BLACK_AMAZON
+                 else self.white_ai_agent)
+        if agent.is_busy():
+            QTimer.singleShot(100, self._resume_ai_after_mode_change)
+            return
+        self.start_ai_turn()
+
     def set_color_scheme(self, scheme_key: str):
         """
         设置棋盘的主题配色方案。
         """
         if self.board_widget:
             self.board_widget.set_color_scheme(scheme_key)
+            self.info_panel.set_theme(scheme_key)
             self.current_color_scheme = scheme_key
+            self.settings.setValue("display/theme", scheme_key)
 
             # 更新菜单状态
             scheme_names = {
@@ -641,9 +1057,9 @@ class AmazonsMainWindow(QMainWindow):
         player_name = "黑方" if self.simulator.current_player == BLACK_AMAZON else "白方"
 
         if self.is_ai_turn():
-            self.status_label.setText(f"轮到 {player_name} (AI) 落子。")
+            self.info_panel.set_status(f"轮到 {player_name}（AI）落子")
         else:
-            self.status_label.setText(f"轮到 {player_name} (人类) 落子。")
+            self.info_panel.set_status(f"轮到 {player_name}（人类）落子")
 
     def show_game_over_message(self, message=None):
         """显示游戏结束消息"""
@@ -697,12 +1113,13 @@ class AmazonsMainWindow(QMainWindow):
         """
         动画完成后的核心处理逻辑。
         """
-        if self.simulator.current_player == BLACK_AMAZON:
-            self.white_ai_agent.update_engine_board(self.simulator.current_player, start_pos, move_pos, arrow_pos)
-        else:
-            self.black_ai_agent.update_engine_board(self.simulator.current_player, start_pos, move_pos, arrow_pos)
-
+        player_who_moved = self.simulator.current_player
         if self.simulator.execute_turn(start_pos, move_pos, arrow_pos):
+            # 先由规则层确认合法，再把同一已提交回合同步到所有对局引擎。
+            self.black_ai_agent.sync_committed_turn(
+                player_who_moved, start_pos, move_pos, arrow_pos)
+            self.white_ai_agent.sync_committed_turn(
+                player_who_moved, start_pos, move_pos, arrow_pos)
             self.move_history.append((start_pos, move_pos, arrow_pos))
             self.board_widget.set_last_turn((start_pos, move_pos, arrow_pos))
 
@@ -710,12 +1127,17 @@ class AmazonsMainWindow(QMainWindow):
             self.board_widget.update()  # 确保在动画结束后立即刷新
 
             if self.simulator.game_over:
+                self.board_widget.set_hints([], self.hint_side)
                 return 'GAME_OVER'
 
             # 玩家落子后，检查是否轮到 AI 下棋
             if self.is_ai_turn():
+                self.board_widget.set_hints([], self.hint_side)  # 轮到 AI，清除旧提示
                 self.start_ai_turn()
                 return 'AI_TURN'
+
+            # 轮到人类：若开启了提示，刷新当前局面的候选着法胜率
+            self.update_hints()
 
             self.board_widget.setEnabled(True)  # 恢复人类输入
             return 'HUMAN_TURN'
@@ -748,6 +1170,8 @@ class AmazonsMainWindow(QMainWindow):
         self.board_widget.setEnabled(False)
         self.board_widget.is_animating = True
         self.board_widget.hidden_pieces.add(start_pos)
+        # 明确告知控件正在移动的是哪一方的棋子，避免它从 hidden_pieces 反推。
+        self.board_widget.anim_piece_type = piece_type
 
         self.board_widget.anim_piece_scale = 1.15
         self.board_widget.anim_offset_factor = 1.0
@@ -809,18 +1233,27 @@ class AmazonsMainWindow(QMainWindow):
         arrow_land_anim.setEasingCurve(QEasingCurve.Type.OutQuad)
 
         # 5. 创建动画组并按顺序添加动画
-        self.animation_group = QSequentialAnimationGroup(self)
-        self.animation_group.addAnimation(piece_anim)
-        self.animation_group.addAnimation(settle_group)
-        self.animation_group.addAnimation(arrow_shrink_anim)
-        self.animation_group.addAnimation(arrow_anim)
-        self.animation_group.addAnimation(arrow_land_anim)
+        animation_generation = self.game_generation
+        animation_group = QSequentialAnimationGroup(self)
+        animation_group.addAnimation(piece_anim)
+        animation_group.addAnimation(settle_group)
+        animation_group.addAnimation(arrow_shrink_anim)
+        animation_group.addAnimation(arrow_anim)
+        animation_group.addAnimation(arrow_land_anim)
 
-        self.board_widget.animation_group = self.animation_group
+        self.animation_group = animation_group
+        self.board_widget.animation_group = animation_group
 
         def on_group_finished():
+            # A stale animation must never apply its move to a new board.
+            if (animation_generation != self.game_generation
+                    or self.animation_group is not animation_group):
+                return
+
+            self.animation_group = None
             self.board_widget.is_animating = False
             self.board_widget.hidden_pieces.clear()
+            self.board_widget.anim_piece_type = 0
             self.board_widget.anim_arrow_scale = 1.0
             self.board_widget.animation_group = None
 
@@ -839,53 +1272,113 @@ class AmazonsMainWindow(QMainWindow):
                 self.board_widget.setEnabled(True)
 
         # 连接信号并启动动画组
-        self.animation_group.finished.connect(on_group_finished)
-        self.animation_group.start(QPropertyAnimation.DeletionPolicy.DeleteWhenStopped)
+        animation_group.finished.connect(on_group_finished)
+        animation_group.start(QPropertyAnimation.DeletionPolicy.DeleteWhenStopped)
 
     def start_ai_turn(self):
         """
         启动AI回合，带有视觉反馈。
         """
+        if self.simulator.game_over or not self.is_ai_turn() or self._ai_turn_pending:
+            return
+
         # 1. 改变状态栏提示
         current_player_name = "黑方" if self.simulator.current_player == BLACK_AMAZON else "白方"
-        self.status_label.setText(f"{current_player_name} (AI) 正在思考...")
+        self.info_panel.set_status(f"{current_player_name}（AI）正在思考…")
         self.board_widget.setEnabled(False)  # 禁用交互
         self.board_widget.repaint()
 
         # 2. 延迟启动 AI 计算，避免阻塞 UI
-        QTimer.singleShot(100, self.start_ai_calculation)
+        generation = self.game_generation
+        player = self.simulator.current_player
+        self._ai_turn_pending = True
+        QTimer.singleShot(
+            100, lambda: self.start_ai_calculation(generation, player))
 
-    def start_ai_calculation(self):
+    def start_ai_calculation(self, generation=None, expected_player=None):
         """
         执行AI的下棋操作。
         """
+        if generation is None:
+            generation = self.game_generation
+        if expected_player is None:
+            expected_player = self.simulator.current_player
+        if generation != self.game_generation:
+            return
+
+        self._ai_turn_pending = False
+        if (self.simulator.game_over or expected_player != self.simulator.current_player
+                or not self.is_ai_turn()):
+            return
+
         # 选择当前玩家的模式和 agent
         if self.simulator.current_player == BLACK_AMAZON:
             current_player_mode = self.black_modes
             current_agent = self.black_ai_agent
+            profile = self.black_ai_profile
+            profile_key = "black"
         else:
             current_player_mode = self.white_modes
             current_agent = self.white_ai_agent
+            profile = self.white_ai_profile
+            profile_key = "white"
 
-        # 根据玩家类型启动 AI 计算
+        # 根据玩家类型启动 AI 计算，同时记录当前 AI 类型供右侧面板显示
+        ai_type_key = ''
         if current_player_mode == self.PLAYER_TYPE_AI_MCTS:
-            current_agent.start_thread_ai_calculation('mcts')
+            ai_type_key = 'mcts'
         elif current_player_mode == self.PLAYER_TYPE_AI_MCTS2:
-            current_agent.start_thread_ai_calculation('mcts_test')
-        elif current_player_mode == self.PLAYER_TYPE_AI_KATAAMAZON:
-            current_agent.start_thread_ai_calculation('kataAmazon')
+            ai_type_key = 'mcts_test'
+        elif current_player_mode == self.PLAYER_TYPE_AI_KATAAMAZON_GPU:
+            ai_type_key = 'kataAmazon_gpu'
+        elif current_player_mode == self.PLAYER_TYPE_AI_KATAAMAZON_LEGACY:
+            ai_type_key = 'kataAmazon_legacy'
+        if not ai_type_key:
+            return
+        # Preserve the legacy backend's historical 400-visits default until
+        # the player explicitly saves a per-side visits value.
+        if (ai_type_key == 'kataAmazon_legacy'
+                and not self.settings.contains(f"ai/{profile_key}/kata_visits")):
+            profile = AIProfile(profile.mcts_seconds, 400)
 
-    def execute_ai_move(self, result):
+        self.current_ai_type = ai_type_key
+        try:
+            started = current_agent.start_thread_ai_calculation(ai_type_key, profile)
+        except Exception as exc:
+            self._active_ai_request = None
+            self._recover_from_ai_failure(str(exc), expected_player)
+            return
+        if not started:
+            # The previous worker can still be shutting down; retry this turn.
+            self.start_ai_turn()
+            return
+        self._active_ai_request = (generation, expected_player, ai_type_key)
+
+    def execute_ai_move(self, result, source_player=None):
         """
         处理AI计算出的最佳移动，执行下棋并更新UI。
         """
-        best_res = result
-
-        if best_res is None or best_res == -1:
-            self.statusBar().showMessage("AI 计算失败。")
+        outcome = result if isinstance(result, AIOutcome) else AIOutcome.failure("AI 返回了未知结果。")
+        request = self._active_ai_request
+        if (request is None
+                or request[0] != self.game_generation
+                or request[1] != self.simulator.current_player
+                or (source_player is not None and request[1] != source_player)
+                or self.simulator.game_over
+                or not self.is_ai_turn()):
             return
 
-        if best_res == -2:
+        current_mode = (self.black_modes if request[1] == BLACK_AMAZON
+                        else self.white_modes)
+        if current_mode != request[2]:
+            return
+        self._active_ai_request = None
+
+        if outcome.error:
+            self._recover_from_ai_failure(outcome.error, request[1])
+            return
+
+        if outcome.resigned:
             self.simulator.game_over = True
             self.simulator.winner = -self.simulator.current_player
             winner_name = "黑方" if self.simulator.winner == BLACK_AMAZON else "白方"
@@ -893,21 +1386,45 @@ class AmazonsMainWindow(QMainWindow):
             self.handle_game_over(f"{player_name}已认输，{winner_name}获胜！")
             return
 
+        best_res = outcome.result
+        if best_res is None:
+            self._recover_from_ai_failure("AI 没有返回着法。", request[1])
+            return
+
+        # 任何空值或越界值都不能进入动画。
+        size = self.simulator.size
+        raw_positions = (best_res.best_pos_from, best_res.best_pos_to, best_res.best_pos_stone)
+        if not all(isinstance(p, int) and 0 <= p < size * size for p in raw_positions):
+            logger.warning("AI 返回非法坐标: %s", raw_positions)
+            self.statusBar().showMessage("AI 计算失败：返回了非法坐标。")
+            return
+
         start_pos = (best_res.best_pos_from // self.simulator.size, best_res.best_pos_from % self.simulator.size)
         move_pos = (best_res.best_pos_to // self.simulator.size, best_res.best_pos_to % self.simulator.size)
         arrow_pos = (best_res.best_pos_stone // self.simulator.size, best_res.best_pos_stone % self.simulator.size)
+        if not self.simulator.is_legal_turn(start_pos, move_pos, arrow_pos):
+            self._recover_from_ai_failure(
+                f"AI 返回了非法着法：{start_pos} → {move_pos} / {arrow_pos}", request[1])
+            return
 
-        win_pro_str = f"{best_res.win_pro :.2f}%"
-        select_pro_str = f"{best_res.select_pro:.4f}"
+        win_pro_str = "—" if best_res.win_pro is None else f"{best_res.win_pro:.2f}%"
+        visits_str = "—" if best_res.max_apt is None else str(int(best_res.max_apt))
+        select_pro_str = "—" if best_res.select_pro is None else f"{best_res.select_pro:.4f}"
         player_name = "黑方" if self.simulator.current_player == BLACK_AMAZON else "白方"
         # 构建状态栏信息
         info_message = (
             f"{player_name}"
             f"AI 走法: 胜率={win_pro_str} | "
-            f"搜索次数={int(best_res.max_apt)} | "
+            f"搜索次数={visits_str} | "
             f"局面估值={select_pro_str}"
         )
         self.statusBar().showMessage(info_message)
+
+        self.update_win_rate_display(best_res.win_pro, self.simulator.current_player)
+
+        # 更新右侧 AI 分析信息面板
+        self.update_ai_info_panel(best_res, self.simulator.current_player,
+                                  getattr(self, 'current_ai_type', ''))
 
         # 使用动画执行 AI 的走法
         player_who_moved = self.simulator.current_player
@@ -916,21 +1433,46 @@ class AmazonsMainWindow(QMainWindow):
 
         # 动画完成后的逻辑会由 on_group_finished -> post_animation_update 处理
 
+    def _recover_from_ai_failure(self, message: str, side: int):
+        """Return control to a human instead of leaving the board disabled."""
+        if side == BLACK_AMAZON:
+            self.black_modes = self.PLAYER_TYPE_HUMAN
+            self.black_human_action.setChecked(True)
+            side_name = "黑方"
+        else:
+            self.white_modes = self.PLAYER_TYPE_HUMAN
+            self.white_human_action.setChecked(True)
+            side_name = "白方"
+        self._ai_turn_pending = False
+        self._active_ai_request = None
+        self.board_widget.setEnabled(True)
+        self.update_status()
+        self.statusBar().showMessage(f"AI 失败，{side_name}已切换为人类：{message}")
+
+    def closeEvent(self, event):
+        """Invalidate callbacks and release engine subprocesses before exit."""
+        self._closing = True
+        self.game_generation += 1
+        self._hint_request_id += 1
+        self._cancel_current_animation()
+        self.settings.setValue("window/geometry", self.saveGeometry())
+        self.settings.sync()
+        self.black_ai_agent.shutdown()
+        self.white_ai_agent.shutdown()
+        event.accept()
+
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     try:
-        print("正在初始化模拟器...")
+        logger.info("正在初始化模拟器")
         simulator = AmazonsSimulator(size=10)
-        print("模拟器初始化成功")
-        print("正在创建主窗口...")
+        logger.info("模拟器初始化成功")
+        logger.info("正在创建主窗口")
         main_window = AmazonsMainWindow(simulator)
-        print("主窗口创建成功")
+        logger.info("主窗口创建成功")
         main_window.show()
-        print("程序启动成功")
+        logger.info("程序启动成功")
         sys.exit(app.exec())
     except Exception as e:
-        print(f"应用程序错误: {e}")
-        import traceback
-
-        traceback.print_exc()
+        logger.exception("应用程序错误: %s", e)
