@@ -1,8 +1,31 @@
 # src/ai/amazons_engine.py
-# cmd可以打开，命令如下
-# kataAmazon.exe gtp -config engine.cfg -model weights/amazons10x10.bin.gz
+# 亚马逊棋 KataGo (Amazons 分支) 引擎桥接。
+#
+# 说明（重要）：
+#   gpu 后端使用 gen012 模型（b20c256legacyv10, 20 残差块 256 通道），配合 OpenCL 版
+#   amazons.exe（KataGo v1.10.0 定制版）。该模型格式与 CUDA 版 katago.exe 不兼容，
+#   必须使用 kataAmazonEngineCuda/ 目录内的 amazons.exe。
+#
+#   本项目还保留两套后备引擎：
+#     - kataAmazonEngine/     原始引擎（kataAmazon.exe, OpenCL）+ 旧模型 weights/amazons10x10.bin.gz
+#     - kataAmazonEngineV2/   Eigen(CPU) 后端 + amazon18 旧模型，无需 GPU。
+#   默认自动选择：若 gpu 引擎目录存在则用它，否则回退到 legacy。
+#
+#   所有路径都相对本文件（__file__）计算，项目整体复制到别处也能正常工作。
+#   可用环境变量覆盖：
+#     KATA_AMAZON_DIR    引擎目录（默认自动选择 kataAmazonEngineCuda / kataAmazonEngine）
+#     KATA_AMAZON_EXE    引擎可执行文件名（默认 amazons.exe）
+#     KATA_AMAZON_MODEL  模型文件路径（相对引擎目录，默认 gen012_model.bin.gz）
+#     KATA_AMAZON_CFG    配置文件名（默认 engine.cfg）
+import logging
+import os
+import queue
+import re
 import subprocess
-import os, sys
+import sys
+import tempfile
+import threading
+import time
 from PyQt6.QtCore import QObject, pyqtSignal
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -11,34 +34,209 @@ project_root = os.path.join(current_dir, '..', '..')
 sys.path.append(project_root)
 from src.core.simulator import WHITE_AMAZON, BLACK_AMAZON, OBSTACLE, EMPTY
 
+
+logger = logging.getLogger(__name__)
+_EOF = object()
+
+
+def parse_genmove_analyze(response: str):
+    """Parse bounded ``kata-genmove_analyze`` output without engine state.
+
+    Returns ``(played, win_rate_percent, visits, ranked_candidates)`` where
+    candidates are ``(move, win_rate_percent, visits)`` sorted by visits.
+    """
+    played = None
+    move_info = {}
+    for raw_line in response.splitlines():
+        line = raw_line.strip()
+        if line.startswith("play "):
+            parts = line.split()
+            if len(parts) >= 2:
+                played = parts[1]
+            continue
+        if "info move " not in line:
+            continue
+        for segment in line.split("info move ")[1:]:
+            tokens = segment.strip().split()
+            if not tokens:
+                continue
+            move = tokens[0]
+            visits = 0
+            winrate = None
+            index = 1
+            while index < len(tokens) - 1:
+                key, value = tokens[index], tokens[index + 1]
+                if key == "visits":
+                    try:
+                        visits = int(value)
+                    except ValueError:
+                        visits = 0
+                elif key == "winrate":
+                    try:
+                        winrate = float(value) * 100.0
+                    except ValueError:
+                        winrate = None
+                index += 1
+            move_info[move] = (visits, winrate)
+
+    ranked = sorted(
+        ((move, winrate, visits) for move, (visits, winrate) in move_info.items()),
+        key=lambda item: item[2],
+        reverse=True,
+    )
+    selected = played or (ranked[0][0] if ranked else None)
+    selected_visits, selected_winrate = move_info.get(selected, (None, None))
+    return selected, selected_winrate, selected_visits, ranked
+
+# --- 引擎后端表（相对本文件，保证可移植）----------------------------------------
+# 本项目提供两个 kataAmazon 引擎选项，每个是一套 (目录, 可执行文件, 模型, 配置)：
+#   'gpu'    -> kataAmazonEngineCuda ：gen012 模型 + OpenCL 版 amazons.exe。
+#               需要支持 OpenCL 的显卡及正确安装的驱动。
+#   'legacy' -> kataAmazonEngine     ：原始引擎（KataGo v1.10.0 OpenCL/GPU）+ 旧模型
+#               weights/amazons10x10.bin.gz。项目最初就带的选项。
+
+BACKENDS = {
+    'gpu': {
+        'dir': os.path.normpath(os.path.join(current_dir, 'kataAmazonEngineCuda')),
+        'exe': 'amazons.exe',
+        'model': 'gen012_model.bin.gz',
+        'cfg': 'engine.cfg',
+        'hint_cfg': 'hint.cfg',
+        'label': 'gen012（OpenCL/GPU）',
+    },
+    'legacy': {
+        'dir': os.path.normpath(os.path.join(current_dir, 'kataAmazonEngine')),
+        'exe': 'kataAmazon.exe',
+        'model': os.path.join('weights', 'amazons10x10.bin.gz'),
+        'cfg': 'engine.cfg',
+        'hint_cfg': 'hint.cfg',
+        'label': '原始 kataAmazon（OpenCL/GPU，旧模型）',
+    },
+}
+
+def _backend_files_available(spec: dict) -> bool:
+    required = (spec['exe'], spec['model'], spec['cfg'], spec.get('hint_cfg', spec['cfg']))
+    return all(os.path.isfile(
+        item if os.path.isabs(item) else os.path.join(spec['dir'], item)
+    ) for item in required)
+
+
+# 默认后端：优先文件完整的新权重 GPU，否则原始引擎。
+_DEFAULT_BACKEND = 'gpu' if _backend_files_available(BACKENDS['gpu']) else 'legacy'
+
+# 兼容旧引用
+_CUDA_ENGINE_DIR = BACKENDS['gpu']['dir']
+CUDA_ENGINE_DIR = _CUDA_ENGINE_DIR
+
+_DEFAULT_ENGINE_DIR = BACKENDS[_DEFAULT_BACKEND]['dir']
+_DEFAULT_ENGINE_EXE = BACKENDS[_DEFAULT_BACKEND]['exe']
+_DEFAULT_MODEL = BACKENDS[_DEFAULT_BACKEND]['model']
+_DEFAULT_CFG = BACKENDS[_DEFAULT_BACKEND]['cfg']
+
+
+def engine_spec_for_backend(backend: str) -> dict:
+    """按后端名返回其 (dir/exe/model/cfg/label) 规格。未知后端回退到默认后端。"""
+    return BACKENDS.get(backend, BACKENDS[_DEFAULT_BACKEND])
+
+
+def engine_dir_for_backend(backend: str) -> str:
+    """按后端名返回引擎目录（兼容旧调用）。"""
+    return engine_spec_for_backend(backend)['dir']
+
+
+def backend_available(backend: str) -> bool:
+    """Return whether the executable, model and configs are all present."""
+    spec = engine_spec_for_backend(backend)
+    return _backend_files_available(spec)
+
+
+def profile_config_for_visits(backend: str, visits: int) -> str:
+    """Return a generated config with an overridden ``maxVisits`` value.
+
+    The shipped engine configuration is deliberately never edited.  A stable
+    file in the platform temp directory also lets multiple turns reuse the
+    same engine profile without recreating it.
+    """
+    spec = engine_spec_for_backend(backend)
+    visits = max(1, int(visits))
+    source = os.path.join(spec['dir'], spec['cfg'])
+    with open(source, 'r', encoding='utf-8') as handle:
+        source_text = handle.read()
+    replacement = f"maxVisits = {visits}"
+    if re.search(r"(?m)^\s*maxVisits\s*=.*$", source_text):
+        rendered = re.sub(r"(?m)^\s*maxVisits\s*=.*$", replacement, source_text)
+    else:
+        rendered = source_text.rstrip() + "\n" + replacement + "\n"
+
+    directory = os.path.join(tempfile.gettempdir(), "amazons-katago-profiles", backend)
+    os.makedirs(directory, exist_ok=True)
+    destination = os.path.join(directory, f"engine-visits-{visits}.cfg")
+    if not os.path.exists(destination):
+        with open(destination, 'w', encoding='utf-8', newline='\n') as handle:
+            handle.write(rendered)
+    return destination
+
+
 class AmazonsKataGoEngine(QObject):
     """
     管理亚马逊棋 AI 引擎（基于GTP协议）的类。
     负责启动、关闭引擎，以及发送和接收GTP命令。
+    使用 kata-genmove_analyze 生成着法，可同时返回胜率与搜索次数。
     """
     # 定义两个信号，用于广播通信内容
     # command_sent: 当一个命令发送给引擎时发射
     # response_received: 当从引擎接收到任何一行输出时发射
     command_sent = pyqtSignal(str)
     response_received = pyqtSignal(str)
+
     def __init__(self,
-                 engine_dir: str = './src/ai/kataAmazonEngine',
-                 engine_exe: str = 'kataAmazon.exe'):
+                 backend: str = None,
+                 engine_dir: str = None,
+                 engine_exe: str = None,
+                 model_file: str = None,
+                 config_file: str = None,
+                 max_visits: int | None = None):
 
         super().__init__()
 
+        self.startup_timeout = float(os.environ.get('KATA_AMAZON_STARTUP_TIMEOUT', '180'))
+        self.command_timeout = float(os.environ.get('KATA_AMAZON_COMMAND_TIMEOUT', '120'))
+        self._command_lock = threading.RLock()
+        self._output_queue = queue.Queue()
+        self._reader_thread = None
+
+        # 若指定了后端('gpu'/'legacy')，用其整套规格作为默认；否则用全局默认后端。
+        spec = engine_spec_for_backend(backend) if backend else BACKENDS[_DEFAULT_BACKEND]
+        self.backend = backend or _DEFAULT_BACKEND
+
+        engine_dir = engine_dir or os.environ.get('KATA_AMAZON_DIR', spec['dir'])
+        engine_exe = engine_exe or os.environ.get('KATA_AMAZON_EXE', spec['exe'])
+        model_file = model_file or os.environ.get('KATA_AMAZON_MODEL', spec['model'])
+        if max_visits is not None:
+            config_file = profile_config_for_visits(self.backend, max_visits)
+        config_file = config_file or os.environ.get('KATA_AMAZON_CFG', spec['cfg'])
+        self.max_visits = max_visits
+
+        # 允许相对路径：以引擎目录为基准解析（引擎子进程也以此为工作目录）
+        engine_dir = os.path.abspath(engine_dir)
         engine_path = os.path.join(engine_dir, engine_exe)
 
         if not os.path.exists(engine_path):
             raise FileNotFoundError(f"引擎文件未找到: {engine_path}")
 
-        command = [engine_path, "gtp", "-config", "engine.cfg", "-model", "weights/amazons10x10.bin.gz"]
+        model_abs = model_file if os.path.isabs(model_file) else os.path.join(engine_dir, model_file)
+        if not os.path.exists(model_abs):
+            raise FileNotFoundError(f"模型文件未找到: {model_abs}")
+
+        # 使用相对引擎目录的模型路径，保证可移植（cwd=engine_dir）
+        model_arg = model_file
+        command = [engine_path, "gtp", "-config", config_file, "-model", model_arg]
 
         startupinfo = None
-        # if os.name == 'nt':
-        #     startupinfo = subprocess.STARTUPINFO()
-        #     startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-        #     startupinfo.wShowWindow = subprocess.SW_HIDE
+        creationflags = 0
+        if os.name == 'nt':
+            # 隐藏引擎控制台黑窗口
+            creationflags = 0x08000000  # CREATE_NO_WINDOW
 
         try:
             self.process = subprocess.Popen(
@@ -50,53 +248,97 @@ class AmazonsKataGoEngine(QObject):
                 text=True,
                 bufsize=1,
                 startupinfo=startupinfo,
+                creationflags=creationflags,
                 cwd=engine_dir
             )
-        except Exception as e:
-            print(f"启动AI引擎失败: {e}")
+        except Exception:
+            logger.exception("启动 AI 引擎失败")
             raise
 
-        self._wait_for_engine_ready()
-        self._initialize_engine()
-        print("亚马逊棋AI引擎初始化完成，准备就绪。")
+        self._reader_thread = threading.Thread(
+            target=self._pump_engine_output,
+            name=f"kata-amazon-output-{self.process.pid}",
+            daemon=True,
+        )
+        self._reader_thread.start()
+
+        # 最近一次生成着法的胜率(%)与搜索次数，由 genmove_analyze 更新
+        self.last_winrate = None      # 0..100，当前行动方视角
+        self.last_visits = None
+
+        try:
+            self._wait_for_engine_ready()
+            self._initialize_engine()
+        except Exception:
+            self.abort()
+            raise
+        _label = spec.get('label', self.backend)
+        logger.info("亚马逊棋 AI 引擎[%s]初始化完成，准备就绪。", _label)
+
+    def _pump_engine_output(self):
+        """Continuously drain stdout so GTP reads can use bounded queue waits."""
+        try:
+            if self.process.stdout:
+                for raw_line in self.process.stdout:
+                    self._output_queue.put(raw_line.rstrip('\r\n'))
+        finally:
+            self._output_queue.put(_EOF)
+
+    def _readline_with_timeout(self, deadline: float, context: str) -> str:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            self._abort_timed_out_process(context)
+        try:
+            line = self._output_queue.get(timeout=max(remaining, 0.001))
+        except queue.Empty:
+            self._abort_timed_out_process(context)
+
+        if line is _EOF:
+            code = self.process.poll()
+            raise RuntimeError(f"AI 引擎输出已关闭（退出码：{code}，阶段：{context}）。")
+        return line
+
+    def _abort_timed_out_process(self, context: str):
+        if self.process.poll() is None:
+            self.process.kill()
+            try:
+                self.process.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                pass
+        raise TimeoutError(f"AI 引擎在 {context} 阶段等待超时。")
 
     def _wait_for_engine_ready(self):
-        if self.process.stdout:
-            while True:
-                line = self.process.stdout.readline().strip()
-                # --- 打印引擎启动信息 ---
-                print(f"FROM ENGINE (startup): {line}")
-                self.response_received.emit(line)
-                # ------------------------------
-                if not line and self.process.poll() is not None:
-                    raise RuntimeError("引擎在初始化时意外退出。")
-                if "GTP ready, beginning main protocol loop" in line:
-                    break
+        deadline = time.monotonic() + self.startup_timeout
+        while True:
+            line = self._readline_with_timeout(deadline, "启动")
+            logger.debug("FROM ENGINE (startup): %s", line)
+            self.response_received.emit(line)
+            if "GTP ready, beginning main protocol loop" in line:
+                break
 
     def _send_command(self, command: str):
-        if self.process.stdin:
-            # --- 打印发送给引擎的命令 ---
-            print(f"TO ENGINE: {command}")
-            self.command_sent.emit(command)
-            # ----------------------------------
-            self.process.stdin.write(command + '\n')
-            self.process.stdin.flush()
+        if self.process.poll() is not None:
+            raise RuntimeError(f"AI 引擎已经退出（退出码：{self.process.returncode}）。")
+        if not self.process.stdin:
+            raise RuntimeError("AI 引擎标准输入不可用。")
+        logger.debug("TO ENGINE: %s", command)
+        self.command_sent.emit(command)
+        self.process.stdin.write(command + '\n')
+        self.process.stdin.flush()
 
-    def _read_response(self) -> str:
+    def _read_response(self, timeout: float | None = None) -> str:
         """
         读取一个完整的GTP响应块。
         GTP响应块总是以一个空行结束。
         """
         response_lines = []
-        if self.process.stdout:
-            while True:
-                line = self.process.stdout.readline().strip()
-                # 实时发射信号，供GTP控制台显示
-                self.response_received.emit(line)
-                # 空行是GTP响应的结束标志
-                if line == "":
-                    break
-                response_lines.append(line)
+        deadline = time.monotonic() + (self.command_timeout if timeout is None else timeout)
+        while True:
+            line = self._readline_with_timeout(deadline, "执行命令")
+            self.response_received.emit(line)
+            if line == "":
+                break
+            response_lines.append(line)
         # 将所有行合并成一个字符串返回
         return "\n".join(response_lines)
 
@@ -104,8 +346,9 @@ class AmazonsKataGoEngine(QObject):
         """
         发送命令并处理可能的多行响应。
         """
-        self._send_command(command)
-        full_response = self._read_response()
+        with self._command_lock:
+            self._send_command(command)
+            full_response = self._read_response()
 
         if full_response.startswith('?'):
             raise RuntimeError(f"引擎命令失败: {command}\n响应: {full_response}")
@@ -123,19 +366,189 @@ class AmazonsKataGoEngine(QObject):
         self._execute_sync_command("boardsize 10")
         self._execute_sync_command("clear_board")
 
+    # ---------- 带胜率的生成着法 ----------------------------------------------
+    def _genmove_analyze(self, player_char: str) -> tuple[str, float | None, int | None]:
+        """
+        用 kata-genmove_analyze 生成一步着法，返回 (坐标, 胜率百分比, 搜索次数)。
+
+        胜率为「当前行动方」(player_char) 视角，0..100。
+        引擎输出形如（可能所有 info 在同一行，也可能分行）：
+            info move K7 visits 165 winrate 0.6458 ... order 0 pv ...
+            info move A7 visits 122 winrate 0.62 ...
+            play K7
+        取被选中的 play 着法对应的 info 行胜率；找不到则用访问量最大的 info 行。
+        """
+        response = self._execute_sync_command(f"kata-genmove_analyze {player_char}")
+
+        played, win_pct, visits, _ranked = parse_genmove_analyze(response)
+        if played is None:
+            # 兜底：走普通 genmove（无胜率信息）
+            played = self._execute_sync_command(f"genmove {player_char}").strip()
+            return played, None, None
+        return played, win_pct, visits
+
     def get_best_turn(self, player: int) -> tuple[str, str, str]:
+        """分析完整回合，但不永久推进引擎棋盘。
+
+        只有 GUI 模拟器确认回合合法后，才通过 ``play_turn`` 提交到所有引擎。
+        """
         player_char = 'b' if player == BLACK_AMAZON else 'w'
         opponent_char = 'w' if player_char == 'b' else 'b'
+        played_count = 0
+        try:
+            start_pos_str, winrate, visits = self._genmove_analyze(player_char)
+            played_count += 1
+            move_pos_str = self._execute_sync_command(f"genmove {opponent_char}")
+            played_count += 1
+            arrow_pos_str = self._execute_sync_command(f"genmove {player_char}")
+            played_count += 1
 
-        start_pos_str = self._execute_sync_command(f"genmove {player_char}")
-        move_pos_str = self._execute_sync_command(f"genmove {opponent_char}")
-        arrow_pos_str = self._execute_sync_command(f"genmove {player_char}")
+            self.last_winrate = winrate
+            self.last_visits = visits
+            return (start_pos_str, move_pos_str, arrow_pos_str)
+        finally:
+            for _ in range(played_count):
+                try:
+                    self._execute_sync_command("undo")
+                except (RuntimeError, TimeoutError):
+                    break
 
-        return (start_pos_str, move_pos_str, arrow_pos_str)
+    def get_move_arrow_for_start(self, player: int, start_coord: str) -> tuple[str, str]:
+        """给定已落下的起点坐标，查询引擎后续的移动目标和射箭目标。
+
+        用于 AI 提示：拿到最佳「选子」后，进一步获取该候选的完整一回合。
+        返回 (move_coord, arrow_coord)，均为 GTP 坐标字符串。
+        注意：调用前 start_coord 必须已经 play 到引擎棋盘上；
+              调用后需由上层 undo 3 次恢复局面。
+        """
+        player_char = 'b' if player == BLACK_AMAZON else 'w'
+        opponent_char = 'w' if player_char == 'b' else 'b'
+        move_pos_str = self._execute_sync_command(f"genmove {opponent_char}").strip()
+        arrow_pos_str = self._execute_sync_command(f"genmove {player_char}").strip()
+        return move_pos_str, arrow_pos_str
+
+    def analyze_turn_stages(self, player: int):
+        """分析最佳完整回合，并返回三个阶段各自的胜率。
+
+        返回 ``(turn, win_rates, visits)``：
+          - turn: (选子坐标, 移动坐标, 射箭坐标)
+          - win_rates: 三个阶段统一换算为原行动方视角的百分比
+          - visits: 三个阶段各自的搜索访问次数
+
+        引擎用交替颜色编码一个亚马逊棋回合：当前方选子、另一颜色移动、
+        当前方射箭。配置中的胜率按阶段的 side-to-move 报告，因此移动阶段
+        必须用 ``100 - winrate`` 换回本回合原行动方视角。
+        """
+        player_char = 'b' if player == BLACK_AMAZON else 'w'
+        opponent_char = 'w' if player_char == 'b' else 'b'
+        played_count = 0
+        non_moves = ('pass', 'resign')
+
+        try:
+            start, start_win, start_visits = self._genmove_analyze(player_char)
+            played_count += 1
+            if str(start).strip().lower() in non_moves:
+                return None, None, None
+
+            move, move_opponent_win, move_visits = self._genmove_analyze(opponent_char)
+            played_count += 1
+            if str(move).strip().lower() in non_moves:
+                return None, None, None
+
+            arrow, arrow_win, arrow_visits = self._genmove_analyze(player_char)
+            played_count += 1
+            if str(arrow).strip().lower() in non_moves:
+                return None, None, None
+
+            move_win = (None if move_opponent_win is None
+                        else 100.0 - move_opponent_win)
+            return (
+                (start, move, arrow),
+                (start_win, move_win, arrow_win),
+                (start_visits, move_visits, arrow_visits),
+            )
+        finally:
+            # kata-genmove_analyze 会实际落下一手；分析完成后必须完整恢复局面。
+            for _ in range(played_count):
+                try:
+                    self._execute_sync_command("undo")
+                except RuntimeError:
+                    break
+
+    def analyze_candidates(self, player: int, top_n: int = 3) -> list[tuple[str, float]]:
+        """
+        返回当前局面下「起点(选子)」候选着法及胜率：[(坐标, 胜率百分比), ...]。
+        按引擎访问次数（visits）降序排列——MCTS 中访问量最大的着法才是引擎真正信任的最佳着法，
+        胜率在访问量极少时不可靠（如 1 次访问 100% 胜率无意义）。
+        用于棋盘上的 AI 提示（只提示第一段落点，即将要移动的皇后）。
+
+        实现说明：不使用 `kata-analyze`（它会持续输出、不发送 GTP 结束空行，会导致
+        读取阻塞），改用有界的 `kata-genmove_analyze` 拿到候选着法及胜率，随后 `undo`
+        撤销它实际落下的那一手，保持局面不变。
+        """
+        player_char = 'b' if player == BLACK_AMAZON else 'w'
+        response = self._execute_sync_command(f"kata-genmove_analyze {player_char}")
+
+        played, _winrate, _visits, ranked = parse_genmove_analyze(response)
+
+        # 撤销 kata-genmove_analyze 实际落下的一手，保持局面不变
+        if played is not None and played != "pass":
+            try:
+                self._execute_sync_command("undo")
+            except RuntimeError:
+                pass
+
+        return [(move, winrate) for move, winrate, _ in ranked[:top_n]
+                if winrate is not None]
+
+    def ranked_start_candidates(self, player: int, top_n: int = 3) -> list[tuple[str, float | None, int | None]]:
+        """Return ranked starting queens while restoring the engine board."""
+        player_char = 'b' if player == BLACK_AMAZON else 'w'
+        response = self._execute_sync_command(f"kata-genmove_analyze {player_char}")
+        played, _winrate, _visits, ranked = parse_genmove_analyze(response)
+        if played is not None and played.lower() not in ('pass', 'resign'):
+            self._execute_sync_command("undo")
+        return [(move, rate, visits) for move, rate, visits in ranked[:top_n]
+                if move.lower() not in ('pass', 'resign')]
+
+    def analyze_turn_for_start(self, player: int, start: str,
+                               start_win: float | None = None,
+                               start_visits: int | None = None):
+        """Analyse move and arrow after a chosen first-stage move.
+
+        GTP encodes an Amazons turn as player / opponent / player.  The
+        temporary three commands are always undone, including failures.
+        """
+        player_char = 'b' if player == BLACK_AMAZON else 'w'
+        opponent_char = 'w' if player_char == 'b' else 'b'
+        played_count = 0
+        try:
+            self._execute_sync_command(f"play {player_char} {start}")
+            played_count += 1
+            move, opponent_rate, move_visits = self._genmove_analyze(opponent_char)
+            played_count += 1
+            if str(move).strip().lower() in ('pass', 'resign'):
+                return None, None, None
+            arrow, arrow_rate, arrow_visits = self._genmove_analyze(player_char)
+            played_count += 1
+            if str(arrow).strip().lower() in ('pass', 'resign'):
+                return None, None, None
+            move_rate = None if opponent_rate is None else 100.0 - opponent_rate
+            return ((start, move, arrow),
+                    (start_win, move_rate, arrow_rate),
+                    (start_visits, move_visits, arrow_visits))
+        finally:
+            for _ in range(played_count):
+                try:
+                    self._execute_sync_command("undo")
+                except RuntimeError:
+                    break
 
     def clear_board(self):
         """向引擎发送 clear_board 命令。"""
         self._execute_sync_command("clear_board")
+        self.last_winrate = None
+        self.last_visits = None
 
     def play_turn(self, player: int, start_str: str, move_str: str, arrow_str: str):
         player_char = 'b' if player == BLACK_AMAZON else 'w'
@@ -160,18 +573,39 @@ class AmazonsKataGoEngine(QObject):
         byo_yomi_time = int(byo_yomi_time)
         command = f"time_settings {main_time} {byo_yomi_time} {byo_yomi_stones}"
         self._execute_sync_command(command)
-        print(f"已向引擎设置时间: {command}")
+        logger.info("已向引擎设置时间: %s", command)
 
     def close(self):
+        if not hasattr(self, 'process'):
+            return
+        with self._command_lock:
+            if self.process.poll() is None:
+                logger.info("正在关闭亚马逊棋 AI 引擎")
+                try:
+                    self._send_command("quit")
+                    self.process.wait(timeout=5)
+                except (BrokenPipeError, OSError, RuntimeError, subprocess.TimeoutExpired):
+                    if self.process.poll() is None:
+                        self.process.kill()
+                        try:
+                            self.process.wait(timeout=3)
+                        except subprocess.TimeoutExpired:
+                            pass
+            for stream in (self.process.stdin, self.process.stdout):
+                try:
+                    if stream:
+                        stream.close()
+                except OSError:
+                    pass
+
+    def abort(self):
+        """Immediately stop the subprocess; used only during app shutdown."""
         if hasattr(self, 'process') and self.process.poll() is None:
-            print("正在关闭亚马逊棋AI引擎...")
-            self._send_command("quit")
+            self.process.kill()
             try:
-                self.process.wait(timeout=5)
+                self.process.wait(timeout=3)
             except subprocess.TimeoutExpired:
-                print("引擎未能正常退出，强制终止。")
-                self.process.kill()
-            print("亚马逊棋AI引擎已关闭。")
+                pass
 
     def _convert_coord(self, coord_str: str) -> tuple[int, int]:
         """将 'A1' 或 'J10' 这样的棋谱坐标转换为内部数组坐标 (9, 0) 或 (0, 8)"""
