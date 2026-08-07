@@ -323,8 +323,15 @@ class AmazonsKataGoEngine(QObject):
             raise RuntimeError("AI 引擎标准输入不可用。")
         logger.debug("TO ENGINE: %s", command)
         self.command_sent.emit(command)
-        self.process.stdin.write(command + '\n')
-        self.process.stdin.flush()
+        try:
+            self.process.stdin.write(command + '\n')
+            self.process.stdin.flush()
+        except (BrokenPipeError, OSError, ValueError) as exc:
+            # A hint cancellation may terminate the subprocess between poll()
+            # and write().  Convert that race into the same engine-level error
+            # used everywhere else instead of leaking an OSError from cleanup.
+            raise RuntimeError(
+                f"AI 引擎输入已关闭（退出码：{self.process.poll()}）。") from exc
 
     def _read_response(self, timeout: float | None = None) -> str:
         """
@@ -472,7 +479,7 @@ class AmazonsKataGoEngine(QObject):
             for _ in range(played_count):
                 try:
                     self._execute_sync_command("undo")
-                except RuntimeError:
+                except (RuntimeError, OSError, ValueError):
                     break
 
     def analyze_candidates(self, player: int, top_n: int = 3) -> list[tuple[str, float]]:
@@ -507,7 +514,12 @@ class AmazonsKataGoEngine(QObject):
         response = self._execute_sync_command(f"kata-genmove_analyze {player_char}")
         played, _winrate, _visits, ranked = parse_genmove_analyze(response)
         if played is not None and played.lower() not in ('pass', 'resign'):
-            self._execute_sync_command("undo")
+            try:
+                self._execute_sync_command("undo")
+            except (RuntimeError, OSError, ValueError):
+                # The hint worker may have cancelled the subprocess while the
+                # temporary candidate position was being restored.
+                pass
         return [(move, rate, visits) for move, rate, visits in ranked[:top_n]
                 if move.lower() not in ('pass', 'resign')]
 
@@ -541,7 +553,7 @@ class AmazonsKataGoEngine(QObject):
             for _ in range(played_count):
                 try:
                     self._execute_sync_command("undo")
-                except RuntimeError:
+                except (RuntimeError, OSError, ValueError):
                     break
 
     def clear_board(self):

@@ -94,18 +94,20 @@ def test_info_panel_theme_changes_are_visible(qapp):
     window.close()
 
 
-def test_top_n_hint_candidates_fill_board_and_info_card(qapp):
+def test_top_n_hint_candidates_keep_only_highest_rate_on_board(qapp):
     window = AmazonsMainWindow(AmazonsSimulator())
     window.show_hints_action.setChecked(True)
     window._hint_request_id = 8
     candidates = (
         HintCandidate(60, 50, 40, (62.0, 58.0, 64.0), (100, 90, 80)),
-        HintCandidate(69, 59, 49, (55.0, 54.0, 56.0), (95, 85, 75)),
+        HintCandidate(69, 59, 49, (71.0, 66.0, 72.0), (95, 85, 75)),
     )
     window._handle_hint_outcome(HintOutcome(
         request_id=8, candidates=candidates, best_turn=(60, 50, 40),
         stage_win_rates=candidates[0].stage_win_rates))
-    assert len(window.board_widget.hint_moves) == 2
+    assert len(window.board_widget.hint_moves) == 1
+    assert window.board_widget.hint_moves[0][:2] == (6, 9)
+    assert window.board_widget.hint_best_turn == (69, 59, 49)
     assert "1." in window.info_panel.info_candidates.text()
     assert "2." in window.info_panel.info_candidates.text()
     window.close()

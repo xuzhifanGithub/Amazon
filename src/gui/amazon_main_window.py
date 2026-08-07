@@ -323,13 +323,24 @@ class AmazonsMainWindow(QMainWindow):
                 normalized.append(candidate)
             elif isinstance(candidate, tuple) and len(candidate) >= 2:
                 normalized.append(HintCandidate(candidate[0], stage_win_rates=(candidate[1], None, None)))
-        hints = normalized
-        best_turn = outcome.best_turn
-        stage_win_rates = outcome.stage_win_rates
+        # The board stays readable by rendering only the strongest candidate.
+        # Other Top-N candidates remain available in the analysis card.
+        hints = sorted(
+            normalized,
+            key=lambda candidate: (candidate.stage_win_rates[0]
+                                   if candidate.stage_win_rates[0] is not None
+                                   else float('-inf')),
+            reverse=True,
+        )
+        board_candidate = hints[0] if hints else None
+        best_turn = (board_candidate.start, board_candidate.move, board_candidate.arrow) \
+            if board_candidate is not None else outcome.best_turn
+        stage_win_rates = (board_candidate.stage_win_rates
+                           if board_candidate is not None else outcome.stage_win_rates)
         size = self.simulator.size
         self.board_widget.set_hints(
-            [(candidate.start // size, candidate.start % size, candidate.stage_win_rates[0])
-             for candidate in hints],
+            ([(board_candidate.start // size, board_candidate.start % size,
+               board_candidate.stage_win_rates[0])] if board_candidate is not None else []),
             self.hint_side,
             best_turn=best_turn,
             stage_win_rates=stage_win_rates)

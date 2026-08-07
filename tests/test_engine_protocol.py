@@ -1,7 +1,35 @@
 import pytest
+from types import SimpleNamespace
 
 from src.ai.amazons_engine import AmazonsKataGoEngine, parse_genmove_analyze
 from src.core.simulator import BLACK_AMAZON
+
+
+class _RaisingInput:
+    def write(self, _value):
+        raise OSError(22, "Invalid argument")
+
+    def flush(self):
+        raise AssertionError("flush should not run after write fails")
+
+
+class _Signal:
+    def emit(self, _value):
+        pass
+
+
+def test_send_command_normalizes_process_closing_race():
+    engine = SimpleNamespace(
+        process=SimpleNamespace(
+            poll=lambda: None,
+            returncode=None,
+            stdin=_RaisingInput(),
+        ),
+        command_sent=_Signal(),
+    )
+
+    with pytest.raises(RuntimeError, match="输入已关闭"):
+        AmazonsKataGoEngine._send_command(engine, "undo")
 
 
 def test_parse_analyze_prefers_actual_play_over_highest_visits():

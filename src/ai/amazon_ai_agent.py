@@ -149,6 +149,13 @@ class HintWorker(QObject):
         self.engine = None
         self.backend = None
         self.busy = False
+        self._cancel_lock = threading.Lock()
+        self._active_request_id = None
+        self._cancelled_request_id = None
+
+    def _was_cancelled(self, request_id: int) -> bool:
+        with self._cancel_lock:
+            return self._cancelled_request_id == request_id
 
     def _close_engine(self):
         if self.engine is not None:
@@ -173,11 +180,17 @@ class HintWorker(QObject):
 
     def analyze(self, request):
         request_id = request['request_id']
+        with self._cancel_lock:
+            self._active_request_id = request_id
         self.busy = True
         try:
             engine = self._ensure_engine(request['backend'])
+            if self._was_cancelled(request_id):
+                return
             engine.clear_board()
             for index, turn in enumerate(request['history']):
+                if self._was_cancelled(request_id):
+                    return
                 player = BLACK_AMAZON if index % 2 == 0 else WHITE_AMAZON
                 start, move, arrow = turn
                 engine.play_turn(
@@ -190,8 +203,12 @@ class HintWorker(QObject):
             candidates = []
             for start, start_win, start_visits in engine.ranked_start_candidates(
                     request['player'], request.get('top_n', 1)):
+                if self._was_cancelled(request_id):
+                    return
                 turn, rates, visits = engine.analyze_turn_for_start(
                     request['player'], start, start_win, start_visits)
+                if self._was_cancelled(request_id):
+                    return
                 if turn is None or rates is None:
                     continue
                 coords = tuple(engine._convert_coord(coord) for coord in turn)
@@ -209,17 +226,33 @@ class HintWorker(QObject):
                 stage_win_rates=best.stage_win_rates,
             ))
         except Exception as exc:
-            logger.exception("提示分析失败")
-            self._close_engine()
-            self.finished.emit(HintOutcome(request_id, error=str(exc)))
+            if self._was_cancelled(request_id):
+                logger.debug("提示请求 %s 已取消", request_id)
+            else:
+                logger.exception("提示分析失败")
+                self._close_engine()
+                self.finished.emit(HintOutcome(request_id, error=str(exc)))
         finally:
             self.busy = False
+            cancelled = self._was_cancelled(request_id)
+            with self._cancel_lock:
+                if self._active_request_id == request_id:
+                    self._active_request_id = None
+                if self._cancelled_request_id == request_id:
+                    self._cancelled_request_id = None
+            # abort() kills the process to interrupt a blocking GTP read.  Do
+            # not retain that dead engine for the next hint request.
+            if cancelled:
+                self._close_engine()
 
     def shutdown(self):
         self._close_engine()
         self.stopped.emit()
 
     def abort(self):
+        with self._cancel_lock:
+            if self._active_request_id is not None:
+                self._cancelled_request_id = self._active_request_id
         if self.engine is not None:
             self.engine.abort()
 
