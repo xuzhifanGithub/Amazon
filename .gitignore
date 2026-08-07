@@ -1,6 +1,7 @@
 .idea/
 __pycache__/
 *.py[cod]
+!src/ai/native/*.pyd
 .pytest_cache/
 .coverage
 htmlcov/
