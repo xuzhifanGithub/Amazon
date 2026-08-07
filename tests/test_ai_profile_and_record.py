@@ -28,6 +28,23 @@ def test_visits_profile_config_does_not_mutate_bundled_file():
     assert source.read_text(encoding='utf-8') == before
 
 
+def test_visits_profile_cache_changes_when_base_config_changes(tmp_path, monkeypatch):
+    source = tmp_path / "engine.cfg"
+    source.write_text("maxVisits = 600\nfoo = one\n", encoding="utf-8")
+    monkeypatch.setitem(BACKENDS, "test", {
+        "dir": str(tmp_path),
+        "cfg": "engine.cfg",
+    })
+
+    first = Path(profile_config_for_visits("test", 750))
+    source.write_text("maxVisits = 600\nfoo = two\n", encoding="utf-8")
+    second = Path(profile_config_for_visits("test", 750))
+
+    assert first != second
+    assert "foo = one" in first.read_text(encoding="utf-8")
+    assert "foo = two" in second.read_text(encoding="utf-8")
+
+
 def test_game_record_round_trip_and_invalid_import_is_atomic(tmp_path):
     original = AmazonsSimulator()
     assert original.execute_turn(*OPENING_TURN)

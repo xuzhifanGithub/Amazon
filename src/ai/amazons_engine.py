@@ -18,6 +18,7 @@
 #     KATA_AMAZON_MODEL  模型文件路径（相对引擎目录，默认 gen012_model.bin.gz）
 #     KATA_AMAZON_CFG    配置文件名（默认 engine.cfg）
 import logging
+import hashlib
 import os
 import queue
 import re
@@ -170,10 +171,17 @@ def profile_config_for_visits(backend: str, visits: int) -> str:
 
     directory = os.path.join(tempfile.gettempdir(), "amazons-katago-profiles", backend)
     os.makedirs(directory, exist_ok=True)
-    destination = os.path.join(directory, f"engine-visits-{visits}.cfg")
-    if not os.path.exists(destination):
-        with open(destination, 'w', encoding='utf-8', newline='\n') as handle:
+    content_hash = hashlib.sha256(rendered.encode('utf-8')).hexdigest()[:12]
+    destination = os.path.join(
+        directory, f"engine-visits-{visits}-{content_hash}.cfg")
+    try:
+        # Exclusive creation is safe when several app instances request the
+        # same profile concurrently.  The content hash makes bundled config
+        # changes select a fresh file after an application update.
+        with open(destination, 'x', encoding='utf-8', newline='\n') as handle:
             handle.write(rendered)
+    except FileExistsError:
+        pass
     return destination
 
 
