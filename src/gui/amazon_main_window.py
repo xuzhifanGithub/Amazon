@@ -225,6 +225,21 @@ class AmazonsMainWindow(QMainWindow):
             action.setChecked(value == self.board_zoom)
         self.settings.setValue("display/board_zoom", self.board_zoom)
         self.statusBar().showMessage(f"棋盘缩放已设置为 {self.board_zoom}%", 2500)
+        # The board is inside a stretchable container.  When moving from a
+        # larger zoom to a smaller one, that container can retain its previous
+        # geometry for one layout pass, leaving a gap before the side panel.
+        # Recalculate each parent from the fixed board size outward so the
+        # first click produces the same compact layout as subsequent clicks.
+        board_panel = self.board_widget.parentWidget()
+        if board_panel is not None:
+            board_panel.adjustSize()
+        central = self.centralWidget()
+        if central is not None:
+            layout = central.layout()
+            if layout is not None:
+                layout.invalidate()
+                layout.activate()
+            central.adjustSize()
         self.adjustSize()
 
     def step_board_zoom(self, direction: int):

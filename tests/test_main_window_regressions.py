@@ -243,6 +243,24 @@ def test_board_zoom_scales_the_full_right_panel(qapp):
     window.close()
 
 
+def test_first_zoom_down_reflows_board_and_side_panel(qapp):
+    window = AmazonsMainWindow(AmazonsSimulator())
+    window.set_board_zoom(140)
+    window.show()
+    qapp.processEvents()
+
+    window.set_board_zoom(80)
+    qapp.processEvents()
+
+    board_panel = window.board_widget.parentWidget()
+    assert board_panel.width() == 544
+    assert window.info_panel.x() == board_panel.x() + board_panel.width() + 12
+    assert window.width() == 800
+
+    window.set_board_zoom(100)
+    window.close()
+
+
 def test_info_panel_uses_three_cards_and_updates_rates(qapp):
     window = AmazonsMainWindow(AmazonsSimulator())
     window.set_board_zoom(100)
