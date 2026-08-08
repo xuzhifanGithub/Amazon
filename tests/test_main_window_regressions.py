@@ -294,6 +294,24 @@ def test_hint_progress_is_shown_in_right_panel(qapp):
     window.close()
 
 
+def test_hint_progress_and_candidates_do_not_resize_window(qapp):
+    window = AmazonsMainWindow(AmazonsSimulator())
+    window.show()
+    qapp.processEvents()
+    original_size = window.size()
+
+    window.info_panel.set_task_progress("正在分析候选着法…", 42)
+    window.info_panel.set_candidates([
+        f"{index}. A1 → B2 → C3  {50 + index:.1f}%"
+        for index in range(1, 6)
+    ])
+    qapp.processEvents()
+
+    assert window.size() == original_size
+    assert window.info_panel.analysis_scroll.verticalScrollBar().maximum() > 0
+    window.close()
+
+
 def test_top_n_hint_candidates_keep_only_highest_rate_on_board(qapp):
     window = AmazonsMainWindow(AmazonsSimulator())
     window.show_hints_action.setChecked(True)

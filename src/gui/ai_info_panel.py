@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QProgressBar,
+    QScrollArea,
     QSizePolicy,
     QVBoxLayout,
     QWidget,
@@ -70,7 +71,10 @@ class AIInfoPanel(QWidget):
         super().__init__(parent)
         self.setObjectName("aiInfoPanel")
         self.setFixedWidth(280)
-        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
+        # The board controls the main-window height. Dynamic progress text and
+        # Top-N analysis rows must be contained inside this side panel instead
+        # of increasing the window's minimum height.
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Ignored)
 
         root = QVBoxLayout(self)
         root.setContentsMargins(8, 10, 12, 10)
@@ -130,6 +134,11 @@ class AIInfoPanel(QWidget):
         self.info_visits = QLabel("搜索次数：—")
         self.info_eval = QLabel("局面估值：—")
         self.info_candidates = QLabel("候选：—")
+        analysis_content = QWidget()
+        analysis_content.setObjectName("analysisContent")
+        analysis_values_layout = QVBoxLayout(analysis_content)
+        analysis_values_layout.setContentsMargins(0, 0, 4, 0)
+        analysis_values_layout.setSpacing(8)
         for label in (
             self.info_ai_model,
             self.info_move_detail,
@@ -140,7 +149,18 @@ class AIInfoPanel(QWidget):
         ):
             label.setObjectName("analysisValue")
             label.setWordWrap(True)
-            analysis_layout.addWidget(label)
+            analysis_values_layout.addWidget(label)
+        analysis_values_layout.addStretch(1)
+        self.analysis_scroll = QScrollArea()
+        self.analysis_scroll.setObjectName("analysisScroll")
+        self.analysis_scroll.setWidgetResizable(True)
+        self.analysis_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.analysis_scroll.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.analysis_scroll.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.analysis_scroll.setWidget(analysis_content)
+        analysis_layout.addWidget(self.analysis_scroll, 1)
         root.addWidget(analysis_card, 1)
 
         self.line_dogs = LineDogWidget(
@@ -237,6 +257,19 @@ class AIInfoPanel(QWidget):
                 padding: 7px 9px;
                 font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
                 font-size: 9pt;
+            }}
+            QWidget#analysisContent, QScrollArea#analysisScroll {{
+                background: transparent;
+                border: none;
+            }}
+            QScrollArea#analysisScroll QScrollBar:vertical {{
+                width: 7px;
+                background: transparent;
+            }}
+            QScrollArea#analysisScroll QScrollBar::handle:vertical {{
+                min-height: 24px;
+                background: {theme['border']};
+                border-radius: 3px;
             }}
             QProgressBar#winRateBar, QProgressBar#taskProgressBar {{
                 background: {theme['accent_soft']};
