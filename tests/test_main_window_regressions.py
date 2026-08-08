@@ -121,11 +121,96 @@ def test_import_resumes_configured_ai_side(qapp, tmp_path, monkeypatch):
 
     window = AmazonsMainWindow(AmazonsSimulator())
     window.black_modes = window.PLAYER_TYPE_AI_MCTS
+    window.update_win_rate_display(81.2, BLACK_AMAZON)
+    window.update_ai_info_panel(
+        BestResult(60, 50, 40, 81.2, 600, 0.812),
+        BLACK_AMAZON,
+        "kataAmazon_gpu",
+    )
     window.start_ai_turn = Mock()
 
     window.import_game_record()
 
     window.start_ai_turn.assert_called_once_with()
+    assert window.win_rate_label.text() == "—"
+    assert window.info_ai_model.text() == "模型：—"
+    window.close()
+
+
+def test_opening_undo_keeps_active_ai_request_alive(qapp):
+    window = AmazonsMainWindow(AmazonsSimulator())
+    window.black_modes = window.PLAYER_TYPE_AI_KATAAMAZON_GPU
+    request = (window.game_generation, BLACK_AMAZON, "kataAmazon_gpu")
+    window._active_ai_request = request
+    window.session.begin_ai()
+    window.board_widget.setEnabled(False)
+
+    window.undo_move()
+
+    assert window._active_ai_request == request
+    assert window.session.state is SessionState.AI_THINKING
+    assert not window.board_widget.isEnabled()
+    window.close()
+
+
+def test_undo_to_human_unlocks_board_and_clears_old_analysis(qapp):
+    window = AmazonsMainWindow(AmazonsSimulator())
+    assert window.simulator.execute_turn(*OPENING_TURN)
+    window.white_modes = window.PLAYER_TYPE_AI_MCTS
+    window.board_widget.setEnabled(False)
+    window.update_win_rate_display(73.5, BLACK_AMAZON)
+    window.update_ai_info_panel(
+        BestResult(60, 50, 40, 73.5, 600, 0.735),
+        BLACK_AMAZON,
+        "kataAmazon_gpu",
+    )
+
+    window.undo_move()
+
+    assert not window.simulator.history_do_chess
+    assert window.board_widget.isEnabled()
+    assert window.session.state is SessionState.IDLE
+    assert window.win_rate_label.text() == "—"
+    assert window.info_ai_model.text() == "模型：—"
+    window.close()
+
+
+def test_busy_worker_uses_completion_signal_instead_of_retry_timer(qapp):
+    window = AmazonsMainWindow(AmazonsSimulator())
+    window.black_modes = window.PLAYER_TYPE_AI_MCTS
+    window.black_ai_agent.start_thread_ai_calculation = Mock(return_value=False)
+    window.start_ai_turn = Mock()
+
+    window.start_ai_calculation(window.game_generation, BLACK_AMAZON)
+
+    assert window._resume_ai_after_worker
+    assert not window.board_widget.isEnabled()
+    window.start_ai_turn.assert_not_called()
+    window.close()
+
+
+def test_game_over_status_names_winner(qapp):
+    window = AmazonsMainWindow(AmazonsSimulator())
+    window.simulator.game_over = True
+    window.simulator.winner = BLACK_AMAZON
+
+    window.update_status()
+
+    assert window.status_label.text() == "游戏结束：黑方获胜"
+    window.close()
+
+
+def test_zoom_shortcuts_step_between_adjacent_levels(qapp):
+    window = AmazonsMainWindow(AmazonsSimulator())
+    window.set_board_zoom(100)
+
+    window.zoom_in_action.trigger()
+    assert window.board_zoom == 120
+    window.zoom_in_action.trigger()
+    assert window.board_zoom == 140
+    window.zoom_out_action.trigger()
+    assert window.board_zoom == 120
+    assert window.zoom_actions[120].isChecked()
     window.close()
 
 

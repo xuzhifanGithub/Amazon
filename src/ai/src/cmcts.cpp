@@ -1431,8 +1431,13 @@ public:
         convert_pyarray_to_carray(initialBoard, board);
         convert_pylist_to_carray(initialQueenPos, queenPos);
 
-        // 2. 调用原始的 uctAll 函数
-        return uctAll(board, queenPos, moveSide, calTime, isDisplayInfo);
+        // 2. 搜索期间不访问 Python 对象，释放 GIL，避免冻结 Qt 主线程。
+        UctRes result;
+        {
+            py::gil_scoped_release release;
+            result = uctAll(board, queenPos, moveSide, calTime, isDisplayInfo);
+        }
+        return result;
     }
 };
 

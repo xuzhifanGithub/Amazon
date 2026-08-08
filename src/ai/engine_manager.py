@@ -81,6 +81,8 @@ class EngineManager:
         """
         self._usage_lock.acquire()
         stale_engines = ()
+        engine = None
+        lease_failed = False
         try:
             with self._lock:
                 if self._reset_pending:
@@ -89,13 +91,26 @@ class EngineManager:
             self._close_engines(stale_engines)
             engine = self.get_game_engine(
                 backend, visits, history, play_turn, mode=mode)
-            yield engine
+            try:
+                yield engine
+            except BaseException:
+                # A GTP/search failure may leave the subprocess dead or its
+                # board partially advanced. Never reuse that instance.
+                lease_failed = True
+                raise
         finally:
-            stale_engines = ()
+            stale_engines = []
             with self._lock:
                 self._active_operations = max(0, self._active_operations - 1)
+                if lease_failed and engine is not None:
+                    for key, pooled_engine in tuple(self.engines.items()):
+                        if pooled_engine is engine:
+                            del self.engines[key]
+                            stale_engines.append(engine)
+                    if not self.engines:
+                        self._synced_turns = 0
                 if self._active_operations == 0 and self._reset_pending:
-                    stale_engines = self._detach_engines_locked()
+                    stale_engines.extend(self._detach_engines_locked())
             self._close_engines(stale_engines)
             self._usage_lock.release()
 

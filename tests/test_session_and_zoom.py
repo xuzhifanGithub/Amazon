@@ -107,6 +107,37 @@ def test_shared_engine_reset_is_deferred_until_full_search_finishes():
     manager.close_all()
 
 
+def test_failed_engine_lease_is_closed_and_not_reused():
+    from src.ai.engine_manager import EngineManager
+
+    created = []
+
+    class Engine:
+        def __init__(self):
+            self.closed = False
+
+        def close(self):
+            self.closed = True
+
+    def factory(**_kwargs):
+        engine = Engine()
+        created.append(engine)
+        return engine
+
+    manager = EngineManager(factory)
+    try:
+        with manager.game_engine("gpu", 600, (), lambda *_args: None) as failed:
+            raise RuntimeError("模拟搜索失败")
+    except RuntimeError:
+        pass
+
+    assert failed.closed
+    with manager.game_engine("gpu", 600, (), lambda *_args: None) as replacement:
+        assert replacement is not failed
+    assert len(created) == 2
+    manager.close_all()
+
+
 def test_engine_startup_does_not_block_reset_request():
     from src.ai.engine_manager import EngineManager
 

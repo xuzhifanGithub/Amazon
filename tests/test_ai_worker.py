@@ -1,9 +1,13 @@
 from contextlib import contextmanager
 from types import SimpleNamespace
+import threading
+import time
 
 from unittest.mock import Mock
+import pytest
 
-from src.ai.amazon_ai_agent import AIWorker, HintWorker
+from src.ai.amazon_ai_agent import AIWorker, HintWorker, amazon_ai
+from src.core.simulator import AmazonsSimulator, BLACK_AMAZON
 from src.ai.results import AIOutcome
 
 
@@ -107,3 +111,34 @@ def test_cancelled_queued_hint_does_not_start_engine():
 
     worker._ensure_engine.assert_not_called()
     assert not worker.busy
+
+
+@pytest.mark.skipif(amazon_ai is None, reason="原生 MCTS 模块不可用")
+def test_native_mcts_releases_gil_during_search():
+    simulator = AmazonsSimulator()
+    board, queens = simulator.get_ai_data()
+    engine = amazon_ai.AmazonasAI()
+    stop = threading.Event()
+    heartbeat_ready = threading.Event()
+    heartbeats = []
+
+    def heartbeat():
+        while not stop.is_set():
+            heartbeats.append(time.perf_counter())
+            if len(heartbeats) >= 3:
+                heartbeat_ready.set()
+            time.sleep(0.01)
+
+    observer = threading.Thread(target=heartbeat)
+    observer.start()
+    assert heartbeat_ready.wait(1)
+    search_started = time.perf_counter()
+    engine.uct_search(board, queens, BLACK_AMAZON, 0.5, False)
+    search_finished = time.perf_counter()
+    stop.set()
+    observer.join(1)
+
+    during_search = [
+        tick for tick in heartbeats if search_started < tick < search_finished]
+    assert not observer.is_alive()
+    assert len(during_search) >= 3

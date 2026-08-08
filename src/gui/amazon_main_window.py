@@ -220,9 +220,22 @@ class AmazonsMainWindow(QMainWindow):
     def set_board_zoom(self, percent: int):
         self.board_zoom = percent if percent in (80, 100, 120, 140) else 100
         self.board_widget.set_zoom_percent(self.board_zoom)
+        for value, action in getattr(self, "zoom_actions", {}).items():
+            action.setChecked(value == self.board_zoom)
         self.settings.setValue("display/board_zoom", self.board_zoom)
         self.statusBar().showMessage(f"棋盘缩放已设置为 {self.board_zoom}%", 2500)
         self.adjustSize()
+
+    def step_board_zoom(self, direction: int):
+        """Move one step through the supported board zoom levels."""
+        levels = (80, 100, 120, 140)
+        try:
+            index = levels.index(self.board_zoom)
+        except ValueError:
+            index = levels.index(100)
+        delta = 1 if direction > 0 else -1
+        index = max(0, min(len(levels) - 1, index + delta))
+        self.set_board_zoom(levels[index])
 
     def show_ai_settings(self):
         """Edit per-side profiles; an already-running worker keeps its snapshot."""
@@ -266,6 +279,8 @@ class AmazonsMainWindow(QMainWindow):
         self.board_widget.reset_selection()
         self.board_widget.set_last_turn(turns[-1] if turns else None)
         self.board_widget.set_hints([], self.hint_side)
+        self.update_win_rate_display(None)
+        self.update_ai_info_panel(None, None)
         self.update_status()
         self.board_widget.update()
         if self.simulator.game_over:
@@ -280,6 +295,7 @@ class AmazonsMainWindow(QMainWindow):
         else:
             self.session.finish_turn()
             self.board_widget.setEnabled(True)
+            self.update_hints()
         self.statusBar().showMessage("棋谱已导入。", 3000)
 
     def set_hint_source(self, source):
@@ -494,6 +510,12 @@ class AmazonsMainWindow(QMainWindow):
             self.statusBar().showMessage("游戏已结束，无法悔棋。")
             return
 
+        # 开局没有可撤销着法时保留正在运行的 AI 请求。若先作废请求再
+        # 返回，棋盘会保持禁用且该请求的结果也不会再被接受。
+        if not self.simulator.history_do_chess:
+            self.statusBar().showMessage("无法悔棋，已是开局。")
+            return
+
         self._invalidate_position()
 
         # 判断是否为人人
@@ -524,7 +546,9 @@ class AmazonsMainWindow(QMainWindow):
 
         # ========= UI 更新 ==========
         self.board_widget.reset_selection()
-        self.update_ai_info_panel(None, None)       # 悔棋时清除 AI 分析面板
+        self.board_widget.set_hints([], self.hint_side)
+        self.update_win_rate_display(None)
+        self.update_ai_info_panel(None, None)
 
         if self.simulator.history_do_chess:
             self.board_widget.set_last_turn(self.simulator.history_do_chess[-1])
@@ -536,7 +560,17 @@ class AmazonsMainWindow(QMainWindow):
 
         # ========== 如果悔棋后轮到AI，则继续AI ==========
         if self.is_ai_turn():
-            self.start_ai_turn()
+            if self.black_ai_agent.is_busy() or self.white_ai_agent.is_busy():
+                self._resume_ai_after_worker = True
+                self.board_widget.setEnabled(False)
+                self.session.begin_ai()
+            else:
+                self.start_ai_turn()
+        else:
+            self._resume_ai_after_worker = False
+            self.board_widget.setEnabled(True)
+            self.session.finish_turn()
+            self.update_hints()
 
     def init_ui(self):
         """初始化主窗口的用户界面布局和控件。"""
@@ -755,16 +789,23 @@ class AmazonsMainWindow(QMainWindow):
         zoom_menu = QMenu("棋盘缩放", self)
         zoom_group = QActionGroup(self)
         zoom_group.setExclusive(True)
+        self.zoom_actions = {}
         for percent in (80, 100, 120, 140):
             action = QAction(f"{percent}%", self, checkable=True)
             action.setChecked(percent == self.board_zoom)
             action.triggered.connect(lambda _, percent=percent: self.set_board_zoom(percent))
             zoom_group.addAction(action)
             zoom_menu.addAction(action)
-            if percent == 120:
-                action.setShortcut("Ctrl++")
-            elif percent == 80:
-                action.setShortcut("Ctrl+-")
+            self.zoom_actions[percent] = action
+        zoom_menu.addSeparator()
+        self.zoom_in_action = QAction("放大一级", self)
+        self.zoom_in_action.setShortcut("Ctrl++")
+        self.zoom_in_action.triggered.connect(lambda: self.step_board_zoom(1))
+        zoom_menu.addAction(self.zoom_in_action)
+        self.zoom_out_action = QAction("缩小一级", self)
+        self.zoom_out_action.setShortcut("Ctrl+-")
+        self.zoom_out_action.triggered.connect(lambda: self.step_board_zoom(-1))
+        zoom_menu.addAction(self.zoom_out_action)
         display_menu.addMenu(zoom_menu)
 
         display_menu.addSeparator()
@@ -964,7 +1005,8 @@ class AmazonsMainWindow(QMainWindow):
         <h3>棋盘操作</h3>
         <p><b>鼠标左键</b> - 选择棋子/放置障碍</p>
         <p><b>鼠标右键</b> - 取消选择</p>
-        <p><b>ESC</b> - 返回主菜单</p>
+        <p><b>ESC</b> - 取消当前选择</p>
+        <p><b>Ctrl++ / Ctrl+-</b> - 逐级放大/缩小棋盘</p>
         """
 
         QMessageBox.information(self, "快捷键", shortcuts_text)
@@ -1149,6 +1191,14 @@ class AmazonsMainWindow(QMainWindow):
 
     def update_status(self):
         """更新状态显示"""
+        if self.simulator.game_over:
+            if self.simulator.winner in (BLACK_AMAZON, WHITE_AMAZON):
+                winner_name = "黑方" if self.simulator.winner == BLACK_AMAZON else "白方"
+                self.info_panel.set_status(f"游戏结束：{winner_name}获胜")
+            else:
+                self.info_panel.set_status("游戏结束")
+            return
+
         player_name = "黑方" if self.simulator.current_player == BLACK_AMAZON else "白方"
 
         if self.is_ai_turn():
@@ -1449,8 +1499,10 @@ class AmazonsMainWindow(QMainWindow):
             self._recover_from_ai_failure(str(exc), expected_player)
             return
         if not started:
-            # The previous worker can still be shutting down; retry this turn.
-            self.start_ai_turn()
+            # calculation_finished 会在旧 worker 真正退出后恢复本回合，
+            # 无需每 100ms 创建一个新的重试定时器。
+            self._resume_ai_after_worker = True
+            self.board_widget.setEnabled(False)
             return
         self._active_ai_request = (generation, expected_player, ai_type_key)
 
