@@ -32,12 +32,11 @@ for folder, destination, model in (
     binaries.extend(folder_binaries)
     datas.extend(folder_datas)
 
-matching_modules = sorted((AI / "native").glob(f"*.{PY_TAG}-win_amd64.pyd"))
-if len(matching_modules) != 2:
+matching_module = AI / "native" / f"amazon_ai.{PY_TAG}-win_amd64.pyd"
+if not matching_module.is_file():
     raise SystemExit(
-        f"缺少 Python {sys.version_info.major}.{sys.version_info.minor} 对应的两个 MCTS .pyd 模块")
-for path in matching_modules:
-    binaries.append((str(path), "src/ai/native"))
+        f"缺少 Python {sys.version_info.major}.{sys.version_info.minor} 对应的 MCTS .pyd 模块")
+binaries.append((str(matching_module), "src/ai/native"))
 binaries.append((str(AI / "native" / "libgomp_64-1.dll"), "src/ai/native"))
 
 a = Analysis(

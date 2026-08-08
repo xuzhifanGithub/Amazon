@@ -24,10 +24,10 @@ def main(argv=None) -> int:
         ai / "kataAmazonEngine" / "engine.cfg",
         ai / "kataAmazonEngine" / "hint.cfg",
     ]
-    native_modules = list((ai / "native").glob("amazon_ai*.pyd"))
+    native_modules = list((ai / "native").glob("amazon_ai.cp*-win_amd64.pyd"))
     missing = [str(path.relative_to(root)) for path in required if not path.is_file()]
-    if len(native_modules) != 2:
-        missing.append("src/ai/native/amazon_ai*.pyd（需要两个匹配当前 Python 的模块）")
+    if len(native_modules) != 1:
+        missing.append("src/ai/native/amazon_ai.cp*-win_amd64.pyd（需要一个匹配当前 Python 的模块）")
     if missing:
         print("Portable build is incomplete:")
         print("\n".join(missing))

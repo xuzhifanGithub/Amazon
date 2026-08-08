@@ -45,8 +45,7 @@ class AmazonsMainWindow(QMainWindow):
     """
     # 定义玩家类型常量
     PLAYER_TYPE_HUMAN = 'human'
-    PLAYER_TYPE_AI_MCTS = 'mcts'  # 保留 MCTS
-    PLAYER_TYPE_AI_MCTS2 = 'mcts_test'  # 保留 MCTS
+    PLAYER_TYPE_AI_MCTS = 'mcts'
     PLAYER_TYPE_AI_KATAAMAZON = 'kataAmazon'          # 兼容旧引用
     PLAYER_TYPE_AI_KATAAMAZON_GPU = 'kataAmazon_gpu'  # XZF-gen028 模型 + OpenCL(GPU) 引擎
     PLAYER_TYPE_AI_KATAAMAZON_LEGACY = 'kataAmazon_legacy'  # 原始引擎（OpenCL/GPU）+ 旧模型
@@ -446,7 +445,6 @@ class AmazonsMainWindow(QMainWindow):
         # 模型名称
         model_names = {
             'mcts': 'MCTS (C++)',
-            'mcts_test': 'MCTS_test (C++)',
             'kataAmazon': 'kataAmazon',
             'kataAmazon_gpu': 'XZF-gen028（GPU）',
             'kataAmazon_legacy': 'kataAmazon-原始（旧模型）',
@@ -642,14 +640,6 @@ class AmazonsMainWindow(QMainWindow):
         black_player_group.addAction(self.black_ai_mcts_action)
         black_ai_menu.addAction(self.black_ai_mcts_action)
 
-        #  MCTS_test(c++)
-        self.black_ai_mcts_test_action = QAction("MCTS_test★", self, checkable=True)
-        self.black_ai_mcts_test_action.setEnabled(mcts_available('mcts_test'))
-        self.black_ai_mcts_test_action.triggered.connect(
-            lambda: self.set_player_mode(BLACK_AMAZON, self.PLAYER_TYPE_AI_MCTS2))
-        black_player_group.addAction(self.black_ai_mcts_test_action)
-        black_ai_menu.addAction(self.black_ai_mcts_test_action)
-
         #  kataAmazon（XZF-gen028 模型，OpenCL/GPU）
         self.black_ai_kata_gpu_action = QAction("XZF-gen028（GPU）★★", self, checkable=True)
         self.black_ai_kata_gpu_action.setEnabled(backend_available('gpu'))
@@ -688,14 +678,6 @@ class AmazonsMainWindow(QMainWindow):
         self.white_ai_mcts_action.triggered.connect(lambda: self.set_player_mode(WHITE_AMAZON, self.PLAYER_TYPE_AI_MCTS))
         white_player_group.addAction(self.white_ai_mcts_action)
         white_ai_menu.addAction(self.white_ai_mcts_action)
-
-        #
-        self.white_ai_mcts_test_action = QAction("MCTS_test★", self, checkable=True)
-        self.white_ai_mcts_test_action.setEnabled(mcts_available('mcts_test'))
-        self.white_ai_mcts_test_action.triggered.connect(
-            lambda: self.set_player_mode(WHITE_AMAZON, self.PLAYER_TYPE_AI_MCTS2))
-        white_player_group.addAction(self.white_ai_mcts_test_action)
-        white_ai_menu.addAction(self.white_ai_mcts_test_action)
 
         #  kataAmazon（XZF-gen028 模型，OpenCL/GPU）
         self.white_ai_kata_gpu_action = QAction("XZF-gen028（GPU）★★", self, checkable=True)
@@ -1090,7 +1072,6 @@ class AmazonsMainWindow(QMainWindow):
         """
         availability = {
             self.PLAYER_TYPE_AI_MCTS: mcts_available('mcts'),
-            self.PLAYER_TYPE_AI_MCTS2: mcts_available('mcts_test'),
             self.PLAYER_TYPE_AI_KATAAMAZON_GPU: backend_available('gpu'),
             self.PLAYER_TYPE_AI_KATAAMAZON_LEGACY: backend_available('legacy'),
         }
@@ -1477,8 +1458,6 @@ class AmazonsMainWindow(QMainWindow):
         ai_type_key = ''
         if current_player_mode == self.PLAYER_TYPE_AI_MCTS:
             ai_type_key = 'mcts'
-        elif current_player_mode == self.PLAYER_TYPE_AI_MCTS2:
-            ai_type_key = 'mcts_test'
         elif current_player_mode == self.PLAYER_TYPE_AI_KATAAMAZON_GPU:
             ai_type_key = 'kataAmazon_gpu'
         elif current_player_mode == self.PLAYER_TYPE_AI_KATAAMAZON_LEGACY:

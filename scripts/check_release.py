@@ -13,8 +13,6 @@ def main() -> int:
     required = [
         AI / "native" / "amazon_ai.cp311-win_amd64.pyd",
         AI / "native" / "amazon_ai.cp313-win_amd64.pyd",
-        AI / "native" / "amazon_ai_test.cp311-win_amd64.pyd",
-        AI / "native" / "amazon_ai_test.cp313-win_amd64.pyd",
         AI / "native" / "libgomp_64-1.dll",
         AI / "kataAmazonEngineCuda" / "amazons.exe",
         AI / "kataAmazonEngineCuda" / "amazon10x10_xzf.bin.gz",

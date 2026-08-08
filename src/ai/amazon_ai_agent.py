@@ -10,8 +10,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 # 优先从发布用 native 目录加载；开发构建目录仅作为本地回退。
 for module_path in (
         os.path.join(current_dir, 'native'),
-        os.path.join(current_dir, 'src', 'build'),
-        os.path.join(current_dir, 'src2', 'build')):
+        os.path.join(current_dir, 'src', 'build')):
     if os.path.isdir(module_path) and module_path not in sys.path:
         sys.path.append(module_path)
 try:
@@ -20,13 +19,6 @@ try:
 except ImportError:
     amazon_ai = None
     logger.warning("未找到 amazon_ai 模块，请选择受支持的 Python 版本或自行编译")
-try:
-    import amazon_ai_test
-    logger.info("成功导入 amazon_ai_test 模块")
-except ImportError:
-    amazon_ai_test = None
-    logger.warning("未找到 amazon_ai_test 模块，请选择受支持的 Python 版本或自行编译")
-
 from src.ai.amazons_engine import (AmazonsKataGoEngine, backend_available,
                                     engine_spec_for_backend)
 from src.ai.engine_manager import EngineManager
@@ -40,11 +32,7 @@ from src.ai.results import AIOutcome, BestResult, HintCandidate, HintOutcome
 
 
 def mcts_available(ai_type: str) -> bool:
-    if ai_type == 'mcts':
-        return amazon_ai is not None
-    if ai_type == 'mcts_test':
-        return amazon_ai_test is not None
-    return False
+    return ai_type == 'mcts' and amazon_ai is not None
 
 class AIWorker(QObject):
     """
@@ -78,7 +66,7 @@ class AIWorker(QObject):
         """
         best_res = BestResult()
         try:
-            if self.ai_type == 'mcts' or self.ai_type == 'mcts_test':
+            if self.ai_type == 'mcts':
                 best_move = self.ai_type_engine.uct_search(
                     self.board,
                     self.queenPos,
@@ -331,7 +319,6 @@ class AmazonAIAgent(QObject):
         self._engine_lock = threading.RLock()
         self.size = self.main_window.simulator.size
         self.ai = amazon_ai.AmazonasAI() if amazon_ai is not None else None
-        self.ai_test = amazon_ai_test.AmazonasAITest() if amazon_ai_test is not None else None
         # kataAmazon 引擎：可选 'gpu'(CUDA,新权重) / 'legacy'(OpenCL,旧模型)。
         # Gameplay engines are reused per (backend, visits) profile.
         self.ai_engine = None
@@ -367,10 +354,6 @@ class AmazonAIAgent(QObject):
             if self.ai is None:
                 raise RuntimeError("MCTS 模块不可用。")
             ai_type_engine = self.ai
-        elif ai_type == 'mcts_test':
-            if self.ai_test is None:
-                raise RuntimeError("MCTS_test 模块不可用。")
-            ai_type_engine = self.ai_test
         elif ai_type in ('kataAmazon', 'kataAmazon_gpu', 'kataAmazon_legacy'):
             #   _gpu    -> 新权重 + CUDA(GPU)
             #   _legacy -> 原始引擎(OpenCL/GPU) + 旧模型 amazons10x10

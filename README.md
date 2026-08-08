@@ -1,7 +1,7 @@
 # 亚马逊棋 (Game of the Amazons)
 
 基于 PyQt6 的 10×10 亚马逊棋对弈程序，支持人机 / 机机对战，内置多种 AI：
-MCTS(C++)、MCTS_test(C++)，以及基于 **KataGo Amazons 分支**（KataGo 训练方法）的
+MCTS(C++)，以及基于 **KataGo Amazons 分支**（KataGo 训练方法）的
 神经网络引擎 **kataAmazon**，可显示实时胜率与候选着法提示。
 
 ## 快速开始
@@ -19,7 +19,7 @@ run.bat         :: 启动游戏
 ### 自包含便携版
 
 发布时可生成 `dist/Amazons/` 便携目录。该目录内包含 Python 运行时、PyQt6、NumPy、
-两个 MCTS 模块、KataGo 引擎、所需 DLL、XZF-gen028 模型和旧模型；目标电脑不需要另行安装
+MCTS 模块、KataGo 引擎、所需 DLL、XZF-gen028 模型和旧模型；目标电脑不需要另行安装
 Python，也不需要在项目目录之外配置模型或引擎文件。
 
 ```bat

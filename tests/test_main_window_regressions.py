@@ -1,5 +1,6 @@
 from unittest.mock import Mock
 
+from PyQt6.QtGui import QAction
 from PyQt6.QtWidgets import QFrame
 
 from src.ai.results import AIOutcome, BestResult, HintCandidate, HintOutcome
@@ -11,6 +12,14 @@ from src.gui.amazon_main_window import AmazonsMainWindow
 
 
 OPENING_TURN = ((6, 0), (5, 0), (6, 0))
+
+
+def test_only_one_cpp_mcts_option_is_exposed(qapp):
+    window = AmazonsMainWindow(AmazonsSimulator())
+    action_texts = [action.text() for action in window.findChildren(QAction)]
+
+    assert action_texts.count("MCTS★") == 2  # 黑方、白方各一个入口
+    window.close()
 
 
 def test_committed_turn_is_broadcast_only_after_validation(qapp):
