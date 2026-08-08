@@ -2,6 +2,7 @@ import sys
 import os
 import logging
 import threading
+import time
 from contextlib import contextmanager, nullcontext
 from PyQt6.QtCore import QObject, QThread, pyqtSignal
 logger = logging.getLogger(__name__)
@@ -290,7 +291,12 @@ class HintWorker(QObject):
             target = request_id if request_id is not None else self._active_request_id
             if target is not None and target != self._last_finished_request_id:
                 self._cancelled_request_ids.add(target)
-            should_abort = target is not None and target == self._active_request_id
+            # During application shutdown there may be an idle hint engine
+            # with no active request. It must be killed as well, otherwise the
+            # worker thread exits while the KataGo child remains alive.
+            should_abort = (
+                target is not None and target == self._active_request_id
+            ) or request_id is None
             engine = self.engine if should_abort else None
             if engine is not None:
                 self._aborted_request_ids.add(target)
@@ -533,8 +539,8 @@ class AmazonAIAgent(QObject):
         with self._engine_lock:
             return self._drop_ai_engine_locked()
 
-    def _drop_ai_engine_locked(self):
-        closed = self._engine_manager.close_all()
+    def _drop_ai_engine_locked(self, force: bool = False):
+        closed = self._engine_manager.close_all(force=force)
         if closed:
             self.ai_engine = None
             self.kata_backend = None
@@ -590,25 +596,51 @@ class AmazonAIAgent(QObject):
         candidates = [] if start_win is None else [(positions[0], start_win)]
         return candidates, positions, stage_win_rates
 
-    def shutdown(self, wait_ms: int = 5000):
-        """Stop worker threads and release all engine subprocesses."""
+    @staticmethod
+    def _wait_or_terminate(thread, deadline: float) -> None:
+        """Wait briefly, then terminate a thread that cannot observe shutdown."""
+        if thread is None or not thread.isRunning():
+            return
+        remaining_ms = max(0, round((deadline - time.monotonic()) * 1000))
+        if remaining_ms and thread.wait(remaining_ms):
+            return
+        if thread.isRunning():
+            logger.warning("AI worker 未能及时退出，正在强制终止线程")
+            thread.terminate()
+            thread.wait(100)
+
+    def shutdown(self, wait_ms: int = 350):
+        """Stop workers quickly and force-close engines during app shutdown."""
+        deadline = time.monotonic() + max(0, wait_ms) / 1000.0
+
         if self.thread is not None and self.thread.isRunning():
+            # Killing the KataGo child interrupts a blocking GTP read.  MCTS
+            # has no external process, so the bounded wait below is followed
+            # by QThread.terminate() if its native search is still running.
+            with self._engine_lock:
+                engine = self.ai_engine
+            if engine is not None:
+                try:
+                    engine.abort()
+                except Exception:
+                    logger.exception("关闭时中止 AI 引擎失败")
+            self.thread.requestInterruption()
             self.thread.quit()
-            if not self.thread.wait(wait_ms):
-                with self._engine_lock:
-                    if self.ai_engine is not None:
-                        self.ai_engine.abort()
-                self.thread.wait(3000)
+            self._wait_or_terminate(self.thread, deadline)
 
         if self.hint_thread is not None and self.hint_thread.isRunning():
-            self.hint_shutdown_requested.emit()
-            if not self.hint_thread.wait(wait_ms):
-                if self.hint_worker is not None:
-                    self.hint_worker.abort()
-                self.hint_thread.wait(3000)
+            hint_worker = self.hint_worker
+            if hint_worker is not None:
+                hint_worker.abort()
+            self.hint_thread.quit()
+            self._wait_or_terminate(self.hint_thread, deadline)
+            if hint_worker is not None:
+                # The worker is no longer executing after the bounded wait;
+                # close any idle/dead engine that was not owned by a request.
+                hint_worker._close_engine()
 
         with self._engine_lock:
-            self._drop_ai_engine_locked()
+            self._drop_ai_engine_locked(force=True)
 
 
 

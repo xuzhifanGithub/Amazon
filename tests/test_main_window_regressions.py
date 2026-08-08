@@ -1,5 +1,6 @@
 from unittest.mock import Mock
 
+from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QAction
 from PyQt6.QtWidgets import QFrame
 
@@ -270,6 +271,9 @@ def test_info_panel_uses_three_cards_and_updates_rates(qapp):
     assert window.info_panel.findChild(QFrame, "winRateCard")
     assert window.info_panel.findChild(QFrame, "analysisCard")
     assert window.info_panel.findChild(QFrame, "lineDogCard")
+    status_alignment = window.info_panel._status_row.itemAt(0).alignment()
+    assert status_alignment & Qt.AlignmentFlag.AlignVCenter
+    assert not status_alignment & Qt.AlignmentFlag.AlignTop
 
     window.update_win_rate_display(53.4, BLACK_AMAZON)
     assert window.win_rate_label.text() == "53.4%"

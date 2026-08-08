@@ -24,10 +24,13 @@ class EngineManager:
         self._synced_turns = 0
 
     @staticmethod
-    def _close_engines(engines) -> None:
+    def _close_engines(engines, force: bool = False) -> None:
         for engine in engines:
             try:
-                engine.close()
+                if force and hasattr(engine, "abort"):
+                    engine.abort()
+                else:
+                    engine.close()
             except Exception:
                 logger.exception("关闭 KataGo 引擎失败")
 
@@ -154,12 +157,12 @@ class EngineManager:
             self._synced_turns = 0
             return True
 
-    def close_all(self):
+    def close_all(self, force: bool = False):
         """Close now when idle, otherwise close when the active lease ends."""
         with self._lock:
-            if self._active_operations:
+            if self._active_operations and not force:
                 self._reset_pending = True
                 return False
             engines = self._detach_engines_locked()
-        self._close_engines(engines)
+        self._close_engines(engines, force=force)
         return True

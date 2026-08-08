@@ -641,7 +641,9 @@ class AmazonsKataGoEngine(QObject):
         if hasattr(self, 'process') and self.process.poll() is None:
             self.process.kill()
             try:
-                self.process.wait(timeout=3)
+                # kill() is already the hard-stop path.  Do not make window
+                # shutdown wait several seconds for a child that is gone.
+                self.process.wait(timeout=0.5)
             except subprocess.TimeoutExpired:
                 pass
 

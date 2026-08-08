@@ -1633,8 +1633,11 @@ class AmazonsMainWindow(QMainWindow):
         self._invalidate_position()
         self.settings.setValue("window/geometry", self.saveGeometry())
         self.settings.sync()
-        self.black_ai_agent.shutdown()
-        self.white_ai_agent.shutdown()
+        # Shutdown has a short bounded grace period; a native search that
+        # cannot be interrupted is force-terminated so closing the window does
+        # not leave the user waiting through multiple engine timeouts.
+        self.black_ai_agent.shutdown(wait_ms=350)
+        self.white_ai_agent.shutdown(wait_ms=350)
         event.accept()
 
 

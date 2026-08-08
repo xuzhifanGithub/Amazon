@@ -95,7 +95,9 @@ class AIInfoPanel(QWidget):
         self.status_label.setObjectName("statusValue")
         self.status_label.setWordWrap(True)
         self.status_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-        status_row.addWidget(self.status_indicator, 0, Qt.AlignmentFlag.AlignTop)
+        # Keep the status dot on the same visual line as the status text,
+        # including when the text wraps to multiple lines.
+        status_row.addWidget(self.status_indicator, 0, Qt.AlignmentFlag.AlignVCenter)
         status_row.addWidget(self.status_label, 1)
         status_layout.addLayout(status_row)
         self.task_status_label = QLabel()
