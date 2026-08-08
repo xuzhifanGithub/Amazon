@@ -243,6 +243,23 @@ def test_info_panel_uses_three_cards_and_updates_rates(qapp):
     window.close()
 
 
+def test_ai_move_path_uses_one_compact_line(qapp):
+    window = AmazonsMainWindow(AmazonsSimulator())
+
+    window.update_ai_info_panel(
+        BestResult(60, 50, 40, 73.5, 600, 0.735),
+        BLACK_AMAZON,
+        "kataAmazon_gpu",
+    )
+
+    assert window.info_move_detail.text() == "棋步：A4 → A5 → A6"
+    assert "\n" not in window.info_move_detail.text()
+    assert window.info_move_detail.toolTip() == "选子 A4 → 移动 A5 → 射箭 A6"
+    assert "\n" not in window.info_ai_model.text()
+    assert window.info_panel.info_summary.text() == "胜率 73.5% · 600次 · 估值 0.735"
+    window.close()
+
+
 def test_game_over_does_not_change_desktop_pet(qapp, monkeypatch):
     monkeypatch.setattr(
         "src.gui.amazon_main_window.QMessageBox.information",
@@ -296,19 +313,35 @@ def test_hint_progress_is_shown_in_right_panel(qapp):
 
 def test_hint_progress_and_candidates_do_not_resize_window(qapp):
     window = AmazonsMainWindow(AmazonsSimulator())
+    window.resize(window.width(), 735)
     window.show()
     qapp.processEvents()
     original_size = window.size()
 
+    window.update_ai_info_panel(
+        BestResult(60, 50, 40, 73.5, 600, 0.735),
+        BLACK_AMAZON,
+        "kataAmazon_gpu",
+    )
     window.info_panel.set_task_progress("正在分析候选着法…", 42)
+    window.info_panel.set_candidates([
+        f"{index}. A1 → B2 → C3  {50 + index:.1f}%"
+        for index in range(1, 4)
+    ])
+    window.info_panel.set_task_progress()
+    qapp.processEvents()
+
+    assert window.size() == original_size
+    assert window.info_panel.info_candidates.text().count("\n") == 3
+    assert window.info_panel.analysis_scroll.verticalScrollBar().maximum() == 0
+
     window.info_panel.set_candidates([
         f"{index}. A1 → B2 → C3  {50 + index:.1f}%"
         for index in range(1, 6)
     ])
     qapp.processEvents()
-
     assert window.size() == original_size
-    assert window.info_panel.analysis_scroll.verticalScrollBar().maximum() > 0
+    assert window.info_panel.info_candidates.text().count("\n") == 5
     window.close()
 
 

@@ -48,7 +48,7 @@ class DogCanvas(QLabel):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedHeight(180)
+        self.setFixedHeight(170)
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setToolTip("点一点两只小狗")
@@ -125,8 +125,8 @@ class LineDogWidget(QFrame):
         self._schedule_random_action()
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(14, 12, 14, 12)
-        layout.setSpacing(6)
+        layout.setContentsMargins(12, 8, 12, 8)
+        layout.setSpacing(4)
         heading = QHBoxLayout()
         title = QLabel("线条小狗")
         title.setObjectName("petTitle")

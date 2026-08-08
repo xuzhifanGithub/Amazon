@@ -399,6 +399,13 @@ class AmazonsMainWindow(QMainWindow):
             candidate_rows.append(f"{index}. {start} → {move} → {arrow}  {rate_text}")
         self.info_panel.set_candidates(candidate_rows)
         self.info_panel.set_task_progress("胜率提示分析完成", 100)
+        # The progress block is useful during analysis, but keeping a completed
+        # bar would unnecessarily take the space needed to show Top-3 directly.
+        completed_request = outcome.request_id
+        QTimer.singleShot(
+            1200,
+            lambda: self._clear_completed_hint_progress(completed_request),
+        )
         if hints and stage_win_rates:
             labels = ("选子", "移动", "射箭")
             rate_text = " → ".join(
@@ -407,6 +414,11 @@ class AmazonsMainWindow(QMainWindow):
             self.statusBar().showMessage(f"AI 提示：{rate_text}")
         else:
             self.statusBar().showMessage("AI 提示不可用（引擎未返回候选）。")
+
+    def _clear_completed_hint_progress(self, request_id: int):
+        """Clear only the completed progress block for the still-current hint."""
+        if not self._closing and request_id == self._hint_request_id:
+            self.info_panel.set_task_progress()
 
     def update_win_rate_display(self, win_rate=None, player=None):
         """更新左侧面板的 AI 胜率显示。win_rate 为百分比(0..100)，player 为行动方。"""
@@ -437,6 +449,7 @@ class AmazonsMainWindow(QMainWindow):
             self.info_win_rate.setText("胜率：—")
             self.info_visits.setText("搜索次数：—")
             self.info_eval.setText("局面估值：—")
+            self.info_panel.info_summary.setText("数据：—")
             self.info_panel.set_candidates()
             return
 
@@ -444,16 +457,17 @@ class AmazonsMainWindow(QMainWindow):
 
         # 模型名称
         model_names = {
-            'mcts': 'MCTS (C++)',
+            'mcts': 'MCTS C++',
             'kataAmazon': 'kataAmazon',
-            'kataAmazon_gpu': 'XZF-gen028（GPU）',
-            'kataAmazon_legacy': 'kataAmazon-原始（旧模型）',
+            'kataAmazon_gpu': 'gen028 GPU',
+            'kataAmazon_legacy': '旧模型 GPU',
         }
         model_label = model_names.get(ai_type_key, ai_type_key or "AI")
         profile = self.black_ai_profile if player == BLACK_AMAZON else self.white_ai_profile
-        strength = (f"{profile.mcts_seconds:.1f} 秒" if ai_type_key.startswith("mcts")
-                    else f"{profile.kata_visits} visits")
-        self.info_ai_model.setText(f"模型：{model_label}\n（{who}，{strength}）")
+        strength = (f"{profile.mcts_seconds:.1f}s" if ai_type_key.startswith("mcts")
+                    else f"{profile.kata_visits}v")
+        side_short = "黑" if player == BLACK_AMAZON else "白"
+        self.info_ai_model.setText(f"模型：{model_label} · {side_short}/{strength}")
 
         # 棋步详情
         size = self.simulator.size
@@ -462,11 +476,12 @@ class AmazonsMainWindow(QMainWindow):
             move_str = self._pos_to_display(best_res.best_pos_to, size)
             arrow_str = self._pos_to_display(best_res.best_pos_stone, size)
             self.info_move_detail.setText(
-                f"选子：{start_str}\n"
-                f"移动：{start_str} → {move_str}\n"
-                f"射箭：{arrow_str}")
+                f"棋步：{start_str} → {move_str} → {arrow_str}")
+            self.info_move_detail.setToolTip(
+                f"选子 {start_str} → 移动 {move_str} → 射箭 {arrow_str}")
         except Exception:
             self.info_move_detail.setText("棋步：解析失败")
+            self.info_move_detail.setToolTip("")
 
         # 胜率
         if best_res.win_pro is not None:
@@ -485,6 +500,15 @@ class AmazonsMainWindow(QMainWindow):
             self.info_eval.setText(f"局面估值：{best_res.select_pro:.4f}")
         else:
             self.info_eval.setText("局面估值：—")
+
+        rate_summary = ("—" if best_res.win_pro is None
+                        else f"{best_res.win_pro:.1f}%")
+        visits_summary = ("—" if best_res.max_apt is None
+                          else str(int(best_res.max_apt)))
+        eval_summary = ("—" if best_res.select_pro is None
+                        else f"{best_res.select_pro:.3f}")
+        self.info_panel.info_summary.setText(
+            f"胜率 {rate_summary} · {visits_summary}次 · 估值 {eval_summary}")
 
     def on_turn_made(self, start_pos, move_pos, arrow_pos):
         """

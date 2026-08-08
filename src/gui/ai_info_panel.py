@@ -78,7 +78,7 @@ class AIInfoPanel(QWidget):
 
         root = QVBoxLayout(self)
         root.setContentsMargins(8, 10, 12, 10)
-        root.setSpacing(12)
+        root.setSpacing(8)
 
         status_card, status_layout = self._create_card("当前状态", "statusCard")
         status_row = QHBoxLayout()
@@ -115,7 +115,7 @@ class AIInfoPanel(QWidget):
         self.win_rate_label = QLabel("—")
         self.win_rate_label.setObjectName("winRateValue")
         self.win_rate_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.win_rate_label.setMinimumHeight(48)
+        self.win_rate_label.setMinimumHeight(36)
         self.win_rate_bar = QProgressBar()
         self.win_rate_bar.setObjectName("winRateBar")
         self.win_rate_bar.setRange(0, 100)
@@ -133,18 +133,22 @@ class AIInfoPanel(QWidget):
         self.info_win_rate = QLabel("胜率：—")
         self.info_visits = QLabel("搜索次数：—")
         self.info_eval = QLabel("局面估值：—")
+        self.info_summary = QLabel("数据：—")
         self.info_candidates = QLabel("候选：—")
         analysis_content = QWidget()
         analysis_content.setObjectName("analysisContent")
         analysis_values_layout = QVBoxLayout(analysis_content)
         analysis_values_layout.setContentsMargins(0, 0, 4, 0)
-        analysis_values_layout.setSpacing(8)
+        analysis_values_layout.setSpacing(4)
+        # Retain the legacy labels as update-compatible data holders. Their
+        # values are presented together in info_summary to save vertical space.
+        for legacy_label in (self.info_win_rate, self.info_visits, self.info_eval):
+            analysis_values_layout.addWidget(legacy_label)
+            legacy_label.hide()
         for label in (
             self.info_ai_model,
             self.info_move_detail,
-            self.info_win_rate,
-            self.info_visits,
-            self.info_eval,
+            self.info_summary,
             self.info_candidates,
         ):
             label.setObjectName("analysisValue")
@@ -176,8 +180,8 @@ class AIInfoPanel(QWidget):
         card = QFrame(self)
         card.setObjectName(object_name)
         layout = QVBoxLayout(card)
-        layout.setContentsMargins(16, 14, 16, 16)
-        layout.setSpacing(8)
+        layout.setContentsMargins(12, 8, 12, 8)
+        layout.setSpacing(5)
         title_label = QLabel(title)
         title_label.setObjectName("cardTitle")
         layout.addWidget(title_label)
@@ -246,17 +250,17 @@ class AIInfoPanel(QWidget):
             QLabel#winRateValue {{
                 color: {theme['accent']};
                 font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
-                font-size: 25pt;
+                font-size: 22pt;
                 font-weight: 700;
             }}
             QLabel#analysisValue {{
                 color: {theme['text']};
                 background: {theme['panel']};
                 border: 1px solid {theme['border']};
-                border-radius: 8px;
-                padding: 7px 9px;
+                border-radius: 6px;
+                padding: 4px 6px;
                 font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
-                font-size: 9pt;
+                font-size: 8.5pt;
             }}
             QWidget#analysisContent, QScrollArea#analysisScroll {{
                 background: transparent;
