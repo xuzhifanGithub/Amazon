@@ -60,6 +60,7 @@ class AmazonsMainWindow(QMainWindow):
         self._hint_request_id = 0
         self._closing = False
         self._resume_ai_after_worker = False
+        self._garden_rewarded = False
 
         self.board_widget = None  # 将在init_ui中初始化
 
@@ -130,6 +131,7 @@ class AmazonsMainWindow(QMainWindow):
         self.white_ai_agent.cancel_hint_analysis()
         if hasattr(self, 'info_panel'):
             self.info_panel.set_task_progress()
+            self.info_panel.garden.set_ai_activity(False)
         self._cancel_current_animation()
 
     def start_new_game(self):
@@ -138,6 +140,7 @@ class AmazonsMainWindow(QMainWindow):
 
         # Invalidate every delayed callback and result that belongs to the old game.
         self._invalidate_position()
+        self._garden_rewarded = False
 
         self.simulator.reset()
         self.board_widget.reset_selection()
@@ -272,9 +275,13 @@ class AmazonsMainWindow(QMainWindow):
             return
         # Validation above leaves the current board intact; mutate only now.
         self._invalidate_position()
+        self._garden_rewarded = False
         self.black_ai_agent.clear_board()
         self.white_ai_agent.clear_board()
         self.simulator.load_turns(turns)
+        # Imported finished records are playback data, not newly completed games.
+        # An unfinished imported match can still earn its reward when played out.
+        self._garden_rewarded = self.simulator.game_over
         self.board_widget.reset_selection()
         self.board_widget.set_last_turn(turns[-1] if turns else None)
         self.board_widget.set_hints([], self.hint_side)
@@ -323,6 +330,7 @@ class AmazonsMainWindow(QMainWindow):
             self.board_widget.set_hints([], self.hint_side)
             self.info_panel.set_candidates()
             self.info_panel.set_task_progress()
+            self.info_panel.garden.set_ai_activity(False)
             return
 
         # 用对应方的 AI agent 查询（使用独立的提示引擎，不影响对局引擎）
@@ -335,6 +343,7 @@ class AmazonsMainWindow(QMainWindow):
         self.info_panel.set_candidates()
         self.statusBar().showMessage("正在后台计算 AI 提示...")
         self.info_panel.set_task_progress("正在启动胜率提示模型…")
+        self.info_panel.garden.set_ai_activity(True, "正在启动胜率提示模型…")
         agent.start_hint_analysis(request_id, self.hint_side, self.hint_source, self.hint_count)
 
     def _handle_hint_progress(self, update):
@@ -346,6 +355,8 @@ class AmazonsMainWindow(QMainWindow):
             return
         self.info_panel.set_task_progress(
             update.get('text', '正在分析胜率…'), update.get('progress'))
+        self.info_panel.garden.set_ai_activity(
+            True, "胜率分析中", update.get('progress'))
 
     def _handle_hint_outcome(self, outcome: HintOutcome):
         """Apply only the newest hint response for the current game position."""
@@ -359,6 +370,7 @@ class AmazonsMainWindow(QMainWindow):
             self.board_widget.set_hints([], self.hint_side)
             self.info_panel.set_candidates()
             self.info_panel.set_task_progress("胜率提示分析失败", 0)
+            self.info_panel.garden.set_ai_activity(False, "胜率分析暂时不可用")
             self.statusBar().showMessage(f"AI 提示不可用：{outcome.error}")
             return
 
@@ -399,6 +411,7 @@ class AmazonsMainWindow(QMainWindow):
             candidate_rows.append(f"{index}. {start} → {move} → {arrow}  {rate_text}")
         self.info_panel.set_candidates(candidate_rows)
         self.info_panel.set_task_progress("胜率提示分析完成", 100)
+        self.info_panel.garden.set_ai_activity(False, "胜率分析完成")
         if hints and stage_win_rates:
             labels = ("选子", "移动", "射箭")
             rate_text = " → ".join(
@@ -588,7 +601,8 @@ class AmazonsMainWindow(QMainWindow):
         self.board_widget.game_over_signal.connect(self.show_game_over_message)
         board_layout.addWidget(self.board_widget)
 
-        self.info_panel = AIInfoPanel(color_scheme=self.current_color_scheme)
+        self.info_panel = AIInfoPanel(
+            color_scheme=self.current_color_scheme, settings=self.settings)
         # 保留主窗口原有属性，避免影响状态更新和 AI 结果处理接口。
         self.status_label = self.info_panel.status_label
         self.win_rate_label = self.info_panel.win_rate_label
@@ -1191,6 +1205,10 @@ class AmazonsMainWindow(QMainWindow):
         """显示游戏结束消息"""
         self.session.finish_turn(True)
         self.board_widget.setEnabled(False)  # 游戏结束，禁用棋盘
+        self.info_panel.garden.set_ai_activity(False)
+        if not self._garden_rewarded and self.simulator.history_do_chess:
+            self._garden_rewarded = True
+            self.info_panel.garden.reward_completed_game()
         self.update_status()
         if message:
             QMessageBox.information(self, "游戏结束", message)
@@ -1415,6 +1433,7 @@ class AmazonsMainWindow(QMainWindow):
         # 1. 改变状态栏提示
         current_player_name = "黑方" if self.simulator.current_player == BLACK_AMAZON else "白方"
         self.info_panel.set_status(f"{current_player_name}（AI）正在思考…")
+        self.info_panel.garden.set_ai_activity(True, "叶片正陪 AI 一起思考…")
         self.board_widget.setEnabled(False)  # 禁用交互
         self.board_widget.repaint()
 
@@ -1506,10 +1525,12 @@ class AmazonsMainWindow(QMainWindow):
         self._active_ai_request = None
 
         if outcome.error:
+            self.info_panel.garden.set_ai_activity(False)
             self._recover_from_ai_failure(outcome.error, request[1])
             return
 
         if outcome.resigned:
+            self.info_panel.garden.set_ai_activity(False)
             self.simulator.game_over = True
             self.simulator.winner = -self.simulator.current_player
             winner_name = "黑方" if self.simulator.winner == BLACK_AMAZON else "白方"
@@ -1519,6 +1540,7 @@ class AmazonsMainWindow(QMainWindow):
 
         best_res = outcome.result
         if best_res is None:
+            self.info_panel.garden.set_ai_activity(False)
             self._recover_from_ai_failure("AI 没有返回着法。", request[1])
             return
 
@@ -1557,6 +1579,7 @@ class AmazonsMainWindow(QMainWindow):
         # 更新右侧 AI 分析信息面板
         self.update_ai_info_panel(best_res, self.simulator.current_player,
                                   getattr(self, 'current_ai_type', ''))
+        self.info_panel.garden.set_ai_activity(False)
 
         # 使用动画执行 AI 的走法
         player_who_moved = self.simulator.current_player
@@ -1567,6 +1590,7 @@ class AmazonsMainWindow(QMainWindow):
 
     def _recover_from_ai_failure(self, message: str, side: int):
         """Return control to a human instead of leaving the board disabled."""
+        self.info_panel.garden.set_ai_activity(False)
         if side == BLACK_AMAZON:
             self.black_modes = self.PLAYER_TYPE_HUMAN
             self.black_human_action.setChecked(True)

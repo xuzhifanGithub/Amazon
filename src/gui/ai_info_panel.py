@@ -11,6 +11,9 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from src.config import create_settings
+from src.gui.garden_widget import GardenWidget
+
 
 PANEL_THEMES = {
     "BW": {
@@ -63,7 +66,7 @@ PANEL_THEMES = {
 class AIInfoPanel(QWidget):
     """Theme-aware card panel for game status and AI analysis."""
 
-    def __init__(self, parent=None, color_scheme: str = "BW"):
+    def __init__(self, parent=None, color_scheme: str = "BW", settings=None):
         super().__init__(parent)
         self.setObjectName("aiInfoPanel")
         self.setFixedWidth(280)
@@ -139,7 +142,13 @@ class AIInfoPanel(QWidget):
             label.setWordWrap(True)
             analysis_layout.addWidget(label)
         root.addWidget(analysis_card, 1)
-        root.addStretch(1)
+
+        self.garden = GardenWidget(
+            settings if settings is not None else create_settings(),
+            self,
+            color_scheme=color_scheme,
+        )
+        root.addWidget(self.garden)
 
         self.set_theme(color_scheme)
 
@@ -161,7 +170,8 @@ class AIInfoPanel(QWidget):
                 background: transparent;
                 color: {theme['text']};
             }}
-            QFrame#statusCard, QFrame#winRateCard, QFrame#analysisCard {{
+            QFrame#statusCard, QFrame#winRateCard, QFrame#analysisCard,
+            QFrame#gardenCard {{
                 background: {theme['surface']};
                 border: 1px solid {theme['border']};
                 border-radius: 14px;
@@ -171,6 +181,31 @@ class AIInfoPanel(QWidget):
                 font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
                 font-size: 10pt;
                 font-weight: 600;
+            }}
+            QLabel#gardenTitle {{
+                color: {theme['text']};
+                font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+                font-size: 10pt;
+                font-weight: 600;
+            }}
+            QLabel#gardenStage, QLabel#gardenStats, QLabel#gardenActivity {{
+                color: {theme['muted']};
+                font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+                font-size: 8.5pt;
+            }}
+            QPushButton#waterButton {{
+                color: white;
+                background: {theme['accent']};
+                border: none;
+                border-radius: 8px;
+                padding: 6px 12px;
+                font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+                font-weight: 600;
+            }}
+            QPushButton#waterButton:hover {{ background: {theme['success']}; }}
+            QPushButton#waterButton:disabled {{
+                color: {theme['muted']};
+                background: {theme['accent_soft']};
             }}
             QLabel#cardCaption {{
                 color: {theme['muted']};
@@ -224,6 +259,7 @@ class AIInfoPanel(QWidget):
             }}
         """)
         self._theme = theme
+        self.garden.set_theme(color_scheme)
 
     def set_status(self, text: str):
         self.status_label.setText(text)

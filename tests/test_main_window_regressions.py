@@ -230,6 +230,7 @@ def test_info_panel_uses_three_cards_and_updates_rates(qapp):
     assert window.info_panel.findChild(QFrame, "statusCard")
     assert window.info_panel.findChild(QFrame, "winRateCard")
     assert window.info_panel.findChild(QFrame, "analysisCard")
+    assert window.info_panel.findChild(QFrame, "gardenCard")
 
     window.update_win_rate_display(53.4, BLACK_AMAZON)
     assert window.win_rate_label.text() == "53.4%"
@@ -239,6 +240,26 @@ def test_info_panel_uses_three_cards_and_updates_rates(qapp):
     window.update_win_rate_display(None)
     assert window.win_rate_label.text() == "—"
     assert window.info_panel.win_rate_bar.value() == 0
+    window.close()
+
+
+def test_game_over_rewards_garden_only_once(qapp, monkeypatch):
+    monkeypatch.setattr(
+        "src.gui.amazon_main_window.QMessageBox.information",
+        lambda *args, **kwargs: None,
+    )
+    window = AmazonsMainWindow(AmazonsSimulator())
+    window.info_panel.garden.state.water_drops = 0
+    window.info_panel.garden.state.completed_games = 0
+    assert window.simulator.execute_turn(*OPENING_TURN)
+    window.simulator.game_over = True
+    window.simulator.winner = BLACK_AMAZON
+
+    window.show_game_over_message()
+    window.show_game_over_message()
+
+    assert window.info_panel.garden.state.water_drops == 1
+    assert window.info_panel.garden.state.completed_games == 1
     window.close()
 
 
