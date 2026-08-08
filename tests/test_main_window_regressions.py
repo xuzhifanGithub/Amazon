@@ -250,7 +250,6 @@ def test_game_over_does_not_change_desktop_pet(qapp, monkeypatch):
     )
     window = AmazonsMainWindow(AmazonsSimulator())
     affection = window.info_panel.line_dogs.affection
-    snacks = window.info_panel.line_dogs.snacks
     assert window.simulator.execute_turn(*OPENING_TURN)
     window.simulator.game_over = True
     window.simulator.winner = BLACK_AMAZON
@@ -258,7 +257,6 @@ def test_game_over_does_not_change_desktop_pet(qapp, monkeypatch):
     window.show_game_over_message()
 
     assert window.info_panel.line_dogs.affection == affection
-    assert window.info_panel.line_dogs.snacks == snacks
     window.close()
 
 

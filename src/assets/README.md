@@ -1,7 +1,10 @@
 # 线条小狗图片来源
 
-`line_dogs_official.png` 下载自 Moonlab_studio 在 LINE STORE 发布的“线条小狗动态表情贴”商品主图：
+`line_dogs/` 中的四张 GIF 选自用户提供的本地“线条小狗 表情包图合集”，并按动作含义命名：
 
-https://store.line.me/emojishop/product/666177dd45171c6ef90f8160/zh-Hant
+- `047-相互依靠.gif`：默认待机；
+- `136-开心追逐.gif`：一起玩；
+- `141-摸摸小金毛.gif`：摸摸互动；
+- `160-抱在一起睡觉.gif`：休息状态。
 
 图片版权归原作者及相关权利方所有。本项目仅将图片作为本地界面素材使用；公开分发前应确认并取得相应授权。
