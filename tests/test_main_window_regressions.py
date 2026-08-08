@@ -230,7 +230,7 @@ def test_info_panel_uses_three_cards_and_updates_rates(qapp):
     assert window.info_panel.findChild(QFrame, "statusCard")
     assert window.info_panel.findChild(QFrame, "winRateCard")
     assert window.info_panel.findChild(QFrame, "analysisCard")
-    assert window.info_panel.findChild(QFrame, "gardenCard")
+    assert window.info_panel.findChild(QFrame, "lineDogCard")
 
     window.update_win_rate_display(53.4, BLACK_AMAZON)
     assert window.win_rate_label.text() == "53.4%"
@@ -243,24 +243,25 @@ def test_info_panel_uses_three_cards_and_updates_rates(qapp):
     window.close()
 
 
-def test_game_over_rewards_garden_only_once(qapp, monkeypatch):
+def test_game_over_does_not_change_desktop_pet(qapp, monkeypatch):
     monkeypatch.setattr(
         "src.gui.amazon_main_window.QMessageBox.information",
         lambda *args, **kwargs: None,
     )
     window = AmazonsMainWindow(AmazonsSimulator())
-    window.info_panel.garden.state.water_drops = 0
-    window.info_panel.garden.state.completed_games = 0
+    affection = window.info_panel.line_dogs.affection
+    snacks = window.info_panel.line_dogs.snacks
     assert window.simulator.execute_turn(*OPENING_TURN)
     window.simulator.game_over = True
     window.simulator.winner = BLACK_AMAZON
 
     window.show_game_over_message()
-    window.show_game_over_message()
 
-    assert window.info_panel.garden.state.water_drops == 1
-    assert window.info_panel.garden.state.completed_games == 1
+    assert window.info_panel.line_dogs.affection == affection
+    assert window.info_panel.line_dogs.snacks == snacks
     window.close()
+
+
 
 
 def test_info_panel_theme_changes_are_visible(qapp):

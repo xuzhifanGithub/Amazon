@@ -24,6 +24,7 @@ def collect_backend(source: Path, destination: str, model: Path):
 
 binaries = []
 datas = []
+datas.append((str(ROOT / "src" / "assets" / "line_dogs_official.png"), "src/assets"))
 for folder, destination, model in (
     (AI / "kataAmazonEngineCuda", "src/ai/kataAmazonEngineCuda", Path("amazon10x10_xzf.bin.gz")),
     (AI / "kataAmazonEngine", "src/ai/kataAmazonEngine", Path("weights/amazons10x10.bin.gz")),

@@ -12,7 +12,7 @@ from PyQt6.QtWidgets import (
 )
 
 from src.config import create_settings
-from src.gui.garden_widget import GardenWidget
+from src.gui.line_dog_widget import LineDogWidget
 
 
 PANEL_THEMES = {
@@ -143,12 +143,12 @@ class AIInfoPanel(QWidget):
             analysis_layout.addWidget(label)
         root.addWidget(analysis_card, 1)
 
-        self.garden = GardenWidget(
+        self.line_dogs = LineDogWidget(
             settings if settings is not None else create_settings(),
             self,
             color_scheme=color_scheme,
         )
-        root.addWidget(self.garden)
+        root.addWidget(self.line_dogs)
 
         self.set_theme(color_scheme)
 
@@ -171,7 +171,7 @@ class AIInfoPanel(QWidget):
                 color: {theme['text']};
             }}
             QFrame#statusCard, QFrame#winRateCard, QFrame#analysisCard,
-            QFrame#gardenCard {{
+            QFrame#lineDogCard {{
                 background: {theme['surface']};
                 border: 1px solid {theme['border']};
                 border-radius: 14px;
@@ -182,18 +182,18 @@ class AIInfoPanel(QWidget):
                 font-size: 10pt;
                 font-weight: 600;
             }}
-            QLabel#gardenTitle {{
+            QLabel#petTitle {{
                 color: {theme['text']};
                 font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
                 font-size: 10pt;
                 font-weight: 600;
             }}
-            QLabel#gardenStage, QLabel#gardenStats, QLabel#gardenActivity {{
+            QLabel#petCaption, QLabel#petStatus {{
                 color: {theme['muted']};
                 font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
                 font-size: 8.5pt;
             }}
-            QPushButton#waterButton {{
+            QPushButton#petButton {{
                 color: white;
                 background: {theme['accent']};
                 border: none;
@@ -202,8 +202,8 @@ class AIInfoPanel(QWidget):
                 font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
                 font-weight: 600;
             }}
-            QPushButton#waterButton:hover {{ background: {theme['success']}; }}
-            QPushButton#waterButton:disabled {{
+            QPushButton#petButton:hover {{ background: {theme['success']}; }}
+            QPushButton#petButton:pressed {{
                 color: {theme['muted']};
                 background: {theme['accent_soft']};
             }}
@@ -259,7 +259,7 @@ class AIInfoPanel(QWidget):
             }}
         """)
         self._theme = theme
-        self.garden.set_theme(color_scheme)
+        self.line_dogs.set_theme(color_scheme)
 
     def set_status(self, text: str):
         self.status_label.setText(text)
