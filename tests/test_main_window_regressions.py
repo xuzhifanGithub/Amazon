@@ -223,8 +223,29 @@ def test_zoom_shortcuts_step_between_adjacent_levels(qapp):
     window.close()
 
 
+def test_board_zoom_scales_the_full_right_panel(qapp):
+    window = AmazonsMainWindow(AmazonsSimulator())
+
+    expected = {
+        80: (224, 136, 13),
+        100: (280, 170, 16),
+        120: (336, 204, 19),
+        140: (392, 238, 22),
+    }
+    for percent, (panel_width, dog_height, progress_height) in expected.items():
+        window.set_board_zoom(percent)
+        assert window.info_panel.width() == panel_width
+        assert window.info_panel.line_dogs.canvas.height() == dog_height
+        assert window.info_panel.task_progress_bar.height() == progress_height
+        assert window.info_panel._zoom_percent == percent
+
+    window.set_board_zoom(100)
+    window.close()
+
+
 def test_info_panel_uses_three_cards_and_updates_rates(qapp):
     window = AmazonsMainWindow(AmazonsSimulator())
+    window.set_board_zoom(100)
 
     assert window.info_panel.width() == 280
     assert window.info_panel.findChild(QFrame, "statusCard")
@@ -313,6 +334,7 @@ def test_hint_progress_is_shown_in_right_panel(qapp):
 
 def test_hint_progress_and_candidates_do_not_resize_window(qapp):
     window = AmazonsMainWindow(AmazonsSimulator())
+    window.set_board_zoom(100)
     window.resize(window.width(), 735)
     window.show()
     qapp.processEvents()

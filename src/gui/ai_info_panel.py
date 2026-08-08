@@ -67,21 +67,26 @@ PANEL_THEMES = {
 class AIInfoPanel(QWidget):
     """Theme-aware card panel for game status and AI analysis."""
 
-    def __init__(self, parent=None, color_scheme: str = "BW", settings=None):
+    def __init__(self, parent=None, color_scheme: str = "BW", settings=None,
+                 zoom_percent: int = 100):
         super().__init__(parent)
         self.setObjectName("aiInfoPanel")
-        self.setFixedWidth(280)
+        self._zoom_percent = 100
+        self._theme_key = color_scheme.upper()
+        self._card_layouts = []
         # The board controls the main-window height. Dynamic progress text and
         # Top-N analysis rows must be contained inside this side panel instead
         # of increasing the window's minimum height.
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Ignored)
 
         root = QVBoxLayout(self)
+        self._root_layout = root
         root.setContentsMargins(8, 10, 12, 10)
         root.setSpacing(8)
 
         status_card, status_layout = self._create_card("当前状态", "statusCard")
         status_row = QHBoxLayout()
+        self._status_row = status_row
         status_row.setSpacing(10)
         self.status_indicator = QLabel()
         self.status_indicator.setObjectName("statusIndicator")
@@ -138,6 +143,7 @@ class AIInfoPanel(QWidget):
         analysis_content = QWidget()
         analysis_content.setObjectName("analysisContent")
         analysis_values_layout = QVBoxLayout(analysis_content)
+        self._analysis_values_layout = analysis_values_layout
         analysis_values_layout.setContentsMargins(0, 0, 4, 0)
         analysis_values_layout.setSpacing(4)
         # Retain the legacy labels as update-compatible data holders. Their
@@ -174,12 +180,13 @@ class AIInfoPanel(QWidget):
         )
         root.addWidget(self.line_dogs)
 
-        self.set_theme(color_scheme)
+        self.set_zoom_percent(zoom_percent)
 
     def _create_card(self, title: str, object_name: str):
         card = QFrame(self)
         card.setObjectName(object_name)
         layout = QVBoxLayout(card)
+        self._card_layouts.append(layout)
         layout.setContentsMargins(12, 8, 12, 8)
         layout.setSpacing(5)
         title_label = QLabel(title)
@@ -188,7 +195,11 @@ class AIInfoPanel(QWidget):
         return card, layout
 
     def set_theme(self, color_scheme: str):
-        theme = PANEL_THEMES.get(color_scheme.upper(), PANEL_THEMES["BW"])
+        self._theme_key = color_scheme.upper()
+        theme = PANEL_THEMES.get(self._theme_key, PANEL_THEMES["BW"])
+        scale = self._zoom_percent / 100.0
+        px = lambda value: max(1, round(value * scale))
+        pt = lambda value: f"{value * scale:.1f}"
         self.setStyleSheet(f"""
             QWidget#aiInfoPanel {{
                 background: transparent;
@@ -198,31 +209,31 @@ class AIInfoPanel(QWidget):
             QFrame#lineDogCard {{
                 background: {theme['surface']};
                 border: 1px solid {theme['border']};
-                border-radius: 14px;
+                border-radius: {px(14)}px;
             }}
             QLabel#cardTitle {{
                 color: {theme['muted']};
                 font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
-                font-size: 10pt;
+                font-size: {pt(10)}pt;
                 font-weight: 600;
             }}
             QLabel#petTitle {{
                 color: {theme['text']};
                 font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
-                font-size: 10pt;
+                font-size: {pt(10)}pt;
                 font-weight: 600;
             }}
             QLabel#petCaption, QLabel#petStatus {{
                 color: {theme['muted']};
                 font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
-                font-size: 8.5pt;
+                font-size: {pt(8.5)}pt;
             }}
             QPushButton#petButton {{
                 color: white;
                 background: {theme['accent']};
                 border: none;
-                border-radius: 8px;
-                padding: 6px 12px;
+                border-radius: {px(8)}px;
+                padding: {px(6)}px {px(12)}px;
                 font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
                 font-weight: 600;
             }}
@@ -234,76 +245,100 @@ class AIInfoPanel(QWidget):
             QLabel#cardCaption {{
                 color: {theme['muted']};
                 font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
-                font-size: 9pt;
+                font-size: {pt(9)}pt;
             }}
             QLabel#statusValue {{
                 color: {theme['text']};
                 font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
-                font-size: 11pt;
+                font-size: {pt(11)}pt;
                 font-weight: 600;
             }}
             QLabel#taskStatus {{
                 color: {theme['warning']};
                 font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
-                font-size: 9pt;
+                font-size: {pt(9)}pt;
             }}
             QLabel#winRateValue {{
                 color: {theme['accent']};
                 font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
-                font-size: 22pt;
+                font-size: {pt(22)}pt;
                 font-weight: 700;
             }}
             QLabel#analysisValue {{
                 color: {theme['text']};
                 background: {theme['panel']};
                 border: 1px solid {theme['border']};
-                border-radius: 6px;
-                padding: 4px 6px;
+                border-radius: {px(6)}px;
+                padding: {px(4)}px {px(6)}px;
                 font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
-                font-size: 8.5pt;
+                font-size: {pt(8.5)}pt;
             }}
             QWidget#analysisContent, QScrollArea#analysisScroll {{
                 background: transparent;
                 border: none;
             }}
             QScrollArea#analysisScroll QScrollBar:vertical {{
-                width: 7px;
+                width: {px(7)}px;
                 background: transparent;
             }}
             QScrollArea#analysisScroll QScrollBar::handle:vertical {{
-                min-height: 24px;
+                min-height: {px(24)}px;
                 background: {theme['border']};
-                border-radius: 3px;
+                border-radius: {px(3)}px;
             }}
             QProgressBar#winRateBar, QProgressBar#taskProgressBar {{
                 background: {theme['accent_soft']};
                 border: none;
-                border-radius: 3px;
+                border-radius: {px(3)}px;
             }}
             QProgressBar#winRateBar::chunk, QProgressBar#taskProgressBar::chunk {{
                 background: {theme['accent']};
-                border-radius: 3px;
+                border-radius: {px(3)}px;
             }}
             QProgressBar#taskProgressBar {{
                 color: {theme['text']};
                 font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
-                font-size: 8pt;
+                font-size: {pt(8)}pt;
                 text-align: center;
             }}
             QLabel#statusIndicator {{
                 background: {theme['success']};
-                border-radius: 5px;
+                border-radius: {px(5)}px;
             }}
         """)
         self._theme = theme
         self.line_dogs.set_theme(color_scheme)
 
+    def set_zoom_percent(self, percent: int):
+        """Scale the full side panel together with the board."""
+        self._zoom_percent = percent if percent in (80, 100, 120, 140) else 100
+        scale = self._zoom_percent / 100.0
+        px = lambda value: max(1, round(value * scale))
+
+        self.setFixedWidth(px(280))
+        self._root_layout.setContentsMargins(px(8), px(10), px(12), px(10))
+        self._root_layout.setSpacing(px(8))
+        self._status_row.setSpacing(px(10))
+        for layout in self._card_layouts:
+            layout.setContentsMargins(px(12), px(8), px(12), px(8))
+            layout.setSpacing(px(5))
+        self.task_progress_bar.setFixedHeight(px(16))
+        self.win_rate_label.setMinimumHeight(px(36))
+        self.win_rate_bar.setFixedHeight(px(7))
+        self._analysis_values_layout.setContentsMargins(0, 0, px(4), 0)
+        self._analysis_values_layout.setSpacing(px(4))
+        self.status_indicator.setFixedSize(px(10), px(10))
+        self.line_dogs.set_zoom_percent(self._zoom_percent)
+        self.set_theme(self._theme_key)
+        self.updateGeometry()
+
     def set_status(self, text: str):
         self.status_label.setText(text)
         thinking = "思考" in text or "AI" in text and "轮到" not in text
         color = self._theme["warning"] if thinking else self._theme["success"]
+        radius = max(1, round(5 * self._zoom_percent / 100.0))
         self.status_indicator.setStyleSheet(
-            f"background: {color}; border-radius: 5px;")
+            f"background: {color}; border-radius: {radius}px;")
 
     def set_win_rate(self, win_rate=None, context: str = ""):
         if win_rate is None or win_rate < 0 or win_rate > 100.0001:

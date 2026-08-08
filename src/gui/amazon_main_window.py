@@ -219,6 +219,8 @@ class AmazonsMainWindow(QMainWindow):
     def set_board_zoom(self, percent: int):
         self.board_zoom = percent if percent in (80, 100, 120, 140) else 100
         self.board_widget.set_zoom_percent(self.board_zoom)
+        if hasattr(self, "info_panel"):
+            self.info_panel.set_zoom_percent(self.board_zoom)
         for value, action in getattr(self, "zoom_actions", {}).items():
             action.setChecked(value == self.board_zoom)
         self.settings.setValue("display/board_zoom", self.board_zoom)
@@ -613,7 +615,10 @@ class AmazonsMainWindow(QMainWindow):
         board_layout.addWidget(self.board_widget)
 
         self.info_panel = AIInfoPanel(
-            color_scheme=self.current_color_scheme, settings=self.settings)
+            color_scheme=self.current_color_scheme,
+            settings=self.settings,
+            zoom_percent=self.board_zoom,
+        )
         # 保留主窗口原有属性，避免影响状态更新和 AI 结果处理接口。
         self.status_label = self.info_panel.status_label
         self.win_rate_label = self.info_panel.win_rate_label

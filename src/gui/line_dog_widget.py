@@ -3,7 +3,7 @@ from __future__ import annotations
 import random
 from pathlib import Path
 
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal
+from PyQt6.QtCore import QSize, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QMovie
 from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
 
@@ -53,8 +53,11 @@ class DogCanvas(QLabel):
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setToolTip("点一点两只小狗")
         self._theme = PET_THEMES["BW"]
+        self._theme_key = "BW"
+        self._zoom_percent = 100
         self._asset_dir = Path(__file__).resolve().parents[1] / "assets" / "line_dogs"
         self._movies: dict[str, QMovie] = {}
+        self._source_sizes: dict[str, QSize] = {}
         self._pose = "idle"
         self._movie: QMovie | None = None
         self.set_pose("idle")
@@ -64,9 +67,47 @@ class DogCanvas(QLabel):
         return self._movie is not None and self._movie.isValid()
 
     def set_theme(self, scheme: str) -> None:
-        self._theme = PET_THEMES.get(scheme.upper(), PET_THEMES["BW"])
+        self._theme_key = scheme.upper()
+        self._theme = PET_THEMES.get(self._theme_key, PET_THEMES["BW"])
+        radius = max(1, round(11 * self._zoom_percent / 100.0))
         self.setStyleSheet(
-            f"background: {self._theme['scene']}; border: none; border-radius: 11px;")
+            f"background: {self._theme['scene']}; border: none; border-radius: {radius}px;")
+
+    def _apply_movie_scale(self, pose: str, movie: QMovie) -> None:
+        source_size = QSize(self._source_sizes.get(pose, QSize()))
+        if source_size.isEmpty():
+            # QMovie may not expose frameRect until its first frame has been
+            # decoded. Decode that frame once so zooming never turns a newly
+            # loaded sticker into a 1 x 1 image.
+            movie.jumpToFrame(0)
+            source_size = movie.currentImage().size()
+            if source_size.isEmpty():
+                movie.setScaledSize(QSize())
+                return
+            self._source_sizes[pose] = QSize(source_size)
+        base_size = QSize(source_size)
+        if base_size.width() > 170 or base_size.height() > 170:
+            base_size.scale(170, 170, Qt.AspectRatioMode.KeepAspectRatio)
+        scale = self._zoom_percent / 100.0
+        target = QSize(
+            max(1, round(base_size.width() * scale)),
+            max(1, round(base_size.height() * scale)),
+        )
+        if target == source_size:
+            movie.setScaledSize(QSize())
+        else:
+            movie.setScaledSize(target)
+
+    def set_zoom_percent(self, percent: int) -> None:
+        self._zoom_percent = percent if percent in (80, 100, 120, 140) else 100
+        self.setFixedHeight(max(1, round(170 * self._zoom_percent / 100.0)))
+        for pose, movie in self._movies.items():
+            was_running = movie.state() == QMovie.MovieState.Running
+            movie.stop()
+            self._apply_movie_scale(pose, movie)
+            if movie is self._movie and was_running:
+                movie.start()
+        self.set_theme(self._theme_key)
 
     def _movie_for(self, pose: str) -> QMovie:
         movie = self._movies.get(pose)
@@ -78,9 +119,9 @@ class DogCanvas(QLabel):
             # Keep 150/170 px stickers at their native size. Only oversized
             # source GIFs are reduced, preserving their aspect ratio.
             source_size = movie.frameRect().size()
-            if source_size.width() > 170 or source_size.height() > 170:
-                source_size.scale(170, 170, Qt.AspectRatioMode.KeepAspectRatio)
-                movie.setScaledSize(source_size)
+            if not source_size.isEmpty():
+                self._source_sizes[pose] = QSize(source_size)
+            self._apply_movie_scale(pose, movie)
             self._movies[pose] = movie
         return movie
 
@@ -111,6 +152,7 @@ class LineDogWidget(QFrame):
         super().__init__(parent)
         self.setObjectName("lineDogCard")
         self.settings = settings
+        self._zoom_percent = 100
         self.settings.remove("garden")
         self.settings.remove("pets/snacks")
         self.settings.remove("pets/snack_date")
@@ -125,9 +167,11 @@ class LineDogWidget(QFrame):
         self._schedule_random_action()
 
         layout = QVBoxLayout(self)
+        self._root_layout = layout
         layout.setContentsMargins(12, 8, 12, 8)
         layout.setSpacing(4)
         heading = QHBoxLayout()
+        self._heading_layout = heading
         title = QLabel("线条小狗")
         title.setObjectName("petTitle")
         self.caption = QLabel("马尔济斯 × 小金毛")
@@ -147,6 +191,7 @@ class LineDogWidget(QFrame):
         layout.addWidget(self.status_label)
 
         actions = QHBoxLayout()
+        self._actions_layout = actions
         self.pet_button = QPushButton("摸摸")
         self.play_button = QPushButton("一起玩")
         # Compatibility alias for callers that used the former second button.
@@ -208,3 +253,14 @@ class LineDogWidget(QFrame):
 
     def set_theme(self, color_scheme: str) -> None:
         self.canvas.set_theme(color_scheme)
+
+    def set_zoom_percent(self, percent: int) -> None:
+        self._zoom_percent = percent if percent in (80, 100, 120, 140) else 100
+        scale = self._zoom_percent / 100.0
+        px = lambda value: max(1, round(value * scale))
+        self._root_layout.setContentsMargins(px(12), px(8), px(12), px(8))
+        self._root_layout.setSpacing(px(4))
+        self._heading_layout.setSpacing(px(6))
+        self._actions_layout.setSpacing(px(6))
+        self.canvas.set_zoom_percent(self._zoom_percent)
+        self.updateGeometry()
