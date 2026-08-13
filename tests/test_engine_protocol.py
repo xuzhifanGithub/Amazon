@@ -90,8 +90,6 @@ class FakeTurnEngine:
 
     def _execute_sync_command(self, command):
         self.commands.append(command)
-        if command.startswith("genmove"):
-            return "B2" if len([c for c in self.commands if c.startswith('genmove')]) == 1 else "C3"
         return ""
 
 
@@ -101,6 +99,27 @@ def test_best_turn_always_restores_engine_position():
     assert turn == ("A1", "B2", "C3")
     assert engine.commands[-3:] == ["undo", "undo", "undo"]
     assert engine.last_winrate == 60.0
+
+
+def test_analyze_replaces_pass_with_most_visited_coordinate():
+    commands = []
+    response = (
+        "info move pass visits 22 winrate 0 order 0 pv pass "
+        "info move J4 visits 29 winrate 0.00667659 order 1 pv J4 pass\n"
+        "play pass"
+    )
+
+    def execute(command):
+        commands.append(command)
+        return response if command.startswith("kata-genmove_analyze") else ""
+
+    engine = SimpleNamespace(_execute_sync_command=execute)
+    move, rate, visits = AmazonsKataGoEngine._genmove_analyze(engine, "w")
+
+    assert move == "J4"
+    assert rate == pytest.approx(0.667659)
+    assert visits == 29
+    assert commands == ["kata-genmove_analyze w", "undo", "play w J4"]
 
 
 def test_three_stage_analysis_normalizes_move_to_original_player():
@@ -151,6 +170,27 @@ def test_candidate_turn_reports_all_three_progress_stages():
         ("move", 70.0, 20),
         ("arrow", 65.0, 30),
     ]
+
+
+def test_ranked_candidates_filter_pass_before_top_n_limit():
+    commands = []
+    response = (
+        "info move pass visits 100 winrate 0 order 0 pv pass "
+        "info move A1 visits 90 winrate 0.6 order 1 pv A1 "
+        "info move B2 visits 80 winrate 0.5 order 2 pv B2 "
+        "info move C3 visits 70 winrate 0.4 order 3 pv C3\n"
+        "play pass"
+    )
+    engine = SimpleNamespace(
+        _execute_sync_command=lambda command: (
+            commands.append(command) or response),
+    )
+
+    candidates = AmazonsKataGoEngine.ranked_start_candidates(
+        engine, BLACK_AMAZON, top_n=3)
+
+    assert [move for move, _rate, _visits in candidates] == ["A1", "B2", "C3"]
+    assert commands == ["kata-genmove_analyze b", "undo"]
 
 
 def test_restore_skips_undo_after_engine_input_is_closed():

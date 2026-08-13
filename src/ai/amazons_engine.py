@@ -433,12 +433,41 @@ class AmazonsKataGoEngine(QObject):
         """
         response = self._execute_sync_command(f"kata-genmove_analyze {player_char}")
 
-        played, win_pct, visits, _ranked = parse_genmove_analyze(response)
+        played, win_pct, visits, ranked = parse_genmove_analyze(response)
         if played is None:
             # 兜底：走普通 genmove（无胜率信息）
             played = self._execute_sync_command(f"genmove {player_char}").strip()
-            return self._require_playable_move(played, "搜索"), None, None
-        return self._require_playable_move(played, "搜索"), win_pct, visits
+            return AmazonsKataGoEngine._require_playable_move(
+                played, "搜索"), None, None
+
+        normalized = str(played).strip().lower()
+        if normalized in ("pass", "resign"):
+            # Amazons has neither pass nor resignation moves. Legacy KataGo
+            # can still choose pass while reporting real coordinates in the
+            # same analysis. Replace it with the most-visited coordinate and
+            # repair the engine board before the next stage starts.
+            fallback = next(
+                ((move, rate, move_visits)
+                 for move, rate, move_visits in ranked
+                 if str(move).strip().lower() not in ("pass", "resign")),
+                None,
+            )
+            if fallback is None:
+                return AmazonsKataGoEngine._require_playable_move(
+                    played, "搜索"), win_pct, visits
+            fallback_move, fallback_rate, fallback_visits = fallback
+            fallback_move = AmazonsKataGoEngine._require_playable_move(
+                fallback_move, "搜索候选")
+            if normalized == "pass":
+                self._execute_sync_command("undo")
+            self._execute_sync_command(f"play {player_char} {fallback_move}")
+            logger.warning(
+                "AI 引擎返回 %s，已改走最高访问量候选 %s（%s visits）",
+                normalized, fallback_move, fallback_visits)
+            return fallback_move, fallback_rate, fallback_visits
+
+        return AmazonsKataGoEngine._require_playable_move(
+            played, "搜索"), win_pct, visits
 
     def _restore_temporary_moves(self, count: int):
         """Undo temporary analysis moves only while the subprocess is writable.
@@ -470,11 +499,9 @@ class AmazonsKataGoEngine(QObject):
         try:
             start_pos_str, winrate, visits = self._genmove_analyze(player_char)
             played_count += 1
-            move_response = self._execute_sync_command(f"genmove {opponent_char}")
-            move_pos_str = AmazonsKataGoEngine._require_playable_move(move_response, "移动")
+            move_pos_str, _move_rate, _move_visits = self._genmove_analyze(opponent_char)
             played_count += 1
-            arrow_response = self._execute_sync_command(f"genmove {player_char}")
-            arrow_pos_str = AmazonsKataGoEngine._require_playable_move(arrow_response, "射箭")
+            arrow_pos_str, _arrow_rate, _arrow_visits = self._genmove_analyze(player_char)
             played_count += 1
 
             self.last_winrate = winrate
@@ -493,10 +520,8 @@ class AmazonsKataGoEngine(QObject):
         """
         player_char = 'b' if player == BLACK_AMAZON else 'w'
         opponent_char = 'w' if player_char == 'b' else 'b'
-        move_pos_str = self._require_playable_move(
-            self._execute_sync_command(f"genmove {opponent_char}"), "移动")
-        arrow_pos_str = self._require_playable_move(
-            self._execute_sync_command(f"genmove {player_char}"), "射箭")
+        move_pos_str, _move_rate, _move_visits = self._genmove_analyze(opponent_char)
+        arrow_pos_str, _arrow_rate, _arrow_visits = self._genmove_analyze(player_char)
         return move_pos_str, arrow_pos_str
 
     def analyze_turn_stages(self, player: int):
@@ -555,23 +580,32 @@ class AmazonsKataGoEngine(QObject):
         played, _winrate, _visits, ranked = parse_genmove_analyze(response)
 
         # 撤销 kata-genmove_analyze 实际落下的一手，保持局面不变
-        if played is not None:
-            played = AmazonsKataGoEngine._require_playable_move(played, "提示选子")
+        if played is not None and str(played).strip().lower() != "resign":
+            # kata-genmove_analyze actually applied either the selected
+            # coordinate or pass. Undo both before returning filtered hints.
             AmazonsKataGoEngine._restore_temporary_moves(self, 1)
 
-        return [(move, winrate) for move, winrate, _ in ranked[:top_n]
-                if winrate is not None]
+        playable = [
+            (move, winrate)
+            for move, winrate, _ in ranked
+            if (winrate is not None
+                and str(move).strip().lower() not in ("pass", "resign"))
+        ]
+        return playable[:top_n]
 
     def ranked_start_candidates(self, player: int, top_n: int = 3) -> list[tuple[str, float | None, int | None]]:
         """Return ranked starting queens while restoring the engine board."""
         player_char = 'b' if player == BLACK_AMAZON else 'w'
         response = self._execute_sync_command(f"kata-genmove_analyze {player_char}")
         played, _winrate, _visits, ranked = parse_genmove_analyze(response)
-        if played is not None:
-            played = self._require_playable_move(played, "提示选子")
+        if played is not None and str(played).strip().lower() != "resign":
             AmazonsKataGoEngine._restore_temporary_moves(self, 1)
-        return [(move, rate, visits) for move, rate, visits in ranked[:top_n]
-                if move.lower() not in ('pass', 'resign')]
+        playable = [
+            (move, rate, visits)
+            for move, rate, visits in ranked
+            if str(move).strip().lower() not in ('pass', 'resign')
+        ]
+        return playable[:top_n]
 
     def analyze_turn_for_start(self, player: int, start: str,
                                start_win: float | None = None,
