@@ -1555,11 +1555,10 @@ class AmazonsMainWindow(QMainWindow):
             return
 
         if outcome.resigned:
-            self.simulator.game_over = True
-            self.simulator.winner = -self.simulator.current_player
-            winner_name = "黑方" if self.simulator.winner == BLACK_AMAZON else "白方"
-            player_name = "黑方" if self.simulator.current_player == BLACK_AMAZON else "白方"
-            self.handle_game_over(f"{player_name}已认输，{winner_name}获胜！")
+            # AI is not allowed to resign. Keep this compatibility branch for
+            # old/plugin workers, but treat it as an engine failure rather than
+            # changing the board or declaring a winner.
+            self._recover_from_ai_failure("AI 引擎返回了认输结果（已禁止）", request[1])
             return
 
         best_res = outcome.result

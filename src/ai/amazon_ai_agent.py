@@ -101,12 +101,6 @@ class AIWorker(QObject):
                         raise RuntimeError("kataAmazon 引擎不可用。")
                     start_pos, move_pos, arrow_pos = engine.get_best_turn(
                         self.current_player)
-                    non_moves = ('pass', 'resign')
-                    if any(str(p).strip().lower() in non_moves
-                           for p in (start_pos, move_pos, arrow_pos)):
-                        self.finished.emit(AIOutcome.resignation())
-                        return
-
                     start_pos = engine._convert_coord(start_pos)
                     move_pos = engine._convert_coord(move_pos)
                     arrow_pos = engine._convert_coord(arrow_pos)

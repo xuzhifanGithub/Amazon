@@ -210,6 +210,20 @@ def test_game_over_status_names_winner(qapp):
     window.close()
 
 
+def test_ai_resignation_compatibility_result_does_not_end_game(qapp):
+    window = AmazonsMainWindow(AmazonsSimulator())
+    window.black_modes = window.PLAYER_TYPE_AI_MCTS
+    window._active_ai_request = (window.game_generation, BLACK_AMAZON, "mcts")
+    window.board_widget.setEnabled(False)
+
+    window.execute_ai_move(AIOutcome.resignation(), BLACK_AMAZON)
+
+    assert not window.simulator.game_over
+    assert window.simulator.winner == 0
+    assert window.black_modes == window.PLAYER_TYPE_HUMAN
+    window.close()
+
+
 def test_zoom_shortcuts_step_between_adjacent_levels(qapp):
     window = AmazonsMainWindow(AmazonsSimulator())
     window.set_board_zoom(100)

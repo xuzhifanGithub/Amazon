@@ -1,7 +1,8 @@
 import pytest
 from types import SimpleNamespace
+from pathlib import Path
 
-from src.ai.amazons_engine import AmazonsKataGoEngine, parse_genmove_analyze
+from src.ai.amazons_engine import BACKENDS, AmazonsKataGoEngine, parse_genmove_analyze
 from src.core.simulator import BLACK_AMAZON
 
 
@@ -49,6 +50,25 @@ def test_parse_analyze_falls_back_to_most_visited_move():
     assert winrate == 50.1
     assert visits == 9
     assert ranked[-1] == ("C3", None, 4)
+
+
+@pytest.mark.parametrize("move", ["pass", "resign", "A0", "I1", "L1", "AA1"])
+def test_engine_rejects_non_amazons_move_tokens(move):
+    with pytest.raises(RuntimeError, match="禁止|非落子"):
+        AmazonsKataGoEngine._require_playable_move(move, "测试")
+
+
+def test_engine_accepts_only_10x10_coordinates():
+    assert AmazonsKataGoEngine._require_playable_move("j10") == "J10"
+
+
+@pytest.mark.parametrize("backend", ["gpu", "legacy"])
+def test_bundled_engine_configs_disable_resignation(backend):
+    spec = BACKENDS[backend]
+    for config_name in (spec["cfg"], spec["hint_cfg"]):
+        path = Path(spec["dir"]) / config_name
+        text = path.read_text(encoding="utf-8")
+        assert "allowResignation = false" in text
 
 
 class FakeTurnEngine:

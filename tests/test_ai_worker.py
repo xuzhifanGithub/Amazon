@@ -82,6 +82,29 @@ def test_kata_worker_holds_snapshot_engine_context_for_complete_turn():
     assert outcomes[0].result.win_pro == 63.0
 
 
+def test_kata_worker_reports_resign_as_error_instead_of_ai_resignation():
+    class FakeKata:
+        last_winrate = None
+        last_visits = None
+
+        def get_best_turn(self, _player):
+            return "resign", "B2", "C3"
+
+    @contextmanager
+    def provider(_backend, _visits, _history):
+        yield FakeKata()
+
+    worker = AIWorker(
+        10, None, None, 1, "kataAmazon", engine_provider=provider,
+        engine_backend="gpu", kata_visits=600)
+    outcomes = []
+    worker.finished.connect(outcomes.append)
+    worker.run()
+
+    assert outcomes[0].resigned is False
+    assert outcomes[0].error
+
+
 def test_hint_cancel_marks_queued_request_without_killing_idle_engine():
     worker = HintWorker(10)
     worker.engine = Mock()
