@@ -325,7 +325,7 @@ class AmazonAIAgent(QObject):
         self._engine_lock = threading.RLock()
         self.size = self.main_window.simulator.size
         self.ai = amazon_ai.AmazonasAI() if amazon_ai is not None else None
-        # kataAmazon 引擎：可选 'gpu'(CUDA,新权重) / 'legacy'(OpenCL,旧模型)。
+        # kataAmazon 引擎：可选 'gpu'(XZF 最新权重) / 'legacy'(OpenCL,旧模型)。
         # Gameplay engines are reused per (backend, visits) profile.
         self.ai_engine = None
         self._engine_manager = engine_manager or EngineManager()
