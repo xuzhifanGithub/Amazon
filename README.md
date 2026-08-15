@@ -16,9 +16,9 @@
 
 ## 分支说明
 
-- **`master`**：当前项目的开发分支，也是公开仓库的默认分支。
-- **`main`**：保留早期亚马逊棋比赛程序与下载资料，仅作为历史归档，不承载当前版本开发。
-  旧内容未被删除，可在 [历史 `main` 分支](https://github.com/xuzhifanGithub/Amazon/tree/main) 中继续查看。
+- **`main`**：当前项目的开发分支，也是公开仓库的默认分支。
+- **`master`**：保留早期亚马逊棋比赛程序与下载资料，仅作为历史归档，不承载当前版本开发。
+  旧内容未被删除，可在 [历史 `master` 分支](https://github.com/xuzhifanGithub/Amazon/tree/master) 中继续查看。
 
 ## 项目亮点
 
