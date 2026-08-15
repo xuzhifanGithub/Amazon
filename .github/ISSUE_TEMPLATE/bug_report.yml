@@ -1,0 +1,56 @@
+name: Bug 报告
+description: 报告可复现的界面、规则或 AI 引擎问题
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: 感谢反馈。请先确认已经使用最新提交，并删除敏感路径或个人信息。
+  - type: input
+    id: version
+    attributes:
+      label: 版本或提交
+      placeholder: 例如 7b15bd9
+    validations:
+      required: true
+  - type: dropdown
+    id: system
+    attributes:
+      label: 运行环境
+      options:
+        - Windows 11 x64
+        - Windows 10 x64
+        - Linux
+        - macOS
+        - 其他
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 请写出玩家类型、模型、visits/思考时间和操作顺序。
+      placeholder: |
+        1. 黑方选择……
+        2. 白方选择……
+        3. 点击……
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期结果
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际结果
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志或棋谱
+      description: 可附诊断日志、截图或 `.amazons.json` 棋谱；请先移除个人信息。
+      render: shell

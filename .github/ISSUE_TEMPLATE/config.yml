@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 安全问题
+    url: https://github.com/xuzhifanGithub/amazonGame/security/advisories/new
+    about: 请不要公开披露漏洞细节，使用私密漏洞报告。
