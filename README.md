@@ -39,7 +39,7 @@ run.bat         :: 启动游戏
 ### 自包含便携版
 
 发布时可生成 `dist/Amazons/` 便携目录。该目录内包含 Python 运行时、PyQt6、NumPy、
-MCTS 模块、KataGo 引擎、所需 DLL、XZF-gen028 模型和旧模型；目标电脑不需要另行安装
+MCTS 模块、KataGo 引擎、所需 DLL、`amazon_X` 模型和 `amazon_L` 模型；目标电脑不需要另行安装
 Python，也不需要在项目目录之外配置模型或引擎文件。
 
 ```bat
@@ -68,7 +68,7 @@ Linux / macOS 可运行纯 Python GUI 和人人对弈；MCTS 与 kataAmazon 需�
 
 - **`amazon_X`（新模型，默认）**：
   - `src/ai/kataAmazonEngineCuda/amazons.exe`（**OpenCL/GPU**）。搭配
-    **XZF 正式冠军 gen028** 模型 `amazon10x10_xzf.bin.gz`。需要支持 OpenCL 的显卡及正确安装的驱动；
+    模型文件 `amazon10x10_xzf.bin.gz`。需要支持 OpenCL 的显卡及正确安装的驱动；
     随目录附带 `OpenCL.dll` / `libz.dll` / `libzip.dll` / `zlib.dll` / `zip.dll` /
     MSVC 运行库与 `engine.cfg`。首次运行会做一次 OpenCL 自动调优，结果缓存在
     目录内的 `KataGoData/opencltuning/`。
@@ -78,22 +78,20 @@ Linux / macOS 可运行纯 Python GUI 和人人对弈；MCTS 与 kataAmazon 需�
 - **默认自动选择**：`amazons_engine.py` 检测到 `amazon_X` 的完整资源则优先使用，
   否则回退到 `amazon_L`；GUI 菜单可为黑白双方独立选择。
 - **模型**：`src/ai/kataAmazonEngineCuda/amazon10x10_xzf.bin.gz`
-  （当前装入服务器正式冠军 `gen028`；架构 `b20c256legacyv10`，20 残差块 / 256 通道；
+  （架构 `b20c256legacyv10`，20 残差块 / 256 通道；
   SHA-256 `bd2c04f20ce7c597269c62ac2d1ddf6c6acdafc5a5d8d913998f37efd681fac6`）。
-  `gen028` 门控结果为对 `gen027` 23 胜 17 负；训练、门控与默认搜索均使用 600 visits。
+  `amazon_X` 的默认对局搜索配置使用 600 visits。
 - **通信**：以 GTP 子进程运行，用有超时边界的 `kata-genmove_analyze` 获取着法和胜率。
   对局着法只在规则层验证通过后提交到所有引擎；提示使用独立后台线程和当前历史快照，
   不会阻塞界面或继续分析旧棋盘。
 - **可移植**：`src/ai/amazons_engine.py` 中所有运行资源都相对该文件计算，正常运行固定使用
   项目或便携目录内随附的引擎、模型与配置，不读取机器上的外部模型路径。
 
-> 注意：XZF-gen028 模型由服务器导出模型兼容转换而来，**只能被配套的 `amazons.exe` 加载**。
+> 注意：`amazon_X` 模型采用与配套引擎兼容的格式，**只能被配套的 `amazons.exe` 加载**。
 > CUDA 版 `katago.exe` 会报 `unknown activation type`，原始 `kataAmazon.exe` 同样无法加载。
 > 目录名 `kataAmazonEngineCuda` 是历史遗留，当前其中放的是 OpenCL 版引擎。
->
-> 棋力参考：gen028 是该迭代训练线当前通过门控的正式冠军，但尚未单独完成与原始强模型的
-> 基准对局；最近一次基准中 gen027 对原始强模型为 0:20。项目只保留界面中实际可选的
-> XZF-gen028 与原始强模型后端，不携带未接入运行流程的试验引擎和重复权重。
+> 项目只保留界面中实际可选的 `amazon_X` 与 `amazon_L` 后端，不携带未接入运行流程的
+> 试验引擎和重复权重。
 
 ## 功能
 
@@ -138,7 +136,7 @@ src/
     amazon_ai_agent.py          AI 线程调度 + 异步提示查询
     results.py                  跨线程的类型化 AI/提示结果
     native/                     发布用预编译 MCTS 模块（不含 CMake 临时文件）
-    kataAmazonEngineCuda/       XZF-gen028 + amazons.exe(OpenCL) + amazon10x10_xzf.bin.gz + dll + 配置（默认）
+    kataAmazonEngineCuda/       amazon_X + amazons.exe(OpenCL) + amazon10x10_xzf.bin.gz + dll + 配置（默认）
     kataAmazonEngine/           原始引擎 kataAmazon.exe(OpenCL) + weights/ + engine.cfg（后备）
   gui/
     amazon_board_widget.py      棋盘绘制（含提示圆环）
