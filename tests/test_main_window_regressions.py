@@ -23,6 +23,25 @@ def test_only_one_cpp_mcts_option_is_exposed(qapp):
     window.close()
 
 
+def test_kata_models_use_consistent_frontend_names(qapp):
+    window = AmazonsMainWindow(AmazonsSimulator())
+    action_texts = [action.text() for action in window.findChildren(QAction)]
+
+    assert action_texts.count("amazon_X★★") == 2
+    assert action_texts.count("amazon_L★★") == 2
+    assert "amazon_X" in action_texts
+    assert "amazon_L" in action_texts
+    assert not any("XZF 最新模型" in text for text in action_texts)
+    assert not any("kataAmazon(原始)" in text for text in action_texts)
+
+    result = BestResult(60, 50, 40, 73.5, 600, 0.735)
+    window.update_ai_info_panel(result, BLACK_AMAZON, "kataAmazon_gpu")
+    assert window.info_ai_model.text().startswith("模型：amazon_X ·")
+    window.update_ai_info_panel(result, BLACK_AMAZON, "kataAmazon_legacy")
+    assert window.info_ai_model.text().startswith("模型：amazon_L ·")
+    window.close()
+
+
 def test_committed_turn_is_broadcast_only_after_validation(qapp):
     window = AmazonsMainWindow(AmazonsSimulator())
     window.black_ai_agent.sync_committed_turn = Mock()

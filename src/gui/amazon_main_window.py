@@ -38,6 +38,11 @@ from src.logging_setup import log_file_path
 
 logger = logging.getLogger(__name__)
 
+KATA_MODEL_DISPLAY_NAMES = {
+    'gpu': 'amazon_X',
+    'legacy': 'amazon_L',
+}
+
 
 class AmazonsMainWindow(QMainWindow):
     """
@@ -475,9 +480,9 @@ class AmazonsMainWindow(QMainWindow):
         # 模型名称
         model_names = {
             'mcts': 'MCTS C++',
-            'kataAmazon': 'kataAmazon',
-            'kataAmazon_gpu': 'XZF 最新模型 GPU',
-            'kataAmazon_legacy': '旧模型 GPU',
+            'kataAmazon': KATA_MODEL_DISPLAY_NAMES['gpu'],
+            'kataAmazon_gpu': KATA_MODEL_DISPLAY_NAMES['gpu'],
+            'kataAmazon_legacy': KATA_MODEL_DISPLAY_NAMES['legacy'],
         }
         model_label = model_names.get(ai_type_key, ai_type_key or "AI")
         profile = self.black_ai_profile if player == BLACK_AMAZON else self.white_ai_profile
@@ -686,7 +691,8 @@ class AmazonsMainWindow(QMainWindow):
         black_ai_menu.addAction(self.black_ai_mcts_action)
 
         #  kataAmazon（XZF 最新模型，OpenCL/GPU）
-        self.black_ai_kata_gpu_action = QAction("XZF 最新模型（GPU）★★", self, checkable=True)
+        self.black_ai_kata_gpu_action = QAction(
+            f"{KATA_MODEL_DISPLAY_NAMES['gpu']}★★", self, checkable=True)
         self.black_ai_kata_gpu_action.setEnabled(backend_available('gpu'))
         self.black_ai_kata_gpu_action.triggered.connect(
             lambda: self.set_player_mode(BLACK_AMAZON, self.PLAYER_TYPE_AI_KATAAMAZON_GPU))
@@ -694,7 +700,8 @@ class AmazonsMainWindow(QMainWindow):
         black_ai_menu.addAction(self.black_ai_kata_gpu_action)
 
         # 原始 kataAmazon（OpenCL/GPU + 旧模型 amazons10x10），项目最初就带的选项
-        self.black_ai_kata_legacy_action = QAction("kataAmazon(原始)★★", self, checkable=True)
+        self.black_ai_kata_legacy_action = QAction(
+            f"{KATA_MODEL_DISPLAY_NAMES['legacy']}★★", self, checkable=True)
         self.black_ai_kata_legacy_action.setEnabled(backend_available('legacy'))
         self.black_ai_kata_legacy_action.triggered.connect(
             lambda: self.set_player_mode(BLACK_AMAZON, self.PLAYER_TYPE_AI_KATAAMAZON_LEGACY))
@@ -725,7 +732,8 @@ class AmazonsMainWindow(QMainWindow):
         white_ai_menu.addAction(self.white_ai_mcts_action)
 
         #  kataAmazon（XZF 最新模型，OpenCL/GPU）
-        self.white_ai_kata_gpu_action = QAction("XZF 最新模型（GPU）★★", self, checkable=True)
+        self.white_ai_kata_gpu_action = QAction(
+            f"{KATA_MODEL_DISPLAY_NAMES['gpu']}★★", self, checkable=True)
         self.white_ai_kata_gpu_action.setEnabled(backend_available('gpu'))
         self.white_ai_kata_gpu_action.triggered.connect(
             lambda: self.set_player_mode(WHITE_AMAZON, self.PLAYER_TYPE_AI_KATAAMAZON_GPU))
@@ -733,7 +741,8 @@ class AmazonsMainWindow(QMainWindow):
         white_ai_menu.addAction(self.white_ai_kata_gpu_action)
 
         # 原始 kataAmazon（OpenCL/GPU + 旧模型 amazons10x10），项目最初就带的选项
-        self.white_ai_kata_legacy_action = QAction("kataAmazon(原始)★★", self, checkable=True)
+        self.white_ai_kata_legacy_action = QAction(
+            f"{KATA_MODEL_DISPLAY_NAMES['legacy']}★★", self, checkable=True)
         self.white_ai_kata_legacy_action.setEnabled(backend_available('legacy'))
         self.white_ai_kata_legacy_action.triggered.connect(
             lambda: self.set_player_mode(WHITE_AMAZON, self.PLAYER_TYPE_AI_KATAAMAZON_LEGACY))
@@ -900,8 +909,7 @@ class AmazonsMainWindow(QMainWindow):
         hint_source_menu = QMenu("提示模型", self)
         hint_source_group = QActionGroup(self)
         hint_source_group.setExclusive(True)
-        for key, label in (('gpu', 'XZF 最新模型（GPU）'),
-                           ('legacy', 'kataAmazon-原始（旧模型）')):
+        for key, label in KATA_MODEL_DISPLAY_NAMES.items():
             action = QAction(label, self, checkable=True)
             action.setEnabled(backend_available(key))
             action.setChecked(key == self.hint_source)
@@ -1006,8 +1014,10 @@ class AmazonsMainWindow(QMainWindow):
         <p>• 平衡探索与利用</p>
         <p>• 适合高分支因子的游戏</p>
 
-        <h3>KataAmazon (基于katago的AI)★★</h3>
-        <p>• 使用katago框架的专业AI</p>
+        <h3>amazon_X / amazon_L（基于 KataGo 的 AI）★★</h3>
+        <p>• amazon_X：新模型</p>
+        <p>• amazon_L：原始模型</p>
+        <p>• 使用 KataGo 框架的专业 AI</p>
         <p>• 性能更强但计算更复杂</p>
 
         <h3>AI难度等级</h3>
