@@ -1,6 +1,6 @@
 # 亚马逊棋Amazon-留白/闯关
   该项目是基于UCT(MCTS改进)的亚马逊棋博弈程序,获得2023年全国计算机博弈大赛亚马逊项目冠军。
-## 具体代码见master分支，地址为https://github.com/xuzhifanGithub/Amazon/tree/master
+> **分支说明：** 本分支保存旧版资料；当前新版项目请查看 [main 分支](https://github.com/xuzhifanGithub/Amazon/tree/main)。
 
 ## 目录
 ### 一.UCT算法改进（默认了解UCT）
