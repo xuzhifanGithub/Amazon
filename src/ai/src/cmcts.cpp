@@ -12,14 +12,124 @@
 #include <math.h>
 #include <climits>
 #include <array>
+#include <functional>
 #include <omp.h>
 #include <cstdlib>
 #include <windows.h>
 #include <ctime>    // 用于 clock_t 和 clock()
 #include <random>
+#ifndef VALUE_MODEL_COMBAT
+#define VALUE_MODEL_COMBAT 0
+#endif
+#ifndef VALUE_MODEL_COMBAT_DETAIL
+#define VALUE_MODEL_COMBAT_DETAIL 0
+#endif
+#ifndef VALUE_MODEL_RAW_NN_CORE
+#define VALUE_MODEL_RAW_NN_CORE 0
+#endif
+#ifndef VALUE_MODEL_RAW_NN_COMBAT
+#define VALUE_MODEL_RAW_NN_COMBAT 0
+#endif
+#ifndef VALUE_MODEL_RAW_NN_MLP
+#define VALUE_MODEL_RAW_NN_MLP 0
+#endif
+#if VALUE_MODEL_RAW_NN_MLP
+#include "value_model_raw_nn_mlp64_combat.h"
+#elif VALUE_MODEL_RAW_NN_COMBAT
+#include "value_model_raw_nn_combat.h"
+#elif VALUE_MODEL_RAW_NN_CORE
+#include "value_model_raw_nn_core.h"
+#elif VALUE_MODEL_COMBAT_DETAIL == 3
+#include "value_model_gen217_combat_order_d5.h"
+#elif VALUE_MODEL_COMBAT_DETAIL == 2
+#include "value_model_gen217_combat_all.h"
+#elif VALUE_MODEL_COMBAT_DETAIL == 1
+#include "value_model_gen217_combat_order.h"
+#elif VALUE_MODEL_COMBAT
+#include "value_model_gen217_combat.h"
+#else
+#include "value_model_gen217.h"
+#endif
+#include "value_model_gen217_legacy.h"
+
+#ifndef GEN217_POLICY_SHORTLIST
+#define GEN217_POLICY_SHORTLIST 0
+#endif
+#if GEN217_POLICY_SHORTLIST
+#include "policy_model_gen217.h"
+#endif
+
+#ifndef GEN217_POLICY_TO_WIDTH
+#define GEN217_POLICY_TO_WIDTH 8
+#endif
+#ifndef GEN217_POLICY_ARROW_WIDTH
+#define GEN217_POLICY_ARROW_WIDTH 8
+#endif
+#ifndef GEN217_POLICY_ORDER_WEIGHT
+#define GEN217_POLICY_ORDER_WEIGHT 0.20
+#endif
+#ifndef GEN217_POLICY_FULL_ROOT
+#define GEN217_POLICY_FULL_ROOT 0
+#endif
+#ifndef GEN217_POLICY_PUCT
+#define GEN217_POLICY_PUCT 0
+#endif
+#ifndef GEN217_POLICY_PUCT_WEIGHT
+#define GEN217_POLICY_PUCT_WEIGHT 1.0
+#endif
+
+#ifndef GEN217_BLEND_PRODUCTION_RICH
+#define GEN217_BLEND_PRODUCTION_RICH 0
+#endif
+#ifndef GEN217_NEW_RICH_WEIGHT
+#define GEN217_NEW_RICH_WEIGHT 1.0
+#endif
+#if GEN217_BLEND_PRODUCTION_RICH
+#include "value_model_gen217_production.h"
+#endif
+
+#ifndef GEN217_LEGACY_BLEND
+#define GEN217_LEGACY_BLEND 0.50
+#endif
+
+#ifndef GEN217_CALIBRATED_BLEND
+#define GEN217_CALIBRATED_BLEND 0
+#endif
+#if GEN217_CALIBRATED_BLEND == 2
+#include "value_blend_gen217_smooth.h"
+#elif GEN217_CALIBRATED_BLEND
+#include "value_blend_gen217.h"
+#endif
+
+#ifndef MCTS_SIMULATION_STEPS
+#define MCTS_SIMULATION_STEPS 6
+#endif
+#ifndef UCT_LEAF_SIMULATION_THRESHOLD
+#define UCT_LEAF_SIMULATION_THRESHOLD 40
+#endif
+
+// Structural feature groups are opt-in for experiments. Production builds keep
+// them disabled unless their fitted model actually consumes the group, so an
+// ablation pays only for the features being measured.
+#ifndef VALUE_FEATURE_COMBAT
+#define VALUE_FEATURE_COMBAT 0
+#endif
+#ifndef VALUE_FEATURE_AREAS
+#define VALUE_FEATURE_AREAS 0
+#endif
+#ifndef VALUE_FEATURE_GATES
+#define VALUE_FEATURE_GATES 0
+#endif
+#ifndef VALUE_FEATURE_ASSIGNMENT
+#define VALUE_FEATURE_ASSIGNMENT 0
+#endif
+#ifndef VALUE_FEATURE_ENDGAME
+#define VALUE_FEATURE_ENDGAME 0
+#endif
 
 static const int BOARD_SIZE = 10;
 static const int BOARD_GRID_SIZE = 100;
+static const int EVALUATION_FEATURE_COUNT = 35;
 static const int EMPTY = 0;           // 空位
 static const int RED_QUEEN = 1;       // 红方皇后
 static const int BLUE_QUEEN = 2;      // 蓝方皇后
@@ -65,6 +175,8 @@ struct MoveAction {
 struct MoveValue {
     MoveAction action;
     double value;
+    double prior;
+    double orderValue;
 };
 
 struct MoveMessage
@@ -72,13 +184,13 @@ struct MoveMessage
     int side;
     double value;
     double r;
+    double prior;
 };
 
 struct MovePro
 {
-    int win;
+    double valueSum;
     int attempt;
-    //double pro;
 };
 
 struct UCTNode
@@ -110,7 +222,7 @@ struct UctRes {
 
 struct COMP {
     bool operator()(MoveValue const& a, MoveValue const& b) {
-        return a.value > b.value;
+        return a.orderValue > b.orderValue;
     }
 };
 
@@ -127,7 +239,10 @@ std::vector<int> getExpandTerritory(const boardArray& board, int actionFrom);
 std::vector<MoveAction> getSideQueenOneMoveAction(const boardArray& board, const queenArray& queenPos, int moveSide);
 std::vector<MoveValue> getSideQueenMoveAction(boardArray& board, const  queenArray& queenPos, int moveSide);
 void checkDisplayMoveValue(const std::vector<MoveValue>& vecMoveValue);
-std::vector<MoveValue> getSideQueenMoveValue(boardArray& board,const queenArray& queenPos, int moveSide);
+std::vector<MoveValue> getSideQueenMoveValue(boardArray& board,const queenArray& queenPos, int moveSide, int searchDepth);
+#if GEN217_POLICY_SHORTLIST
+std::vector<MoveValue> getSideQueenPolicyMoveAction(const boardArray& board, const queenArray& queenPos, int moveSide);
+#endif
 
 //估值相关
 double valueT1(const boardArray& board, const queenArray& queenPos, int moveSide, double* wValue);
@@ -137,6 +252,10 @@ double valueMobility(const boardArray& board,const queenArray& queenPos, int mov
 int getNeighborsEmptyNumber(const boardArray& board, int actionFrom);
 int getNeighborsEmptyNumber(const boardArray& board, int fromX, int fromY);
 double calculateOneQueenMobilityValue(const boardArray& board, int kingPosX, int kingPosY);
+std::array<double, EVALUATION_FEATURE_COUNT> calculateEvaluationFeatures(
+    const boardArray& board, const queenArray& queenPos, int moveSide);
+double evaluateFeatureArray(
+    const std::array<double, EVALUATION_FEATURE_COUNT>& features);
 double valueAll(const boardArray& board, const queenArray& queenPos, int moveSide);
 
 //uct相关
@@ -144,8 +263,8 @@ UCTNode* uctInitNode(const boardArray& board, const queenArray& queenPos, UCTNod
 void deleteRoot(UCTNode* node);
 UCTNode* uctSelect(UCTNode* node);
 double uctGetR(UCTNode* node);
-int uctSimulate(const boardArray& board, const queenArray&, int moveSide);
-void uctBackPropagation(UCTNode* node, int isWin);
+double uctSimulate(const boardArray& board, const queenArray&, int moveSide);
+void uctBackPropagation(UCTNode* node, double value);
 UCTNode* uctExpand(UCTNode* node);
 UctRes  uctAll(const boardArray& board, const queenArray&, int moveSide, double calTime = 1.0, bool isDisplayInfo = false);
 void InitializeRandomSeed();
@@ -369,7 +488,7 @@ std::vector<MoveValue> getSideQueenMoveAction(boardArray& board,const queenArray
 
                     while (isLegalArr[stoneX + 1][stoneY + 1] && board[stoneX][stoneY] == EMPTY) {
                         //board[stoneX][stoneY] = STONE;//
-                        vecGetMovePos.push_back({ {queenPos[offset][k],x * BOARD_SIZE + y,stoneX * BOARD_SIZE + stoneY},0.0 });
+                        vecGetMovePos.push_back({ {queenPos[offset][k],x * BOARD_SIZE + y,stoneX * BOARD_SIZE + stoneY},0.0,0.0,0.0 });
                         //vecGetMovePos.push_back({ {tempQueenPos,x * BOARD_SIZE + y,stoneX * BOARD_SIZE + stoneY},valueT1(board,queenPos,moveSide) });
                         //
                         board[stoneX][stoneY] = EMPTY;//
@@ -389,13 +508,189 @@ std::vector<MoveValue> getSideQueenMoveAction(boardArray& board,const queenArray
     return vecGetMovePos;
 }
 
-std::vector<MoveValue> getSideQueenMoveValue(boardArray& board,const queenArray& queenPos, int moveSide)
+#if GEN217_POLICY_SHORTLIST
+struct RankedPolicyPosition {
+    int position;
+    double logProbability;
+};
+
+static void evaluateGen217Policy(
+    const boardArray& board,
+    int moveSide,
+    int stage,
+    int marker,
+    float* logits)
 {
+    float inputs[gen217_policy::INPUT_SIZE] = {0.0f};
+    int currentQueen = moveSide == RED_SIDE ? RED_QUEEN : BLUE_QUEEN;
+    int opponentQueen = moveSide == RED_SIDE ? BLUE_QUEEN : RED_QUEEN;
+    for (int position = 0; position < BOARD_GRID_SIZE; position++) {
+        int piece = board[position / BOARD_SIZE][position % BOARD_SIZE];
+        if (piece == currentQueen)
+            inputs[position] = 1.0f;
+        else if (piece == opponentQueen)
+            inputs[BOARD_GRID_SIZE + position] = 1.0f;
+        else if (piece == STONE)
+            inputs[2 * BOARD_GRID_SIZE + position] = 1.0f;
+    }
+    if (stage == 1 && marker >= 0)
+        inputs[3 * BOARD_GRID_SIZE + marker] = 1.0f;
+    else if (stage == 2 && marker >= 0)
+        inputs[4 * BOARD_GRID_SIZE + marker] = 1.0f;
+    inputs[5 * BOARD_GRID_SIZE + stage] = 1.0f;
+
+    float hidden1[gen217_policy::HIDDEN_SIZE];
+    float hidden2[gen217_policy::HIDDEN_SIZE];
+    for (int output = 0; output < gen217_policy::HIDDEN_SIZE; output++) {
+        float value = gen217_policy::HIDDEN1_BIAS[output];
+        const float* weights = gen217_policy::HIDDEN1_WEIGHTS
+            + output * gen217_policy::INPUT_SIZE;
+        for (int input = 0; input < gen217_policy::INPUT_SIZE; input++)
+            value += weights[input] * inputs[input];
+        hidden1[output] = std::max(value, 0.0f);
+    }
+    for (int output = 0; output < gen217_policy::HIDDEN_SIZE; output++) {
+        float value = gen217_policy::HIDDEN2_BIAS[output];
+        const float* weights = gen217_policy::HIDDEN2_WEIGHTS
+            + output * gen217_policy::HIDDEN_SIZE;
+        for (int input = 0; input < gen217_policy::HIDDEN_SIZE; input++)
+            value += weights[input] * hidden1[input];
+        hidden2[output] = std::max(value, 0.0f);
+    }
+    int headOffset = stage * gen217_policy::POLICY_SIZE;
+    for (int output = 0; output < gen217_policy::POLICY_SIZE; output++) {
+        float value = gen217_policy::OUTPUT_BIAS[headOffset + output];
+        const float* weights = gen217_policy::OUTPUT_WEIGHTS
+            + (headOffset + output) * gen217_policy::HIDDEN_SIZE;
+        for (int input = 0; input < gen217_policy::HIDDEN_SIZE; input++)
+            value += weights[input] * hidden2[input];
+        logits[output] = value;
+    }
+}
+
+static std::vector<RankedPolicyPosition> rankPolicyPositions(
+    const std::vector<int>& legalPositions,
+    const float* logits,
+    int width)
+{
+    std::vector<RankedPolicyPosition> ranked;
+    if (legalPositions.empty())
+        return ranked;
+    float maxLogit = logits[legalPositions[0]];
+    for (int position : legalPositions)
+        maxLogit = std::max(maxLogit, logits[position]);
+    double probabilitySum = 0.0;
+    for (int position : legalPositions)
+        probabilitySum += exp((double)logits[position] - maxLogit);
+    double logNormalizer = (double)maxLogit + log(probabilitySum);
+    ranked.reserve(legalPositions.size());
+    for (int position : legalPositions)
+        ranked.push_back({position, (double)logits[position] - logNormalizer});
+    std::sort(
+        ranked.begin(), ranked.end(),
+        [](const RankedPolicyPosition& left, const RankedPolicyPosition& right) {
+            return left.logProbability > right.logProbability;
+        }
+    );
+    if ((int)ranked.size() > width)
+        ranked.resize(width);
+    return ranked;
+}
+
+std::vector<MoveValue> getSideQueenPolicyMoveAction(
+    const boardArray& board,
+    const queenArray& queenPos,
+    int moveSide)
+{
+    std::vector<MoveValue> moves;
+    int offset = moveSide == RED_SIDE ? 0 : 1;
+    std::vector<int> legalQueens;
+    for (int queenIndex = 0; queenIndex < 4; queenIndex++) {
+        int from = queenPos[offset][queenIndex];
+        if (!getExpandTerritory(board, from).empty())
+            legalQueens.push_back(from);
+    }
+    float stage0Logits[BOARD_GRID_SIZE];
+    evaluateGen217Policy(board, moveSide, 0, -1, stage0Logits);
+    std::vector<RankedPolicyPosition> rankedQueens = rankPolicyPositions(
+        legalQueens, stage0Logits, (int)legalQueens.size());
+
+    for (const RankedPolicyPosition& queen : rankedQueens) {
+        float stage1Logits[BOARD_GRID_SIZE];
+        evaluateGen217Policy(board, moveSide, 1, queen.position, stage1Logits);
+        std::vector<int> legalDestinations = getExpandTerritory(board, queen.position);
+        std::vector<RankedPolicyPosition> rankedDestinations = rankPolicyPositions(
+            legalDestinations, stage1Logits, GEN217_POLICY_TO_WIDTH);
+
+        for (const RankedPolicyPosition& destination : rankedDestinations) {
+            boardArray movedBoard;
+            memcpy(movedBoard, board, sizeof(int) * BOARD_GRID_SIZE);
+            movedBoard[destination.position / BOARD_SIZE][destination.position % BOARD_SIZE]
+                = movedBoard[queen.position / BOARD_SIZE][queen.position % BOARD_SIZE];
+            movedBoard[queen.position / BOARD_SIZE][queen.position % BOARD_SIZE] = EMPTY;
+
+            float stage2Logits[BOARD_GRID_SIZE];
+            evaluateGen217Policy(
+                movedBoard, moveSide, 2, destination.position, stage2Logits);
+            std::vector<int> legalArrows = getExpandTerritory(
+                movedBoard, destination.position);
+            std::vector<RankedPolicyPosition> rankedArrows = rankPolicyPositions(
+                legalArrows, stage2Logits, GEN217_POLICY_ARROW_WIDTH);
+            for (const RankedPolicyPosition& arrow : rankedArrows) {
+                double logPrior = queen.logProbability
+                    + destination.logProbability + arrow.logProbability;
+                moves.push_back({
+                    {queen.position, destination.position, arrow.position},
+                    0.0,
+                    logPrior,
+                    0.0,
+                });
+            }
+        }
+    }
+
+    if (moves.empty())
+        return moves;
+    double maxLogPrior = moves[0].prior;
+    for (const MoveValue& move : moves)
+        maxLogPrior = std::max(maxLogPrior, move.prior);
+    double priorSum = 0.0;
+    for (MoveValue& move : moves) {
+        move.prior = exp(move.prior - maxLogPrior);
+        priorSum += move.prior;
+    }
+    for (MoveValue& move : moves)
+        move.prior /= priorSum;
+    return moves;
+}
+#endif
+
+std::vector<MoveValue> getSideQueenMoveValue(
+    boardArray& board,
+    const queenArray& queenPos,
+    int moveSide,
+    int searchDepth)
+{
+#if GEN217_POLICY_SHORTLIST
+    std::vector<MoveValue> vecSideMoveValue =
+        (GEN217_POLICY_FULL_ROOT && searchDepth == 0)
+        ? getSideQueenMoveAction(board, queenPos, moveSide)
+        : getSideQueenPolicyMoveAction(board, queenPos, moveSide);
+    bool hasPolicyPrior = !(GEN217_POLICY_FULL_ROOT && searchDepth == 0);
+#else
     std::vector<MoveValue> vecSideMoveValue = getSideQueenMoveAction(board, queenPos, moveSide);
+#endif
     //int tempBoard[10][10];
     //memccpy(tempBoard,board,100*4);
 
     const int num_moves = vecSideMoveValue.size();
+#if GEN217_POLICY_SHORTLIST
+    double maxPolicyPrior = 0.0;
+    if (hasPolicyPrior) {
+        for (const MoveValue& move : vecSideMoveValue)
+            maxPolicyPrior = std::max(maxPolicyPrior, move.prior);
+    }
+#endif
 
     // 预计算所有坐标
     struct MoveCoord {
@@ -442,7 +737,27 @@ std::vector<MoveValue> getSideQueenMoveValue(boardArray& board,const queenArray&
         //updateQueenPos(tempQueenPos,moveSide,vecSideMoveValue[i].action.From,vecSideMoveValue[i].action.To);
         updateQueenPos(tempQueenPos, moveSide, vecSideMoveValue[i].action.From, vecSideMoveValue[i].action.To);
 
-        vecSideMoveValue[i].value = valueAll(tempBoard, tempQueenPos, moveSide);//valueAll(tempBoard, tempQueenPos, moveSide);
+        // The fitted model is trained from the actual player-to-move perspective.
+        // A child is the opponent's turn, so negate that value for move ordering.
+        vecSideMoveValue[i].value = -valueAll(tempBoard, tempQueenPos, -moveSide);
+#if GEN217_POLICY_SHORTLIST
+        // The prior is already normalized over shortlisted complete moves. A
+        // bounded log-prior penalty breaks close value ties without turning a
+        // policy score into a fictitious rollout result.
+        if (hasPolicyPrior) {
+            double relativeLogPrior = log(
+                std::max(vecSideMoveValue[i].prior, 1.0e-12)
+                / std::max(maxPolicyPrior, 1.0e-12));
+            vecSideMoveValue[i].orderValue = vecSideMoveValue[i].value
+                + GEN217_POLICY_ORDER_WEIGHT * std::max(relativeLogPrior / 8.0, -1.0);
+        }
+        else {
+            vecSideMoveValue[i].prior = 0.0;
+            vecSideMoveValue[i].orderValue = vecSideMoveValue[i].value;
+        }
+#else
+        vecSideMoveValue[i].orderValue = vecSideMoveValue[i].value;
+#endif
 
 
         //updateQueenPos(tempQueenPos,moveSide, vecSideMoveValue[i].action.To, vecSideMoveValue[i].action.From);
@@ -534,7 +849,11 @@ double valueT1(const boardArray& board, const queenArray& queenPos, int moveSide
             value -= 1;
         }
 
-        if (tempRedDisBoard[i] == INT_MAX || tempBlueDisBoard[i] == INT_MAX)
+        // w is a phase/contested-reachability feature. Occupied cells retain
+        // distance zero in both arrays and used to add a spurious 1.0 each.
+        // Fit and evaluate only on empty cells.
+        if (board[i / BOARD_SIZE][i % BOARD_SIZE] != EMPTY ||
+            tempRedDisBoard[i] == INT_MAX || tempBlueDisBoard[i] == INT_MAX)
         {
             w += 0;
         }
@@ -828,35 +1147,644 @@ int getNeighborsEmptyNumber(const boardArray& board, int fromX, int fromY)
     return count;
 }
 
+struct AreaStructureFeatures {
+    double activeQueens = 0.0;
+    double exclusiveQueenRedundancy = 0.0;
+    double activeAreaCount = 0.0;
+    double blockerQueens = 0.0;
+    double blockerSwing = 0.0;
+    double gatewayControl = 0.0;
+    double territoryDeadEndRisk = 0.0;
+    double territoryCutRisk = 0.0;
+};
+
+AreaStructureFeatures calculateAreaStructureFeatures(
+    const boardArray& board, const int (&queenDistance)[2][BOARD_GRID_SIZE])
+{
+    AreaStructureFeatures result;
+#if VALUE_FEATURE_AREAS || VALUE_FEATURE_GATES || VALUE_FEATURE_ENDGAME
+    bool traversable[BOARD_GRID_SIZE] = {};
+    bool empty[BOARD_GRID_SIZE] = {};
+    int component[BOARD_GRID_SIZE];
+    std::fill(component, component + BOARD_GRID_SIZE, -1);
+    std::vector<std::vector<int>> componentNodes;
+    std::vector<int> componentEmpty;
+    std::vector<int> componentRed;
+    std::vector<int> componentBlue;
+
+    for (int position = 0; position < BOARD_GRID_SIZE; ++position) {
+        int row = position / BOARD_SIZE;
+        int column = position % BOARD_SIZE;
+        traversable[position] = board[row][column] != STONE;
+        empty[position] = board[row][column] == EMPTY;
+    }
+
+    for (int start = 0; start < BOARD_GRID_SIZE; ++start) {
+        if (!traversable[start] || component[start] >= 0) continue;
+        int componentId = static_cast<int>(componentNodes.size());
+        componentNodes.push_back({});
+        componentEmpty.push_back(0);
+        componentRed.push_back(0);
+        componentBlue.push_back(0);
+        std::queue<int> pending;
+        pending.push(start);
+        component[start] = componentId;
+        while (!pending.empty()) {
+            int position = pending.front();
+            pending.pop();
+            componentNodes[componentId].push_back(position);
+            int row = position / BOARD_SIZE;
+            int column = position % BOARD_SIZE;
+            if (board[row][column] == EMPTY) ++componentEmpty[componentId];
+            else if (board[row][column] == RED_QUEEN) ++componentRed[componentId];
+            else if (board[row][column] == BLUE_QUEEN) ++componentBlue[componentId];
+            for (int direction = 0; direction < 8; ++direction) {
+                int nextRow = row + dx[direction];
+                int nextColumn = column + dy[direction];
+                if (!isLegalArr[nextRow + 1][nextColumn + 1]) continue;
+                int next = nextRow * BOARD_SIZE + nextColumn;
+                if (traversable[next] && component[next] < 0) {
+                    component[next] = componentId;
+                    pending.push(next);
+                }
+            }
+        }
+    }
+
+    double cutSwing[BOARD_GRID_SIZE] = {};
+#if VALUE_FEATURE_GATES || VALUE_FEATURE_ENDGAME
+    int discovery[BOARD_GRID_SIZE];
+    int low[BOARD_GRID_SIZE] = {};
+    int parent[BOARD_GRID_SIZE];
+    int subtreeEmpty[BOARD_GRID_SIZE] = {};
+    std::fill(discovery, discovery + BOARD_GRID_SIZE, -1);
+    std::fill(parent, parent + BOARD_GRID_SIZE, -1);
+    int discoveryTime = 0;
+
+    for (int componentId = 0;
+         componentId < static_cast<int>(componentNodes.size());
+         ++componentId) {
+        if (componentNodes[componentId].empty()) continue;
+        int totalEmpty = componentEmpty[componentId];
+        std::function<void(int)> visit = [&](int position) {
+            discovery[position] = discoveryTime;
+            low[position] = discoveryTime;
+            ++discoveryTime;
+            subtreeEmpty[position] = empty[position] ? 1 : 0;
+            std::vector<int> separatedParts;
+            int row = position / BOARD_SIZE;
+            int column = position % BOARD_SIZE;
+            for (int direction = 0; direction < 8; ++direction) {
+                int nextRow = row + dx[direction];
+                int nextColumn = column + dy[direction];
+                if (!isLegalArr[nextRow + 1][nextColumn + 1]) continue;
+                int next = nextRow * BOARD_SIZE + nextColumn;
+                if (!traversable[next]) continue;
+                if (discovery[next] < 0) {
+                    parent[next] = position;
+                    visit(next);
+                    subtreeEmpty[position] += subtreeEmpty[next];
+                    low[position] = std::min(low[position], low[next]);
+                    if (low[next] >= discovery[position]) {
+                        separatedParts.push_back(subtreeEmpty[next]);
+                    }
+                }
+                else if (next != parent[position]) {
+                    low[position] = std::min(low[position], discovery[next]);
+                }
+            }
+
+            int separatedSum = 0;
+            int largestPart = 0;
+            int positiveParts = 0;
+            for (int part : separatedParts) {
+                separatedSum += part;
+                if (part > 0) {
+                    largestPart = std::max(largestPart, part);
+                    ++positiveParts;
+                }
+            }
+            int remainder = totalEmpty - (empty[position] ? 1 : 0) - separatedSum;
+            if (remainder > 0) {
+                largestPart = std::max(largestPart, remainder);
+                ++positiveParts;
+            }
+            int totalAfterRemoval = totalEmpty - (empty[position] ? 1 : 0);
+            if (positiveParts >= 2) {
+                cutSwing[position] = totalAfterRemoval - largestPart;
+            }
+        };
+        visit(componentNodes[componentId].front());
+    }
+#endif
+
+    double redDeadEndRisk = 0.0;
+    double blueDeadEndRisk = 0.0;
+    double redCutRisk = 0.0;
+    double blueCutRisk = 0.0;
+    for (int componentId = 0;
+         componentId < static_cast<int>(componentNodes.size());
+         ++componentId) {
+        int redCount = componentRed[componentId];
+        int blueCount = componentBlue[componentId];
+        int emptyCount = componentEmpty[componentId];
+        if (emptyCount == 0) continue;
+        if (redCount > 0 && blueCount > 0) {
+#if VALUE_FEATURE_AREAS
+            result.activeAreaCount += 1.0;
+            result.activeQueens += redCount - blueCount;
+#endif
+            continue;
+        }
+        if (redCount == 0 && blueCount == 0) continue;
+#if VALUE_FEATURE_AREAS
+        if (redCount > 0) result.exclusiveQueenRedundancy -= std::max(0, redCount - 1);
+        else result.exclusiveQueenRedundancy += std::max(0, blueCount - 1);
+#endif
+#if VALUE_FEATURE_ENDGAME
+        int ownerCount = redCount > 0 ? redCount : blueCount;
+        int deadEnds = 0;
+        double areaCutRisk = 0.0;
+        for (int position : componentNodes[componentId]) {
+            if (!empty[position]) continue;
+            int row = position / BOARD_SIZE;
+            int column = position % BOARD_SIZE;
+            int degree = 0;
+            for (int direction = 0; direction < 8; ++direction) {
+                int nextRow = row + dx[direction];
+                int nextColumn = column + dy[direction];
+                if (!isLegalArr[nextRow + 1][nextColumn + 1]) continue;
+                int next = nextRow * BOARD_SIZE + nextColumn;
+                if (traversable[next]) ++degree;
+            }
+            if (degree <= 1) ++deadEnds;
+            areaCutRisk += cutSwing[position];
+        }
+        double deadEndRisk = std::max(0, deadEnds - ownerCount);
+        if (redCount > 0) {
+            redDeadEndRisk += deadEndRisk;
+            redCutRisk += areaCutRisk;
+        }
+        else {
+            blueDeadEndRisk += deadEndRisk;
+            blueCutRisk += areaCutRisk;
+        }
+#endif
+    }
+
+#if VALUE_FEATURE_GATES
+    for (int position = 0; position < BOARD_GRID_SIZE; ++position) {
+        int row = position / BOARD_SIZE;
+        int column = position % BOARD_SIZE;
+        if (board[row][column] == RED_QUEEN && cutSwing[position] > 0.0) {
+            result.blockerQueens += 1.0;
+            result.blockerSwing += cutSwing[position];
+        }
+        else if (board[row][column] == BLUE_QUEEN && cutSwing[position] > 0.0) {
+            result.blockerQueens -= 1.0;
+            result.blockerSwing -= cutSwing[position];
+        }
+        else if (board[row][column] == EMPTY && cutSwing[position] > 0.0) {
+            int redDistance = queenDistance[0][position];
+            int blueDistance = queenDistance[1][position];
+            if (redDistance < 127 && blueDistance < 127) {
+                if (redDistance < blueDistance) result.gatewayControl += cutSwing[position];
+                else if (blueDistance < redDistance) result.gatewayControl -= cutSwing[position];
+            }
+        }
+    }
+#endif
+#if VALUE_FEATURE_ENDGAME
+    result.territoryDeadEndRisk = blueDeadEndRisk - redDeadEndRisk;
+    result.territoryCutRisk = blueCutRisk - redCutRisk;
+#endif
+#endif
+    return result;
+}
+
+void calculateSingleQueenDistances(
+    const boardArray& board, int source, int (&distances)[BOARD_GRID_SIZE])
+{
+    static const int INF = 127;
+    std::fill(distances, distances + BOARD_GRID_SIZE, INF);
+    std::queue<int> pending;
+    distances[source] = 0;
+    pending.push(source);
+    while (!pending.empty()) {
+        int position = pending.front();
+        pending.pop();
+        int row = position / BOARD_SIZE;
+        int column = position % BOARD_SIZE;
+        int nextDistance = distances[position] + 1;
+        for (int direction = 0; direction < 8; ++direction) {
+            int nextRow = row + dx[direction];
+            int nextColumn = column + dy[direction];
+            while (
+                isLegalArr[nextRow + 1][nextColumn + 1]
+                && board[nextRow][nextColumn] == EMPTY
+            ) {
+                int nextPosition = nextRow * BOARD_SIZE + nextColumn;
+                if (distances[nextPosition] > nextDistance) {
+                    distances[nextPosition] = nextDistance;
+                    pending.push(nextPosition);
+                }
+                nextRow += dx[direction];
+                nextColumn += dy[direction];
+            }
+        }
+    }
+}
+
+std::array<double, EVALUATION_FEATURE_COUNT> calculateEvaluationFeatures(
+    const boardArray& board, const queenArray& queenPos, int moveSide)
+{
+    static const int INF = 127;
+    int queenDistance[2][BOARD_GRID_SIZE];
+    int kingDistance[2][BOARD_GRID_SIZE];
+
+    for (int side = 0; side < 2; ++side) {
+        std::fill(queenDistance[side], queenDistance[side] + BOARD_GRID_SIZE, INF);
+        std::fill(kingDistance[side], kingDistance[side] + BOARD_GRID_SIZE, INF);
+        std::queue<int> queenQueue;
+        std::queue<int> kingQueue;
+        for (int queen = 0; queen < 4; ++queen) {
+            int position = queenPos[side][queen];
+            queenDistance[side][position] = 0;
+            kingDistance[side][position] = 0;
+            queenQueue.push(position);
+            kingQueue.push(position);
+        }
+
+        while (!queenQueue.empty()) {
+            int position = queenQueue.front();
+            queenQueue.pop();
+            int row = position / BOARD_SIZE;
+            int column = position % BOARD_SIZE;
+            int nextDistance = queenDistance[side][position] + 1;
+            for (int direction = 0; direction < 8; ++direction) {
+                int nextRow = row + dx[direction];
+                int nextColumn = column + dy[direction];
+                while (
+                    isLegalArr[nextRow + 1][nextColumn + 1]
+                    && board[nextRow][nextColumn] == EMPTY
+                ) {
+                    int nextPosition = nextRow * BOARD_SIZE + nextColumn;
+                    if (queenDistance[side][nextPosition] > nextDistance) {
+                        queenDistance[side][nextPosition] = nextDistance;
+                        queenQueue.push(nextPosition);
+                    }
+                    nextRow += dx[direction];
+                    nextColumn += dy[direction];
+                }
+            }
+        }
+
+        while (!kingQueue.empty()) {
+            int position = kingQueue.front();
+            kingQueue.pop();
+            int row = position / BOARD_SIZE;
+            int column = position % BOARD_SIZE;
+            int nextDistance = kingDistance[side][position] + 1;
+            for (int direction = 0; direction < 8; ++direction) {
+                int nextRow = row + dx[direction];
+                int nextColumn = column + dy[direction];
+                if (
+                    isLegalArr[nextRow + 1][nextColumn + 1]
+                    && board[nextRow][nextColumn] == EMPTY
+                ) {
+                    int nextPosition = nextRow * BOARD_SIZE + nextColumn;
+                    if (kingDistance[side][nextPosition] > nextDistance) {
+                        kingDistance[side][nextPosition] = nextDistance;
+                        kingQueue.push(nextPosition);
+                    }
+                }
+            }
+        }
+    }
+
+    double t1 = 0.0;
+    double t2 = 0.0;
+    double c1 = 0.0;
+    double c2 = 0.0;
+    double w = 0.0;
+    double emptyCount = 0.0;
+    double secureTerritory = 0.0;
+    double contestedCount = 0.0;
+    for (int position = 0; position < BOARD_GRID_SIZE; ++position) {
+        int row = position / BOARD_SIZE;
+        int column = position % BOARD_SIZE;
+        if (board[row][column] != EMPTY) {
+            continue;
+        }
+        emptyCount += 1.0;
+        int redQueenDistance = queenDistance[0][position];
+        int blueQueenDistance = queenDistance[1][position];
+        bool redQueenReachable = redQueenDistance < INF;
+        bool blueQueenReachable = blueQueenDistance < INF;
+        if (redQueenDistance < blueQueenDistance) t1 += 1.0;
+        else if (redQueenDistance > blueQueenDistance) t1 -= 1.0;
+        if (redQueenReachable) c1 += std::exp2(-redQueenDistance);
+        if (blueQueenReachable) c1 -= std::exp2(-blueQueenDistance);
+        if (redQueenReachable && blueQueenReachable) {
+            w += std::exp2(-std::abs(redQueenDistance - blueQueenDistance));
+            contestedCount += 1.0;
+        }
+        else if (redQueenReachable) secureTerritory += 1.0;
+        else if (blueQueenReachable) secureTerritory -= 1.0;
+
+        int redKingDistance = kingDistance[0][position];
+        int blueKingDistance = kingDistance[1][position];
+        if (redKingDistance < blueKingDistance) t2 += 1.0;
+        else if (redKingDistance > blueKingDistance) t2 -= 1.0;
+        if (!(redKingDistance == INF && blueKingDistance == INF)) {
+            double margin = (blueKingDistance - redKingDistance) / 6.0;
+            c2 += std::max(-1.0, std::min(1.0, margin));
+        }
+    }
+
+    double legacyMobility[2][4] = {};
+    double directMobility[2][4] = {};
+    double combatMobilityByQueen[2][4] = {};
+    double liberties[2][4] = {};
+    int reachCount[2][BOARD_GRID_SIZE] = {};
+    for (int side = 0; side < 2; ++side) {
+        for (int queen = 0; queen < 4; ++queen) {
+            int position = queenPos[side][queen];
+            int row = position / BOARD_SIZE;
+            int column = position % BOARD_SIZE;
+            liberties[side][queen] = getNeighborsEmptyNumber(board, row, column);
+            for (int direction = 0; direction < 8; ++direction) {
+                int distance = 1;
+                int nextRow = row + dx[direction];
+                int nextColumn = column + dy[direction];
+                while (
+                    isLegalArr[nextRow + 1][nextColumn + 1]
+                    && board[nextRow][nextColumn] == EMPTY
+                ) {
+                    int nextPosition = nextRow * BOARD_SIZE + nextColumn;
+                    directMobility[side][queen] += 1.0;
+                    reachCount[side][nextPosition] += 1;
+                    if (distance <= 2
+#if VALUE_FEATURE_COMBAT
+                        || queenDistance[1 - side][nextPosition] < INF
+#endif
+                    ) {
+                        double neighborCount = getNeighborsEmptyNumber(
+                            board, nextRow, nextColumn);
+                        if (distance <= 2) {
+                            legacyMobility[side][queen] +=
+                                neighborCount * std::exp2(1 - distance);
+                        }
+#if VALUE_FEATURE_COMBAT
+                        if (queenDistance[1 - side][nextPosition] < INF) {
+                            combatMobilityByQueen[side][queen] +=
+                                neighborCount * std::exp2(-distance);
+                        }
+#endif
+                    }
+                    ++distance;
+                    nextRow += dx[direction];
+                    nextColumn += dy[direction];
+                }
+            }
+        }
+    }
+
+    auto mobilityPenalty = [](double value) {
+        return value <= 5.0 ? -0.4 * value + 7.0 : 85.0 / (12.0 + value);
+    };
+    auto standardDeviation = [](const double values[4]) {
+        double mean = 0.25 * (values[0] + values[1] + values[2] + values[3]);
+        double variance = 0.0;
+        for (int i = 0; i < 4; ++i) {
+            double difference = values[i] - mean;
+            variance += difference * difference;
+        }
+        return std::sqrt(0.25 * variance);
+    };
+
+    double mobility = 0.0;
+    double combatMobility = 0.0;
+    double queenMobility = 0.0;
+    double libertyDifference = 0.0;
+    double trappedQueens = 0.0;
+    for (int queen = 0; queen < 4; ++queen) {
+        mobility += mobilityPenalty(legacyMobility[1][queen]);
+        mobility -= mobilityPenalty(legacyMobility[0][queen]);
+        queenMobility += directMobility[0][queen] - directMobility[1][queen];
+        libertyDifference += liberties[0][queen] - liberties[1][queen];
+        if (liberties[1][queen] <= 2.0) trappedQueens += 1.0;
+        if (liberties[0][queen] <= 2.0) trappedQueens -= 1.0;
+#if VALUE_FEATURE_COMBAT
+        combatMobility += 30.0 / (5.0 + combatMobilityByQueen[1][queen]);
+        combatMobility -= 30.0 / (5.0 + combatMobilityByQueen[0][queen]);
+#endif
+    }
+    double weakestQueenMobility =
+        *std::min_element(directMobility[0], directMobility[0] + 4)
+        - *std::min_element(directMobility[1], directMobility[1] + 4);
+    double queenMobilityBalance = standardDeviation(directMobility[1])
+        - standardDeviation(directMobility[0]);
+    double weakestLiberties =
+        *std::min_element(liberties[0], liberties[0] + 4)
+        - *std::min_element(liberties[1], liberties[1] + 4);
+    double weakestCombatMobility = 0.0;
+    double secondWeakestCombatMobility = 0.0;
+    double strongestCombatMobility = 0.0;
+    double combatMobilityBalance = 0.0;
+    double combatActiveQueens = 0.0;
+#if VALUE_FEATURE_COMBAT
+    weakestCombatMobility =
+        *std::min_element(combatMobilityByQueen[0], combatMobilityByQueen[0] + 4)
+        - *std::min_element(combatMobilityByQueen[1], combatMobilityByQueen[1] + 4);
+    double sortedCombatMobility[2][4];
+    for (int side = 0; side < 2; ++side) {
+        std::copy(
+            combatMobilityByQueen[side],
+            combatMobilityByQueen[side] + 4,
+            sortedCombatMobility[side]);
+        std::sort(sortedCombatMobility[side], sortedCombatMobility[side] + 4);
+        for (int queen = 0; queen < 4; ++queen) {
+            if (combatMobilityByQueen[side][queen] > 0.0) {
+                combatActiveQueens += side == 0 ? 1.0 : -1.0;
+            }
+        }
+    }
+    secondWeakestCombatMobility =
+        sortedCombatMobility[0][1] - sortedCombatMobility[1][1];
+    strongestCombatMobility =
+        sortedCombatMobility[0][3] - sortedCombatMobility[1][3];
+    combatMobilityBalance = standardDeviation(combatMobilityByQueen[1])
+        - standardDeviation(combatMobilityByQueen[0]);
+#endif
+    double reachOverlap = 0.0;
+    for (int position = 0; position < BOARD_GRID_SIZE; ++position) {
+        reachOverlap += std::max(reachCount[0][position] - 1, 0);
+        reachOverlap -= std::max(reachCount[1][position] - 1, 0);
+    }
+
+    double centerControl = 0.0;
+    double queenSpread = 0.0;
+    for (int side = 0; side < 2; ++side) {
+        double sideSign = side == 0 ? 1.0 : -1.0;
+        for (int queen = 0; queen < 4; ++queen) {
+            double row = queenPos[side][queen] / BOARD_SIZE;
+            double column = queenPos[side][queen] % BOARD_SIZE;
+            centerControl += sideSign * (
+                4.5 - std::max(std::abs(row - 4.5), std::abs(column - 4.5)));
+            for (int other = queen + 1; other < 4; ++other) {
+                int otherRow = queenPos[side][other] / BOARD_SIZE;
+                int otherColumn = queenPos[side][other] % BOARD_SIZE;
+                queenSpread += sideSign * std::max(
+                    std::abs(static_cast<int>(row) - otherRow),
+                    std::abs(static_cast<int>(column) - otherColumn));
+            }
+        }
+    }
+
+    AreaStructureFeatures areaStructure =
+        calculateAreaStructureFeatures(board, queenDistance);
+    double queenLoadMin = 0.0;
+    double queenLoadBalance = 0.0;
+    double accessRedundancy = 0.0;
+#if VALUE_FEATURE_ASSIGNMENT
+    int individualQueenDistance[2][4][BOARD_GRID_SIZE];
+    double queenLoad[2][4] = {};
+    double sideRedundancy[2] = {};
+    for (int side = 0; side < 2; ++side) {
+        for (int queen = 0; queen < 4; ++queen) {
+            calculateSingleQueenDistances(
+                board, queenPos[side][queen], individualQueenDistance[side][queen]);
+        }
+    }
+    for (int position = 0; position < BOARD_GRID_SIZE; ++position) {
+        int row = position / BOARD_SIZE;
+        int column = position % BOARD_SIZE;
+        if (
+            board[row][column] != EMPTY
+            || queenDistance[0][position] >= INF
+            || queenDistance[1][position] >= INF
+        ) continue;
+        for (int side = 0; side < 2; ++side) {
+            int minimum = INF;
+            for (int queen = 0; queen < 4; ++queen) {
+                minimum = std::min(
+                    minimum, individualQueenDistance[side][queen][position]);
+            }
+            int fastestCount = 0;
+            for (int queen = 0; queen < 4; ++queen) {
+                if (individualQueenDistance[side][queen][position] == minimum) {
+                    ++fastestCount;
+                }
+            }
+            if (minimum < INF && fastestCount > 0) {
+                double share = 1.0 / fastestCount;
+                for (int queen = 0; queen < 4; ++queen) {
+                    if (individualQueenDistance[side][queen][position] == minimum) {
+                        queenLoad[side][queen] += share;
+                    }
+                }
+                sideRedundancy[side] += std::max(fastestCount - 1, 0);
+            }
+        }
+    }
+    queenLoadMin = *std::min_element(queenLoad[0], queenLoad[0] + 4)
+        - *std::min_element(queenLoad[1], queenLoad[1] + 4);
+    queenLoadBalance = standardDeviation(queenLoad[1])
+        - standardDeviation(queenLoad[0]);
+    accessRedundancy = sideRedundancy[0] - sideRedundancy[1];
+#endif
+
+    double perspective = moveSide == RED_SIDE ? 1.0 : -1.0;
+    return {
+        perspective * t1,
+        perspective * t2,
+        perspective * c1,
+        perspective * c2,
+        perspective * mobility,
+        w,
+        emptyCount,
+        perspective * secureTerritory,
+        contestedCount,
+        perspective * queenMobility,
+        perspective * weakestQueenMobility,
+        perspective * queenMobilityBalance,
+        perspective * libertyDifference,
+        perspective * weakestLiberties,
+        perspective * trappedQueens,
+        perspective * reachOverlap,
+        perspective * centerControl,
+        perspective * queenSpread,
+        perspective * combatMobility,
+        perspective * weakestCombatMobility,
+        perspective * areaStructure.activeQueens,
+        perspective * areaStructure.exclusiveQueenRedundancy,
+        areaStructure.activeAreaCount,
+        perspective * areaStructure.blockerQueens,
+        perspective * areaStructure.blockerSwing,
+        perspective * areaStructure.gatewayControl,
+        perspective * queenLoadMin,
+        perspective * queenLoadBalance,
+        perspective * accessRedundancy,
+        perspective * areaStructure.territoryDeadEndRisk,
+        perspective * areaStructure.territoryCutRisk,
+        perspective * secondWeakestCombatMobility,
+        perspective * strongestCombatMobility,
+        perspective * combatMobilityBalance,
+        perspective * combatActiveQueens,
+    };
+}
+
+double evaluateFeatureArray(
+    const std::array<double, EVALUATION_FEATURE_COUNT>& features)
+{
+    std::array<double, gen217_value_model::INPUT_SIZE> modelFeatures = {};
+    static_assert(
+        gen217_value_model::INPUT_SIZE <= EVALUATION_FEATURE_COUNT,
+        "value model expects more inputs than the evaluator provides");
+    for (int index = 0; index < gen217_value_model::INPUT_SIZE; ++index) {
+        modelFeatures[index] = features[index];
+    }
+    double richValue = gen217_value_model::evaluate(modelFeatures);
+#if GEN217_BLEND_PRODUCTION_RICH
+    std::array<double, gen217_production_value_model::INPUT_SIZE>
+        productionFeatures = {};
+    static_assert(
+        gen217_production_value_model::INPUT_SIZE <= EVALUATION_FEATURE_COUNT,
+        "production value model expects too many inputs");
+    for (
+        int index = 0;
+        index < gen217_production_value_model::INPUT_SIZE;
+        ++index
+    ) {
+        productionFeatures[index] = features[index];
+    }
+    double productionRichValue =
+        gen217_production_value_model::evaluate(productionFeatures);
+    richValue = GEN217_NEW_RICH_WEIGHT * richValue
+        + (1.0 - GEN217_NEW_RICH_WEIGHT) * productionRichValue;
+#endif
+    if (GEN217_LEGACY_BLEND <= 0.0) return richValue;
+    std::array<double, 4> legacyFeatures = {
+        features[0], features[1], features[4], features[5]
+    };
+    double legacyValue = gen217_legacy_value_model::evaluate(legacyFeatures);
+#if GEN217_CALIBRATED_BLEND
+    return gen217_value_blend::evaluate(richValue, legacyValue, features[5]);
+#else
+    return GEN217_LEGACY_BLEND * legacyValue
+        + (1.0 - GEN217_LEGACY_BLEND) * richValue;
+#endif
+}
+
 double valueAll(const boardArray& board, const queenArray& queenPos, int moveSide)
 {
-    double value = 0;
-    double w = 0;
-    double t1 = valueT1(board, queenPos, moveSide, &w);
-    double t2 = valueT2(board, queenPos, moveSide);
-    double m = valueMobility(board, queenPos, moveSide);
-
-    double k1, k2, k3;
-    if (w >= 0 && w <= 14) {
-        k1 = 1; k2 = 0; k3 = 0;
-    }
-    else if (w > 14 && w <= 25) {
-        k1 = 1; k2 = 0; k3 = 0.2;
-    }
-    else if (w > 25 && w <= 40) {
-        k1 = 1; k2 = 1; k3 = 1;
-    }
-    else if (w > 40 && w <= 55) {
-        k1 = 1; k2 = 1; k3 = 2;
-    }
-    else if (w > 55 && w <= 63) {
-        k1 = 1; k2 = 1; k3 = 3;
-    }
-    else {
-        k1 = 1; k2 = 1; k3 = 4;
-    }
-
-    return t1 * k1 + t2 * k2 + k3 * m;
+    // Phase-dependent formula distilled from candidate_gen217 immediate MCTS
+    // values on 288,915 complete-turn self-play positions. The fitted formula
+    // and legacy gen217 evaluator are blended equally. See
+    // src/ai/value_model_gen217.json.
+    return evaluateFeatureArray(
+        calculateEvaluationFeatures(board, queenPos, moveSide));
 }
 
 
@@ -894,10 +1822,11 @@ UCTNode* uctInitNode(const boardArray& board, const queenArray& queenPos, UCTNod
     head->action.Stone = -1;
 
     head->message.side = -moveSide;
-    head->message.value = valueAll(board, queenPos, -moveSide);
+    head->message.value = -valueAll(board, queenPos, moveSide);
     head->message.r = 0;
+    head->message.prior = 1.0;
 
-    head->simulate.win = 0;
+    head->simulate.valueSum = 0.0;
     head->simulate.attempt = 0;
     //head->simulate.pro = 0;
 
@@ -948,9 +1877,19 @@ UCTNode* uctSelect(UCTNode* node)
 //得到r值
 double uctGetR(UCTNode* node)
 {
-    double win = (node->simulate.win + node->simulate.attempt) / 2;
-
-    return (double)win / node->simulate.attempt + 0.35 * (double)sqrt((double)log(node->parent->simulate.attempt) / node->simulate.attempt);
+    double meanValue = node->simulate.valueSum / node->simulate.attempt;
+    double winProbability = 0.5 * (meanValue + 1.0);
+#if GEN217_POLICY_PUCT
+    double parentAttempts = std::max(node->parent->simulate.attempt, 1);
+    return winProbability
+        + 0.20 * (double)sqrt(
+            (double)log(parentAttempts + 1.0) / node->simulate.attempt)
+        + GEN217_POLICY_PUCT_WEIGHT * node->message.prior
+            * sqrt(parentAttempts) / (1.0 + node->simulate.attempt);
+#else
+    return winProbability + 0.35 * (double)sqrt(
+        (double)log(node->parent->simulate.attempt) / node->simulate.attempt);
+#endif
 }
 
 //UCT算法的扩展
@@ -970,17 +1909,12 @@ UCTNode* uctExpand(UCTNode* node)
     std::vector<MoveValue> vecMoveValue;
 
 
-    if(node->simulate.attempt < 40 && node->simulate.attempt > 0)
+    if(node->simulate.attempt < UCT_LEAF_SIMULATION_THRESHOLD && node->simulate.attempt > 0)
     {
         //从我方下棋开始且最后我方输棋
-        if(uctSimulate(node->nodeBoard,node->queenPos,-node->message.side) == node->message.side)
-        {
-            uctBackPropagation(node,1);
-        }
-        else//从我方下棋开始且最后对方输棋
-        {
-            uctBackPropagation(node,-1);
-        }
+        double nextPlayerValue = uctSimulate(
+            node->nodeBoard, node->queenPos, -node->message.side);
+        uctBackPropagation(node, -nextPlayerValue);
 
         //OMPnRoundUCTSimulateSixStep(node,board,moveSide,4);
 
@@ -1011,7 +1945,8 @@ UCTNode* uctExpand(UCTNode* node)
     {
 
 
-        vecMoveValue = getSideQueenMoveValue(node->nodeBoard,node->queenPos,-node->message.side);
+        vecMoveValue = getSideQueenMoveValue(
+            node->nodeBoard, node->queenPos, -node->message.side, node->depth);
 
         //uctNodeNumber += vecMoveValue.size();
 
@@ -1074,21 +2009,15 @@ UCTNode* uctExpand(UCTNode* node)
         newNode->parent = currentPtr;
         newNode->message.side = newNode->parent->message.side * -1;
         newNode->message.value = vecMoveValue[i].value;
+        newNode->message.prior = vecMoveValue[i].prior;
 
         newNode->simulate.attempt = 0;
-        newNode->simulate.win = 0;
+        newNode->simulate.valueSum = 0.0;
         newNode->message.r = -1;
         newNode->expandSize = 0;
         newNode->depth = newNode->parent->depth + 1;
 
-        if (newNode->message.value >= 0)
-        {
-            uctBackPropagation(newNode, 1);
-        }
-        else
-        {
-            uctBackPropagation(newNode, -1);
-        }
+        uctBackPropagation(newNode, newNode->message.value);
 
 
         node->vecNodes.push_back(newNode);
@@ -1098,7 +2027,7 @@ UCTNode* uctExpand(UCTNode* node)
 }
 
 
-int uctSimulate(const boardArray& board, const queenArray& queenPos, int moveSide)
+double uctSimulate(const boardArray& board, const queenArray& queenPos, int moveSide)
 {
     int randomIndex;
     int step;
@@ -1115,14 +2044,14 @@ int uctSimulate(const boardArray& board, const queenArray& queenPos, int moveSid
     memcpy(temp_queenPos,queenPos,sizeof(int)*8);//复制当前红方皇后位置
 
 
-    for (step = 0; step < 6; step++)
+    for (step = 0; step < MCTS_SIMULATION_STEPS; step++)
     {
         //下一步
         vecMovePos = getSideQueenOneMoveAction(temp_board, temp_queenPos, tempSide);
 
         if (vecMovePos.empty())
         {
-            return -tempSide;
+            return tempSide == moveSide ? -1.0 : 1.0;
         }
         randomIndex = rand() % vecMovePos.size();
 
@@ -1144,14 +2073,8 @@ int uctSimulate(const boardArray& board, const queenArray& queenPos, int moveSid
     }
 
 
-    if (valueAll(temp_board, temp_queenPos, RED_SIDE) >= 0)
-    {
-        return RED_SIDE;
-    }
-    else
-    {
-        return BLUE_SIDE;
-    }
+    double leafValue = valueAll(temp_board, temp_queenPos, tempSide);
+    return tempSide == moveSide ? leafValue : -leafValue;
 
 }
 
@@ -1231,26 +2154,14 @@ int uctSimulate(const boardArray& board, const queenArray& queenPos, int moveSid
 }*/
 
 //UCT算法的反向传播
-void uctBackPropagation(UCTNode* node, int isWin)
+void uctBackPropagation(UCTNode* node, double value)
 {
     UCTNode* currentNode = node;
-    int winSide = node->message.side;
-
-
-    //将win，attemp传播
     while (currentNode != NULL)
     {
         currentNode->simulate.attempt++;
-
-        if (currentNode->message.side == winSide)
-        {
-            currentNode->simulate.win += isWin;
-        }
-        else
-        {
-            currentNode->simulate.win -= isWin;
-        }
-
+        currentNode->simulate.valueSum += value;
+        value = -value;
         currentNode = currentNode->parent;
     }
 
@@ -1340,7 +2251,8 @@ UctRes  uctAll(const boardArray& board,const queenArray& queenPos, int moveSide,
             bestMoveInfo.Stone = bestNode->action.Stone;
             bestMoveInfo.attempt = bestNode->parent->simulate.attempt;
             bestMoveInfo.value = bestNode->message.value;
-            bestMoveInfo.pro = ((double)(bestNode->simulate.win + bestNode->simulate.attempt) / bestNode->simulate.attempt / 2) * 100;
+            bestMoveInfo.pro = 50.0 *
+                (bestNode->simulate.valueSum / bestNode->simulate.attempt + 1.0);
             //cout << uctTree->simulate.attempt;
             //uctDisplayUCTNode(uctTree);
             //double thisTime = (double)(endTime - startTime) / CLOCKS_PER_SEC;
@@ -1348,7 +2260,8 @@ UctRes  uctAll(const boardArray& board,const queenArray& queenPos, int moveSide,
             //printf("<This Time :%0.1fs. All time:%0.2fmin. Count:%d>",thisTime,allTime/60.0,moveCount);
 
 
-            double uctPro = ((double)(bestNode->simulate.win + bestNode->simulate.attempt) / bestNode->simulate.attempt / 2) * 100;
+            double uctPro = 50.0 *
+                (bestNode->simulate.valueSum / bestNode->simulate.attempt + 1.0);
 
 
             if (isDisplayInfo)
@@ -1370,7 +2283,8 @@ UctRes  uctAll(const boardArray& board,const queenArray& queenPos, int moveSide,
 
                 printf("(From:%d,To:%d,Stone:%d)|%f|", bestNode->action.From, bestNode->action.To, bestNode->action.Stone, w);
                 printf("(attemp:%d/%d,number: %d/%d,value:%.2f,pro:%0.0f)\n", bestNode->simulate.attempt, uctTree->simulate.attempt, bestNumber, uctTree->vecNodes.size(),
-                    bestNode->message.value, ((double)(bestNode->simulate.win + bestNode->simulate.attempt) / bestNode->simulate.attempt / 2) * 100);
+                    bestNode->message.value, 50.0 *
+                    (bestNode->simulate.valueSum / bestNode->simulate.attempt + 1.0));
                 //printf("(|%.0f|[%d/%d][value:%.2f][%0.0f]\n",checkW(board),bestNode->simulate.attempt,uctTree->simulate.attempt,
                        //bestNode->message.value,( (double)(bestNode->simulate.win + bestNode->simulate.attempt)/bestNode->simulate.attempt/2 )*100);
 
@@ -1439,6 +2353,42 @@ public:
         }
         return result;
     }
+
+    py::dict evaluateFeatures(py::array_t<int> initialBoard, py::list initialQueenPos, int moveSide) {
+        boardArray board;
+        queenArray queenPos;
+        convert_pyarray_to_carray(initialBoard, board);
+        convert_pylist_to_carray(initialQueenPos, queenPos);
+
+        std::array<double, EVALUATION_FEATURE_COUNT> features =
+            calculateEvaluationFeatures(
+            board, queenPos, moveSide);
+        py::dict result;
+        static const char* featureNames[EVALUATION_FEATURE_COUNT] = {
+            "t1", "t2", "c1", "c2", "mobility", "w", "empty_count",
+            "secure_territory", "contested_count", "queen_mobility",
+            "weakest_queen_mobility", "queen_mobility_balance", "liberties",
+            "weakest_liberties", "trapped_queens", "reach_overlap",
+            "center_control", "queen_spread", "combat_mobility",
+            "weakest_combat_mobility", "active_queens",
+            "exclusive_queen_redundancy", "active_area_count",
+            "blocker_queens", "blocker_swing", "gateway_control",
+            "queen_load_min", "queen_load_balance", "access_redundancy",
+            "territory_dead_end_risk", "territory_cut_risk",
+            "second_weakest_combat_mobility", "strongest_combat_mobility",
+            "combat_mobility_balance", "combat_active_queens"
+        };
+        for (int index = 0; index < EVALUATION_FEATURE_COUNT; ++index) {
+            result[featureNames[index]] = features[index];
+        }
+        std::array<double, gen217_value_model::INPUT_SIZE> modelFeatures = {};
+        for (int index = 0; index < gen217_value_model::INPUT_SIZE; ++index) {
+            modelFeatures[index] = features[index];
+        }
+        result["rich_value"] = gen217_value_model::evaluate(modelFeatures);
+        result["value"] = evaluateFeatureArray(features);
+        return result;
+    }
 };
 
 
@@ -1484,6 +2434,11 @@ PYBIND11_MODULE(amazon_ai, m) {
              py::arg("calTime"),
              py::arg("isDisplayInfo") = false, // 将可选参数 isDisplayInfo 绑定
              "Runs UCT/MCTS search on the given board state and returns the best move.")
+        .def("evaluate_features", &AmazonasAI::evaluateFeatures,
+             py::arg("initialBoard"),
+             py::arg("initialQueenPos"),
+             py::arg("moveSide"),
+             "Returns the fitted evaluator inputs and continuous value.")
         // 绑定 __repr__
         .def("__repr__", [](const AmazonasAI &a) {
             return "<AmazonasAI object>";

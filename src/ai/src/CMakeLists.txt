@@ -32,8 +32,15 @@ pybind11_add_module(amazon_ai ${SOURCE_FILES})
 # 链接 OpenMP 库。
 target_link_libraries(amazon_ai PRIVATE OpenMP::OpenMP_CXX)
 
-# Keep distributable modules separate from disposable CMake build trees.
+# Keep distributable modules separate from disposable CMake build trees. Tests
+# can override this cache path so candidate modules never replace production.
+set(
+    AMAZON_AI_OUTPUT_DIRECTORY
+    "${CMAKE_CURRENT_SOURCE_DIR}/../native"
+    CACHE PATH
+    "Directory for the compiled amazon_ai Python module"
+)
 set_target_properties(amazon_ai PROPERTIES
-    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../native"
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../native"
+    LIBRARY_OUTPUT_DIRECTORY "${AMAZON_AI_OUTPUT_DIRECTORY}"
+    RUNTIME_OUTPUT_DIRECTORY "${AMAZON_AI_OUTPUT_DIRECTORY}"
 )

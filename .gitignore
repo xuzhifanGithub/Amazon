@@ -14,6 +14,9 @@ gtp_logs/
 **/build/
 *.log
 
+# Local rollback copies of large neural-network weights.
+*.pre_*.bin.gz
+
 # 项目自带的虚拟环境（每台机器用 setup_env 重建）
 .venv/
 

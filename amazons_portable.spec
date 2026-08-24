@@ -39,7 +39,13 @@ if not matching_module.is_file():
     raise SystemExit(
         f"缺少 Python {sys.version_info.major}.{sys.version_info.minor} 对应的 MCTS .pyd 模块")
 binaries.append((str(matching_module), "src/ai/native"))
-binaries.append((str(AI / "native" / "libgomp_64-1.dll"), "src/ai/native"))
+for runtime_dll in (
+    "libgomp-1.dll",
+    "libwinpthread-1.dll",
+    "libgcc_s_seh-1.dll",
+    "libdl.dll",
+):
+    binaries.append((str(AI / "native" / runtime_dll), "src/ai/native"))
 
 a = Analysis(
     [str(ROOT / "main.py")],

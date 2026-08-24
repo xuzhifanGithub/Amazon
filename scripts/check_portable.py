@@ -14,7 +14,10 @@ def main(argv=None) -> int:
     ai = root / "src" / "ai"
     required = [
         root / "Amazons.exe",
-        ai / "native" / "libgomp_64-1.dll",
+        ai / "native" / "libgomp-1.dll",
+        ai / "native" / "libwinpthread-1.dll",
+        ai / "native" / "libgcc_s_seh-1.dll",
+        ai / "native" / "libdl.dll",
         ai / "kataAmazonEngineCuda" / "amazons.exe",
         ai / "kataAmazonEngineCuda" / "amazon10x10_xzf.bin.gz",
         ai / "kataAmazonEngineCuda" / "engine.cfg",
