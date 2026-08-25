@@ -57,9 +57,11 @@ def test_parse_analyze_falls_back_to_most_visited_move():
 def test_parse_analyze_exposes_score_and_policy_metadata():
     response = (
         "info move A1 visits 200 utility 0.42 winrate 0.61 "
-        "scoreMean 3.0 scoreStdev 1.25 scoreLead 3.5 prior 0.18 pv A1 "
+        "scoreMean 0.01 scoreStdev 1.25 scoreLead -3.5 "
+        "scoreSelfplay 3.0 prior 0.18 pv A1 "
         "info move B2 visits 120 utility -0.1 winrate 0.57 "
-        "scoreLead -2.25 scoreStdev 2.5 prior 0.08 pv B2\n"
+        "scoreMean 0.02 scoreLead -2.25 scoreSelfplay 1.75 "
+        "scoreStdev 2.5 prior 0.08 pv B2\n"
         "play B2"
     )
 
@@ -67,6 +69,8 @@ def test_parse_analyze_exposes_score_and_policy_metadata():
 
     assert move == "B2"
     assert selected["score_lead"] == pytest.approx(-2.25)
+    assert selected["score_mean"] == pytest.approx(0.02)
+    assert selected["score_selfplay"] == pytest.approx(1.75)
     assert selected["score_stdev"] == pytest.approx(2.5)
     assert selected["utility"] == pytest.approx(-0.1)
     assert selected["prior"] == pytest.approx(0.08)
@@ -126,6 +130,7 @@ def test_best_turn_always_restores_engine_position():
     assert engine.commands[-3:] == ["undo", "undo", "undo"]
     assert engine.last_winrate == 60.0
     assert engine.last_score_lead is None
+    assert engine.last_score_selfplay is None
 
 
 def test_analyze_replaces_pass_with_most_visited_coordinate():

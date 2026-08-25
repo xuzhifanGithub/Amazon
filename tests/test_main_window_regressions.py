@@ -55,7 +55,8 @@ def test_amazon_x_score_lead_is_visible_and_names_the_leading_side(qapp):
     window = AmazonsMainWindow(AmazonsSimulator())
     result = BestResult(
         60, 50, 40, 73.5, 600, 0.735,
-        score_lead=4.25,
+        score_lead=-3.5,
+        score_selfplay=4.25,
         score_stdev=1.1,
         utility=0.48,
         policy_prior=0.22,
@@ -69,7 +70,7 @@ def test_amazon_x_score_lead_is_visible_and_names_the_leading_side(qapp):
     assert "效用 0.480" in window.info_panel.info_summary.text()
     assert "先验 0.220" in window.info_panel.info_summary.text()
 
-    result.score_lead = -2.5
+    result.score_selfplay = -2.5
     window.update_ai_info_panel(result, BLACK_AMAZON, "kataAmazon_gpu")
     assert window.info_score.text().startswith("预测分差：白方 +2.50 分")
     window.close()

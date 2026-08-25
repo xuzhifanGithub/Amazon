@@ -509,21 +509,22 @@ class AmazonsMainWindow(QMainWindow):
             self.info_move_detail.setText("棋步：解析失败")
             self.info_move_detail.setToolTip("")
 
-        # KataGo 的 scoreLead 使用 reportAnalysisWinratesAs 配置的视角；
-        # 本项目配置为 SIDETOMOVE，因此这里把正负值转成直观的领先方。
-        if best_res.score_lead is not None:
-            score_lead = float(best_res.score_lead)
-            if abs(score_lead) < 0.005:
+        # Amazon 的领地标签学习目标是当前自博弈策略下的终局分差，
+        # 对应 scoreSelfplay。这个分支的 scoreLead 经过搜索分差校准，
+        # 实测可能与胜率方向相反，不能直接当作终局领地差显示。
+        if best_res.score_selfplay is not None:
+            score_value = float(best_res.score_selfplay)
+            if abs(score_value) < 0.005:
                 score_text = "基本持平"
             else:
                 opponent = "白方" if player == BLACK_AMAZON else "黑方"
-                leader = who if score_lead > 0 else opponent
-                score_text = f"{leader} +{abs(score_lead):.2f} 分"
+                leader = who if score_value > 0 else opponent
+                score_text = f"{leader} +{abs(score_value):.2f} 分"
             if best_res.score_stdev is not None:
                 score_text += f" · 不确定度 ±{abs(float(best_res.score_stdev)):.2f}"
             self.info_score.setText(f"预测分差：{score_text}")
             self.info_score.setToolTip(
-                "来自模型的 scoreLead；不确定度为 scoreStdev。")
+                "来自模型的 scoreSelfplay；不确定度为 scoreStdev。")
             self.info_score.show()
         else:
             self.info_score.setText("预测分差：—")
@@ -1654,8 +1655,8 @@ class AmazonsMainWindow(QMainWindow):
         win_pro_str = "—" if best_res.win_pro is None else f"{best_res.win_pro:.2f}%"
         visits_str = "—" if best_res.max_apt is None else str(int(best_res.max_apt))
         select_pro_str = "—" if best_res.select_pro is None else f"{best_res.select_pro:.4f}"
-        score_lead_str = ("" if best_res.score_lead is None
-                          else f" | 预测分差={best_res.score_lead:+.2f}")
+        score_value_str = ("" if best_res.score_selfplay is None
+                           else f" | 预测分差={best_res.score_selfplay:+.2f}")
         player_name = "黑方" if self.simulator.current_player == BLACK_AMAZON else "白方"
         # 构建状态栏信息
         info_message = (
@@ -1663,7 +1664,7 @@ class AmazonsMainWindow(QMainWindow):
             f"AI 走法: 胜率={win_pro_str} | "
             f"搜索次数={visits_str} | "
             f"局面估值={select_pro_str}"
-            f"{score_lead_str}"
+            f"{score_value_str}"
         )
         self.statusBar().showMessage(info_message)
 

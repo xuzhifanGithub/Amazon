@@ -124,6 +124,8 @@ class AIWorker(QObject):
                     best_res.max_apt = visits
                     best_res.select_pro = (win / 100.0) if win is not None else None
                     best_res.score_lead = getattr(engine, 'last_score_lead', None)
+                    best_res.score_selfplay = getattr(
+                        engine, 'last_score_selfplay', None)
                     best_res.score_stdev = getattr(engine, 'last_score_stdev', None)
                     best_res.utility = getattr(engine, 'last_utility', None)
                     best_res.policy_prior = getattr(
@@ -653,4 +655,3 @@ class AmazonAIAgent(QObject):
 
         with self._engine_lock:
             self._drop_ai_engine_locked(force=True)
-

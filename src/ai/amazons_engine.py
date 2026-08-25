@@ -58,7 +58,9 @@ def parse_genmove_analyze_details(response: str):
                 "move": move,
                 "visits": 0,
                 "winrate": None,
+                "score_mean": None,
                 "score_lead": None,
+                "score_selfplay": None,
                 "score_stdev": None,
                 "utility": None,
                 "prior": None,
@@ -76,16 +78,21 @@ def parse_genmove_analyze_details(response: str):
                         metrics["winrate"] = float(value) * 100.0
                     except ValueError:
                         metrics["winrate"] = None
-                elif key in ("scoreLead", "scoreMean"):
-                    # scoreMean is retained by KataGo as a compatibility alias
-                    # for scoreLead. Prefer the explicit scoreLead when both
-                    # occur in one analysis line.
-                    if (key == "scoreLead"
-                            or metrics["score_lead"] is None):
-                        try:
-                            metrics["score_lead"] = float(value)
-                        except ValueError:
-                            pass
+                elif key == "scoreMean":
+                    try:
+                        metrics["score_mean"] = float(value)
+                    except ValueError:
+                        pass
+                elif key == "scoreLead":
+                    try:
+                        metrics["score_lead"] = float(value)
+                    except ValueError:
+                        pass
+                elif key == "scoreSelfplay":
+                    try:
+                        metrics["score_selfplay"] = float(value)
+                    except ValueError:
+                        pass
                 elif key == "scoreStdev":
                     try:
                         metrics["score_stdev"] = float(value)
@@ -363,6 +370,7 @@ class AmazonsKataGoEngine(QObject):
         self.last_winrate = None      # 0..100，当前行动方视角
         self.last_visits = None
         self.last_score_lead = None   # 当前行动方视角的预计领先分
+        self.last_score_selfplay = None  # 当前策略下的预计终局领地差
         self.last_score_stdev = None  # 分差预测的标准差
         self.last_utility = None
         self.last_policy_prior = None
@@ -577,6 +585,7 @@ class AmazonsKataGoEngine(QObject):
             self.last_winrate = winrate
             self.last_visits = visits
             self.last_score_lead = start_metrics.get("score_lead")
+            self.last_score_selfplay = start_metrics.get("score_selfplay")
             self.last_score_stdev = start_metrics.get("score_stdev")
             self.last_utility = start_metrics.get("utility")
             self.last_policy_prior = start_metrics.get("prior")
