@@ -553,18 +553,12 @@ class AmazonsMainWindow(QMainWindow):
                         else f"{best_res.win_pro:.1f}%")
         visits_summary = ("—" if best_res.max_apt is None
                           else str(int(best_res.max_apt)))
-        if best_res.utility is not None:
-            eval_label = "效用"
-            eval_summary = f"{best_res.utility:.3f}"
-        else:
-            eval_label = "估值"
-            eval_summary = ("—" if best_res.select_pro is None
-                            else f"{best_res.select_pro:.3f}")
-        prior_summary = ("" if best_res.policy_prior is None
-                         else f" · 先验 {best_res.policy_prior:.3f}")
-        self.info_panel.info_summary.setText(
-            f"胜率 {rate_summary} · {visits_summary}次 · "
-            f"{eval_label} {eval_summary}{prior_summary}")
+        summary_parts = [f"胜率 {rate_summary}", f"{visits_summary}次"]
+        if best_res.select_pro is not None:
+            summary_parts.append(f"估值 {best_res.select_pro:.3f}")
+        if best_res.policy_prior is not None:
+            summary_parts.append(f"先验 {best_res.policy_prior:.3f}")
+        self.info_panel.info_summary.setText(" · ".join(summary_parts))
 
     def on_turn_made(self, start_pos, move_pos, arrow_pos):
         """

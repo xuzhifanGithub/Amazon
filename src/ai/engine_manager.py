@@ -41,6 +41,13 @@ class EngineManager:
         self._reset_pending = False
         return engines
 
+    def has_game_engine(self, backend: str, visits: int,
+                        mode: str = "gameplay") -> bool:
+        """Return whether a matching initialized engine is already pooled."""
+        key = (backend, int(visits), mode)
+        with self._lock:
+            return key in self.engines
+
     def get_game_engine(self, backend: str, visits: int, history, play_turn,
                         mode: str = "gameplay"):
         key = (backend, int(visits), mode)

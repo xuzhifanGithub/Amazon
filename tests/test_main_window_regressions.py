@@ -67,7 +67,8 @@ def test_amazon_x_score_lead_is_visible_and_names_the_leading_side(qapp):
     assert window.info_score.text() == (
         "预测分差：黑方 +4.25 分 · 不确定度 ±1.10")
     assert not window.info_score.isHidden()
-    assert "效用 0.480" in window.info_panel.info_summary.text()
+    assert "效用" not in window.info_panel.info_summary.text()
+    assert "估值 0.735" in window.info_panel.info_summary.text()
     assert "先验 0.220" in window.info_panel.info_summary.text()
 
     result.score_selfplay = -2.5

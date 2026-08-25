@@ -98,11 +98,15 @@ def test_engine_manager_reuses_same_profile_and_closes_all():
 
     played = []
     manager = EngineManager(factory)
+    assert not manager.has_game_engine('gpu', 600)
     first = manager.get_game_engine('gpu', 600, [OPENING_TURN],
                                     lambda engine, player, *turn: played.append((engine, player, turn)))
+    assert manager.has_game_engine('gpu', 600)
+    assert not manager.has_game_engine('gpu', 800)
     assert manager.get_game_engine('gpu', 600, [], lambda *_: None) is first
     second = manager.get_game_engine('gpu', 800, [], lambda *_: None)
     assert first is not second
     assert played[0][1:] == (1, OPENING_TURN)
     manager.close_all()
+    assert not manager.has_game_engine('gpu', 600)
     assert all(engine.closed for engine in created)

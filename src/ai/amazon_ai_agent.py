@@ -359,8 +359,6 @@ class AmazonAIAgent(QObject):
         if self.thread is not None and self.thread.isRunning():
             return False
 
-        self.main_window.statusBar().showMessage("AI 正在思考中...")
-
         # 创建工作者和线程
         self.thread = QThread()
         simulator = self.main_window.simulator
@@ -386,6 +384,20 @@ class AmazonAIAgent(QObject):
             raise ValueError("Invalid AI type provided.")
 
         profile = (profile or AIProfile()).normalized()
+        if worker_ai_type == 'kataAmazon':
+            model_name = 'amazon_L' if backend == 'legacy' else 'amazon_X'
+            if self._engine_manager.has_game_engine(
+                    backend, profile.kata_visits):
+                status_text = f"{model_name} 正在思考中..."
+            elif backend == 'legacy':
+                status_text = (
+                    "正在启动 amazon_L 并思考；首次运行会进行 OpenCL 调优，"
+                    "可能需要数分钟...")
+            else:
+                status_text = f"正在启动 {model_name} 并思考..."
+        else:
+            status_text = "AI 正在思考中..."
+        self.main_window.statusBar().showMessage(status_text)
         self.worker = AIWorker(
             simulator.size,
             ai_board,
