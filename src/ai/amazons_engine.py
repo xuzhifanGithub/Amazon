@@ -3,9 +3,9 @@
 #
 # 说明（重要）：
 #   gpu 后端使用项目内置的 amazon10x10_xzf 最新模型
-#   （b20c256legacyv10, 20 残差块 256 通道），配合 OpenCL 版
-#   amazons.exe（KataGo v1.10.0 定制版）。该模型格式与 CUDA 版 katago.exe 不兼容，
-#   必须使用 kataAmazonEngineCuda/ 目录内的 amazons.exe。
+#   （gen223_b featurev1，b20c256legacyv10），配合启用了
+#   USE_AMAZON_FEATURES_V1 的 OpenCL 版 amazons.exe。该引擎按模型内部名称中的
+#   featurev1 标记启用新版输入；旧 2022 引擎不能正确推理该模型。
 #
 #   本项目还保留两套后备引擎：
 #     - kataAmazonEngine/     原始引擎（kataAmazon.exe, OpenCL）+ 旧模型 weights/amazons10x10.bin.gz
@@ -99,7 +99,8 @@ BACKENDS = {
         'model': 'amazon10x10_xzf.bin.gz',
         'cfg': 'engine.cfg',
         'hint_cfg': 'hint.cfg',
-        'label': 'XZF 最新模型（OpenCL/GPU）',
+        'runtime_files': ('libgcc_s_seh-1.dll', 'libstdc++-6.dll', 'libwinpthread-1.dll'),
+        'label': 'XZF gen223_b featurev1（OpenCL/GPU）',
     },
     'legacy': {
         'dir': os.path.normpath(os.path.join(current_dir, 'kataAmazonEngine')),
@@ -112,7 +113,10 @@ BACKENDS = {
 }
 
 def _backend_files_available(spec: dict) -> bool:
-    required = (spec['exe'], spec['model'], spec['cfg'], spec.get('hint_cfg', spec['cfg']))
+    required = (
+        spec['exe'], spec['model'], spec['cfg'], spec.get('hint_cfg', spec['cfg']),
+        *spec.get('runtime_files', ()),
+    )
     return all(os.path.isfile(
         item if os.path.isabs(item) else os.path.join(spec['dir'], item)
     ) for item in required)

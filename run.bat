@@ -1,12 +1,23 @@
 @echo off
-REM 用项目自带的 .venv 启动亚马逊棋 GUI。
-setlocal
+setlocal EnableExtensions
 cd /d "%~dp0"
 
 if not exist ".venv\Scripts\python.exe" (
-    echo [run] 未找到虚拟环境，请先运行 setup_env.bat。
-    exit /b 1
+    echo [run] .venv was not found. Creating it now ...
+    call setup_env.bat --no-pause
+    if errorlevel 1 goto :failed
 )
 
 ".venv\Scripts\python.exe" main.py
-endlocal
+set "RUN_STATUS=%ERRORLEVEL%"
+if not "%RUN_STATUS%"=="0" (
+    echo.
+    echo [run] Application exited with code %RUN_STATUS%.
+    pause
+)
+endlocal & exit /b %RUN_STATUS%
+
+:failed
+echo [run] Environment setup failed.
+pause
+endlocal & exit /b 1

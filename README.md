@@ -33,14 +33,19 @@
 
 项目自带环境脚本。由于模型和原生引擎通过 Git LFS 管理，首次克隆前请先安装
 [Git LFS](https://git-lfs.com/) 并执行 `git lfs install`。完整功能版本目前正式支持
-**Windows x64 + Python 3.11 / 3.13**：
+**Windows x64 + Python 3.11 / 3.13**；Python 3.10 可运行 GUI 与 KataGo，但不含预编译 MCTS：
 
 Windows：
 
 ```bat
 setup_env.bat   :: 创建 .venv 并安装依赖（首次）
 run.bat         :: 启动游戏
+call activate_env.bat  :: 可选：在当前终端激活 .venv
 ```
+
+`setup_env.bat` 负责创建环境和安装依赖，本身不会把调用它的终端永久切换到 `.venv`；
+需要激活时必须使用 `call activate_env.bat`。脚本默认使用清华 PyPI 镜像，可通过环境变量
+`KATA_AMAZON_PIP_INDEX` 改成其他镜像。
 
 ### 自包含便携版
 
@@ -67,7 +72,7 @@ Linux / macOS 可运行纯 Python GUI 和人人对弈；MCTS 与 kataAmazon 需�
 ./run.sh
 ```
 
-需要本机已安装 Python 3.11—3.13（推荐 3.11 或 3.13，与预编译的 C++ MCTS 模块匹配）。
+需要本机已安装 Python 3.10—3.13；推荐 3.11 或 3.13，只有这两个版本配有预编译的 C++ MCTS 模块。
 缺少某个原生模块、模型或配置时，对应 AI 菜单会自动禁用，程序仍可进行人人对弈。
 
 ## AI 引擎说明
@@ -75,8 +80,9 @@ Linux / macOS 可运行纯 Python GUI 和人人对弈；MCTS 与 kataAmazon 需�
 - **`amazon_X`（新模型，默认）**：
   - `src/ai/kataAmazonEngineCuda/amazons.exe`（**OpenCL/GPU**）。搭配
     模型文件 `amazon10x10_xzf.bin.gz`。需要支持 OpenCL 的显卡及正确安装的驱动；
-    随目录附带 `OpenCL.dll` / `libz.dll` / `libzip.dll` / `zlib.dll` / `zip.dll` /
-    MSVC 运行库与 `engine.cfg`。首次运行会做一次 OpenCL 自动调优，结果缓存在
+    当前权重为 `gen223_b featurev1`，配套引擎会计算第一阶段新增输入特征。随目录附带
+    OpenCL/zlib/MinGW 运行库与
+    `engine.cfg`。首次运行会做一次 OpenCL 自动调优，结果缓存在
     目录内的 `KataGoData/opencltuning/`。
 - **`amazon_L`（原始模型，后备）**：
   - `src/ai/kataAmazonEngine/kataAmazon.exe`（原始 **OpenCL/GPU** 引擎），搭配
@@ -84,8 +90,8 @@ Linux / macOS 可运行纯 Python GUI 和人人对弈；MCTS 与 kataAmazon 需�
 - **默认自动选择**：`amazons_engine.py` 检测到 `amazon_X` 的完整资源则优先使用，
   否则回退到 `amazon_L`；GUI 菜单可为黑白双方独立选择。
 - **模型**：`src/ai/kataAmazonEngineCuda/amazon10x10_xzf.bin.gz`
-  （架构 `b20c256legacyv10`，20 残差块 / 256 通道；
-  SHA-256 `bd2c04f20ce7c597269c62ac2d1ddf6c6acdafc5a5d8d913998f37efd681fac6`）。
+  （`gen223_b featurev1`，架构 `b20c256legacyv10`，20 残差块 / 256 通道；
+  SHA-256 `f32740014037c091ba564a586d9b6e05fb78d1e3fd4dae59e97c280c99af776a`）。
   `amazon_X` 的默认对局搜索配置使用 600 visits。
 - **通信**：以 GTP 子进程运行，用有超时边界的 `kata-genmove_analyze` 获取着法和胜率。
   对局着法只在规则层验证通过后提交到所有引擎；提示使用独立后台线程和当前历史快照，
@@ -93,8 +99,10 @@ Linux / macOS 可运行纯 Python GUI 和人人对弈；MCTS 与 kataAmazon 需�
 - **可移植**：`src/ai/amazons_engine.py` 中所有运行资源都相对该文件计算，正常运行固定使用
   项目或便携目录内随附的引擎、模型与配置，不读取机器上的外部模型路径。
 
-> 注意：`amazon_X` 模型采用与配套引擎兼容的格式，**只能被配套的 `amazons.exe` 加载**。
-> CUDA 版 `katago.exe` 会报 `unknown activation type`，原始 `kataAmazon.exe` 同样无法加载。
+> 注意：featurev1 模型必须由本项目配套的 `amazons.exe` 推理。旧引擎即使能解析权重，
+> 也不会计算新增输入特征，输出不可信；原始 `amazon_L` 引擎和模型没有被替换。
+> 后续替换 XZF 权重时，应继续使用当前格式导出的模型，并保留内部模型名中的
+> `featurev1` 标记；2022 旧引擎专用的“删 48 行元数据”权重不应与新版引擎混用。
 > 目录名 `kataAmazonEngineCuda` 是历史遗留，当前其中放的是 OpenCL 版引擎。
 > 项目只保留界面中实际可选的 `amazon_X` 与 `amazon_L` 后端，不携带未接入运行流程的
 > 试验引擎和重复权重。
