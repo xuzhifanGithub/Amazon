@@ -220,8 +220,10 @@ def resolve_engine_resources(backend: str, engine_dir: str | None = None,
     )
 
 
-def profile_config_for_visits(backend: str, visits: int) -> str:
-    """Return a generated config with an overridden ``maxVisits`` value.
+def profile_config_for_visits(
+        backend: str, visits: int,
+        score_utility_enabled: bool | None = None) -> str:
+    """Return a generated config with per-search profile overrides.
 
     The shipped engine configuration is deliberately never edited.  A stable
     file in the platform temp directory also lets multiple turns reuse the
@@ -237,6 +239,18 @@ def profile_config_for_visits(backend: str, visits: int) -> str:
         rendered = re.sub(r"(?m)^\s*maxVisits\s*=.*$", replacement, source_text)
     else:
         rendered = source_text.rstrip() + "\n" + replacement + "\n"
+
+    if score_utility_enabled is not None:
+        factor = "0.02" if score_utility_enabled else "0.0"
+        replacement = f"dynamicScoreUtilityFactor = {factor}"
+        if re.search(r"(?m)^\s*dynamicScoreUtilityFactor\s*=.*$", rendered):
+            rendered = re.sub(
+                r"(?m)^\s*dynamicScoreUtilityFactor\s*=.*$",
+                replacement,
+                rendered,
+            )
+        else:
+            rendered = rendered.rstrip() + "\n" + replacement + "\n"
 
     directory = os.path.join(tempfile.gettempdir(), "amazons-katago-profiles", backend)
     os.makedirs(directory, exist_ok=True)
@@ -298,7 +312,8 @@ class AmazonsKataGoEngine(QObject):
                  engine_exe: str = None,
                  model_file: str = None,
                  config_file: str = None,
-                 max_visits: int | None = None):
+                 max_visits: int | None = None,
+                 score_utility_enabled: bool | None = None):
 
         super().__init__()
 
@@ -319,8 +334,10 @@ class AmazonsKataGoEngine(QObject):
         engine_dir, engine_exe, model_file, config_file = resolve_engine_resources(
             self.backend, engine_dir, engine_exe, model_file, config_file)
         if max_visits is not None:
-            config_file = profile_config_for_visits(self.backend, max_visits)
+            config_file = profile_config_for_visits(
+                self.backend, max_visits, score_utility_enabled)
         self.max_visits = max_visits
+        self.score_utility_enabled = score_utility_enabled
 
         # 允许相对路径：以引擎目录为基准解析（引擎子进程也以此为工作目录）
         engine_path = os.path.join(engine_dir, engine_exe)

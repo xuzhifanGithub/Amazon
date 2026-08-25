@@ -67,8 +67,8 @@ def test_amazon_x_score_lead_is_visible_and_names_the_leading_side(qapp):
     assert window.info_score.text() == (
         "预测分差：黑方 +4.25 分 · 不确定度 ±1.10")
     assert not window.info_score.isHidden()
-    assert "效用" not in window.info_panel.info_summary.text()
-    assert "估值 0.735" in window.info_panel.info_summary.text()
+    assert "价值头 0.740" in window.info_panel.info_summary.text()
+    assert "估值 0.735" not in window.info_panel.info_summary.text()
     assert "先验 0.220" in window.info_panel.info_summary.text()
 
     result.score_selfplay = -2.5
@@ -374,7 +374,7 @@ def test_ai_move_path_uses_one_compact_line(qapp):
     window = AmazonsMainWindow(AmazonsSimulator())
 
     window.update_ai_info_panel(
-        BestResult(60, 50, 40, 73.5, 600, 0.735),
+        BestResult(60, 50, 40, 73.5, 600, 0.735, utility=0.48),
         BLACK_AMAZON,
         "kataAmazon_gpu",
     )
@@ -383,6 +383,50 @@ def test_ai_move_path_uses_one_compact_line(qapp):
     assert "\n" not in window.info_move_detail.text()
     assert window.info_move_detail.toolTip() == "选子 A4 → 移动 A5 → 射箭 A6"
     assert "\n" not in window.info_ai_model.text()
+    assert window.info_panel.info_summary.text() == "胜率 73.5% · 600次 · 价值头 0.740"
+    window.close()
+
+
+def test_amazon_x_does_not_fall_back_to_normalized_win_rate(qapp):
+    window = AmazonsMainWindow(AmazonsSimulator())
+
+    window.update_ai_info_panel(
+        BestResult(60, 50, 40, 73.5, 600, 0.735),
+        BLACK_AMAZON,
+        "kataAmazon_gpu",
+    )
+
+    assert window.info_eval.text() == "价值头：—"
+    assert window.info_panel.info_summary.text() == "胜率 73.5% · 600次"
+    window.close()
+
+
+def test_amazon_x_value_head_is_normalized_and_clamped(qapp):
+    window = AmazonsMainWindow(AmazonsSimulator())
+
+    for utility, expected in [(-1.0, "0.000"), (0.0, "0.500"),
+                              (1.0, "1.000"), (2.0, "1.000")]:
+        window.update_ai_info_panel(
+            BestResult(60, 50, 40, 73.5, 600, 0.735,
+                       utility=utility),
+            BLACK_AMAZON,
+            "kataAmazon_gpu",
+        )
+        assert f"价值头 {expected}" in window.info_panel.info_summary.text()
+
+    window.close()
+
+
+def test_non_amazon_x_keeps_existing_evaluation_display(qapp):
+    window = AmazonsMainWindow(AmazonsSimulator())
+
+    window.update_ai_info_panel(
+        BestResult(60, 50, 40, 73.5, 600, 0.735),
+        BLACK_AMAZON,
+        "mcts_18",
+    )
+
+    assert window.info_eval.text() == "估值：0.7350"
     assert window.info_panel.info_summary.text() == "胜率 73.5% · 600次 · 估值 0.735"
     window.close()
 

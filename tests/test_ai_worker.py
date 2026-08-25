@@ -80,8 +80,9 @@ def test_kata_worker_holds_snapshot_engine_context_for_complete_turn():
             return {"A1": (0, 0), "B2": (1, 1), "C3": (2, 2)}[coord]
 
     @contextmanager
-    def provider(backend, visits, history):
-        calls.append(("acquire", backend, visits, history))
+    def provider(backend, visits, history, score_utility_enabled):
+        calls.append((
+            "acquire", backend, visits, history, score_utility_enabled))
         yield FakeKata()
         calls.append(("release",))
 
@@ -89,14 +90,14 @@ def test_kata_worker_holds_snapshot_engine_context_for_complete_turn():
     worker = AIWorker(
         10, None, None, 1, "kataAmazon",
         engine_provider=provider, engine_backend="gpu",
-        kata_visits=700, history=history)
+        kata_visits=700, history=history, score_utility_enabled=False)
     outcomes = []
     worker.finished.connect(outcomes.append)
 
     worker.run()
 
     assert calls == [
-        ("acquire", "gpu", 700, history),
+        ("acquire", "gpu", 700, history, False),
         ("search", 1),
         ("release",),
     ]
@@ -129,7 +130,7 @@ def test_legacy_kata_worker_does_not_expose_untrained_score_head():
             return {"A1": (0, 0), "B2": (1, 1), "C3": (2, 2)}[coord]
 
     @contextmanager
-    def provider(_backend, _visits, _history):
+    def provider(_backend, _visits, _history, _score_utility_enabled):
         yield FakeLegacyKata()
 
     worker = AIWorker(
@@ -154,7 +155,7 @@ def test_kata_worker_reports_resign_as_error_instead_of_ai_resignation():
             return "resign", "B2", "C3"
 
     @contextmanager
-    def provider(_backend, _visits, _history):
+    def provider(_backend, _visits, _history, _score_utility_enabled):
         yield FakeKata()
 
     worker = AIWorker(

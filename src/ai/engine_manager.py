@@ -12,11 +12,13 @@ logger = logging.getLogger(__name__)
 
 
 class EngineManager:
-    """Own engines keyed by backend and visits, never by mutable board state."""
+    """Own engines keyed by immutable search settings, never by board state."""
 
     def __init__(self, engine_factory=AmazonsKataGoEngine):
         self._engine_factory = engine_factory
-        self.engines: dict[tuple[str, int, str], AmazonsKataGoEngine] = {}
+        self.engines: dict[
+            tuple[str, int, str, bool | None], AmazonsKataGoEngine
+        ] = {}
         self._lock = threading.RLock()
         self._usage_lock = threading.Lock()
         self._active_operations = 0
@@ -42,15 +44,17 @@ class EngineManager:
         return engines
 
     def has_game_engine(self, backend: str, visits: int,
-                        mode: str = "gameplay") -> bool:
+                        mode: str = "gameplay",
+                        score_utility_enabled: bool | None = None) -> bool:
         """Return whether a matching initialized engine is already pooled."""
-        key = (backend, int(visits), mode)
+        key = (backend, int(visits), mode, score_utility_enabled)
         with self._lock:
             return key in self.engines
 
     def get_game_engine(self, backend: str, visits: int, history, play_turn,
-                        mode: str = "gameplay"):
-        key = (backend, int(visits), mode)
+                        mode: str = "gameplay",
+                        score_utility_enabled: bool | None = None):
+        key = (backend, int(visits), mode, score_utility_enabled)
         history = tuple(history)
         with self._lock:
             engine = self.engines.get(key)
@@ -60,7 +64,11 @@ class EngineManager:
         # Engine startup and history replay can take minutes on first OpenCL
         # use.  They must not hold the manager state lock, otherwise a GUI
         # reset cannot even mark the active request as stale.
-        engine = self._engine_factory(backend=backend, max_visits=key[1])
+        engine = self._engine_factory(
+            backend=backend,
+            max_visits=key[1],
+            score_utility_enabled=score_utility_enabled,
+        )
         try:
             for index, turn in enumerate(history):
                 play_turn(engine, 1 if index % 2 == 0 else -1, *turn)
@@ -82,7 +90,8 @@ class EngineManager:
 
     @contextmanager
     def game_engine(self, backend: str, visits: int, history, play_turn,
-                    mode: str = "gameplay"):
+                    mode: str = "gameplay",
+                    score_utility_enabled: bool | None = None):
         """Lease an engine for one complete search.
 
         Reset, undo, and sync requests never write into a search in progress.
@@ -100,7 +109,8 @@ class EngineManager:
                 self._active_operations += 1
             self._close_engines(stale_engines)
             engine = self.get_game_engine(
-                backend, visits, history, play_turn, mode=mode)
+                backend, visits, history, play_turn, mode=mode,
+                score_utility_enabled=score_utility_enabled)
             try:
                 yield engine
             except BaseException:
@@ -133,8 +143,8 @@ class EngineManager:
                 return False
             if committed_turns <= self._synced_turns:
                 return True
-            for (_backend, _visits, mode), engine in tuple(self.engines.items()):
-                if mode == "gameplay":
+            for key, engine in tuple(self.engines.items()):
+                if key[2] == "gameplay":
                     play_turn(engine, player, start_pos, move_pos, arrow_pos)
             self._synced_turns = committed_turns
             return True
@@ -147,8 +157,8 @@ class EngineManager:
                 return False
             if committed_turns >= self._synced_turns:
                 return True
-            for (_backend, _visits, mode), engine in tuple(self.engines.items()):
-                if mode == "gameplay":
+            for key, engine in tuple(self.engines.items()):
+                if key[2] == "gameplay":
                     engine.undo()
             self._synced_turns = committed_turns
             return True
@@ -158,8 +168,8 @@ class EngineManager:
             if self._active_operations:
                 self._reset_pending = True
                 return False
-            for (_backend, _visits, mode), engine in tuple(self.engines.items()):
-                if mode == "gameplay":
+            for key, engine in tuple(self.engines.items()):
+                if key[2] == "gameplay":
                     engine.clear_board()
             self._synced_turns = 0
             return True

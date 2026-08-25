@@ -18,13 +18,14 @@ class AIProfile:
 
     mcts_seconds: float = 1.0
     kata_visits: int = 600
+    score_utility_enabled: bool = False
 
     def normalized(self) -> "AIProfile":
         seconds = max(MCTS_MIN_SECONDS, min(MCTS_MAX_SECONDS, float(self.mcts_seconds)))
         seconds = round(seconds / MCTS_STEP_SECONDS) * MCTS_STEP_SECONDS
         visits = max(KATA_MIN_VISITS, min(KATA_MAX_VISITS, int(self.kata_visits)))
         visits = round(visits / KATA_STEP_VISITS) * KATA_STEP_VISITS
-        return AIProfile(seconds, visits)
+        return AIProfile(seconds, visits, bool(self.score_utility_enabled))
 
 
 def default_kata_visits(backend: str | None = None) -> int:
@@ -37,6 +38,11 @@ def load_profile(settings, side_key: str, backend: str | None = None) -> AIProfi
     profile = AIProfile(
         settings.value(f"ai/{side_key}/mcts_seconds", default.mcts_seconds, type=float),
         settings.value(f"ai/{side_key}/kata_visits", default.kata_visits, type=int),
+        settings.value(
+            f"ai/{side_key}/score_utility_enabled",
+            default.score_utility_enabled,
+            type=bool,
+        ),
     ).normalized()
     return profile
 
@@ -45,4 +51,8 @@ def save_profile(settings, side_key: str, profile: AIProfile) -> AIProfile:
     profile = profile.normalized()
     settings.setValue(f"ai/{side_key}/mcts_seconds", profile.mcts_seconds)
     settings.setValue(f"ai/{side_key}/kata_visits", profile.kata_visits)
+    settings.setValue(
+        f"ai/{side_key}/score_utility_enabled",
+        profile.score_utility_enabled,
+    )
     return profile

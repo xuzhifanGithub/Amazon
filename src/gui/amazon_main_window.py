@@ -459,6 +459,22 @@ class AmazonsMainWindow(QMainWindow):
         row_number = size - row
         return f"{col_letter}{row_number}"
 
+    @staticmethod
+    def _ai_evaluation_for_display(best_res, ai_type_key: str):
+        """返回界面应显示的估值名称和值。
+
+        amazon_X 的 ``select_pro`` 是胜率除以 100，并不是独立的局面
+        估值；该模型改用引擎的原始 utility/value 输出，并将其从
+        ``[-1, 1]`` 线性映射到便于阅读的 ``[0, 1]``。其他 AI 保留
+        原有估值语义。
+        """
+        if ai_type_key in ('kataAmazon', 'kataAmazon_gpu'):
+            if best_res.utility is None:
+                return "价值头", None
+            normalized_value = (float(best_res.utility) + 1.0) / 2.0
+            return "价值头", max(0.0, min(1.0, normalized_value))
+        return "估值", best_res.select_pro
+
     def update_ai_info_panel(self, best_res, player, ai_type_key: str = ""):
         """更新右侧 AI 分析信息面板。
 
@@ -544,19 +560,21 @@ class AmazonsMainWindow(QMainWindow):
         else:
             self.info_visits.setText("搜索次数：—")
 
-        # 局面估值 / 选择概率
-        if best_res.select_pro is not None:
-            self.info_eval.setText(f"局面估值：{best_res.select_pro:.4f}")
+        # amazon_X 展示独立的价值头输出，避免重复显示归一化胜率。
+        eval_label, eval_value = self._ai_evaluation_for_display(
+            best_res, ai_type_key)
+        if eval_value is not None:
+            self.info_eval.setText(f"{eval_label}：{eval_value:.4f}")
         else:
-            self.info_eval.setText("局面估值：—")
+            self.info_eval.setText(f"{eval_label}：—")
 
         rate_summary = ("—" if best_res.win_pro is None
                         else f"{best_res.win_pro:.1f}%")
         visits_summary = ("—" if best_res.max_apt is None
                           else str(int(best_res.max_apt)))
         summary_parts = [f"胜率 {rate_summary}", f"{visits_summary}次"]
-        if best_res.select_pro is not None:
-            summary_parts.append(f"估值 {best_res.select_pro:.3f}")
+        if eval_value is not None:
+            summary_parts.append(f"{eval_label} {eval_value:.3f}")
         if best_res.policy_prior is not None:
             summary_parts.append(f"先验 {best_res.policy_prior:.3f}")
         self.info_panel.info_summary.setText(" · ".join(summary_parts))
@@ -1577,7 +1595,8 @@ class AmazonsMainWindow(QMainWindow):
         # the player explicitly saves a per-side visits value.
         if (ai_type_key == 'kataAmazon_legacy'
                 and not self.settings.contains(f"ai/{profile_key}/kata_visits")):
-            profile = AIProfile(profile.mcts_seconds, 400)
+            profile = AIProfile(
+                profile.mcts_seconds, 400, profile.score_utility_enabled)
 
         self.current_ai_type = ai_type_key
         try:
@@ -1649,7 +1668,9 @@ class AmazonsMainWindow(QMainWindow):
 
         win_pro_str = "—" if best_res.win_pro is None else f"{best_res.win_pro:.2f}%"
         visits_str = "—" if best_res.max_apt is None else str(int(best_res.max_apt))
-        select_pro_str = "—" if best_res.select_pro is None else f"{best_res.select_pro:.4f}"
+        eval_label, eval_value = self._ai_evaluation_for_display(
+            best_res, getattr(self, 'current_ai_type', ''))
+        eval_value_str = "—" if eval_value is None else f"{eval_value:.4f}"
         score_value_str = ("" if best_res.score_selfplay is None
                            else f" | 预测分差={best_res.score_selfplay:+.2f}")
         player_name = "黑方" if self.simulator.current_player == BLACK_AMAZON else "白方"
@@ -1658,7 +1679,7 @@ class AmazonsMainWindow(QMainWindow):
             f"{player_name}"
             f"AI 走法: 胜率={win_pro_str} | "
             f"搜索次数={visits_str} | "
-            f"局面估值={select_pro_str}"
+            f"{eval_label}={eval_value_str}"
             f"{score_value_str}"
         )
         self.statusBar().showMessage(info_message)

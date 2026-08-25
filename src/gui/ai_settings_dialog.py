@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from PyQt6.QtWidgets import (
-    QDialog, QDialogButtonBox, QDoubleSpinBox, QFormLayout, QGroupBox,
+    QCheckBox, QDialog, QDialogButtonBox, QDoubleSpinBox, QFormLayout, QGroupBox,
     QHBoxLayout, QPushButton, QSpinBox, QVBoxLayout,
 )
 
@@ -50,20 +50,30 @@ class AISettingsDialog(QDialog):
         visits.setSingleStep(KATA_STEP_VISITS)
         visits.setSuffix(" visits")
         visits.setValue(profile.normalized().kata_visits)
+        score_utility = QCheckBox("开启", box)
+        score_utility.setChecked(profile.normalized().score_utility_enabled)
+        score_utility.setToolTip(
+            "仅作用于 amazon_X；开启后搜索会加入少量动态分差价值，"
+            "关闭后只按胜负价值搜索。")
         form.addRow("MCTS 思考时间", seconds)
         form.addRow("KataGo 搜索次数", visits)
+        form.addRow("amazon_X 分差头搜索", score_utility)
         root.addWidget(box)
-        return seconds, visits
+        return seconds, visits, score_utility
 
     def restore_defaults(self):
-        for seconds, visits in (self.black_controls, self.white_controls):
+        for seconds, visits, score_utility in (
+                self.black_controls, self.white_controls):
             seconds.setValue(1.0)
             visits.setValue(600)
+            score_utility.setChecked(False)
 
     @staticmethod
     def _profile(controls) -> AIProfile:
-        seconds, visits = controls
-        return AIProfile(seconds.value(), visits.value()).normalized()
+        seconds, visits, score_utility = controls
+        return AIProfile(
+            seconds.value(), visits.value(), score_utility.isChecked()
+        ).normalized()
 
     def profiles(self) -> tuple[AIProfile, AIProfile]:
         return self._profile(self.black_controls), self._profile(self.white_controls)
