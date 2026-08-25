@@ -1779,12 +1779,43 @@ double evaluateFeatureArray(
 
 double valueAll(const boardArray& board, const queenArray& queenPos, int moveSide)
 {
+#if defined(AMAZON_AI_ORIGINAL_EVALUATOR) && AMAZON_AI_ORIGINAL_EVALUATOR
+    // Keep the project's original four-feature/phase formula available as the
+    // entry-level MCTS model.  The stronger module below uses the distilled
+    // 18-feature evaluator instead.
+    double w = 0;
+    double t1 = valueT1(board, queenPos, moveSide, &w);
+    double t2 = valueT2(board, queenPos, moveSide);
+    double mobility = valueMobility(board, queenPos, moveSide);
+
+    double k1, k2, k3;
+    if (w >= 0 && w <= 14) {
+        k1 = 1; k2 = 0; k3 = 0;
+    }
+    else if (w > 14 && w <= 25) {
+        k1 = 1; k2 = 0; k3 = 0.2;
+    }
+    else if (w > 25 && w <= 40) {
+        k1 = 1; k2 = 1; k3 = 1;
+    }
+    else if (w > 40 && w <= 55) {
+        k1 = 1; k2 = 1; k3 = 2;
+    }
+    else if (w > 55 && w <= 63) {
+        k1 = 1; k2 = 1; k3 = 3;
+    }
+    else {
+        k1 = 1; k2 = 1; k3 = 4;
+    }
+    return t1 * k1 + t2 * k2 + k3 * mobility;
+#else
     // Phase-dependent formula distilled from candidate_gen217 immediate MCTS
     // values on 288,915 complete-turn self-play positions. The fitted formula
     // and legacy gen217 evaluator are blended equally. See
     // src/ai/value_model_gen217.json.
     return evaluateFeatureArray(
         calculateEvaluationFeatures(board, queenPos, moveSide));
+#endif
 }
 
 
@@ -2386,7 +2417,7 @@ public:
             modelFeatures[index] = features[index];
         }
         result["rich_value"] = gen217_value_model::evaluate(modelFeatures);
-        result["value"] = evaluateFeatureArray(features);
+        result["value"] = valueAll(board, queenPos, moveSide);
         return result;
     }
 };
@@ -2397,11 +2428,15 @@ public:
 // ===========================================
 // pybind11 封装部分
 // ===========================================
-PYBIND11_MODULE(amazon_ai, m) {
+#ifndef AMAZON_AI_MODULE_NAME
+#define AMAZON_AI_MODULE_NAME amazon_ai
+#endif
+
+PYBIND11_MODULE(AMAZON_AI_MODULE_NAME, m) {
     m.doc() = "pybind11 wrapper for the Amazonas UCT C++ AI"; // 模块文档字符串
 
     // 1. 绑定 UctRes 结构体
-    py::class_<UctRes>(m, "UctRes")
+    py::class_<UctRes>(m, "UctRes", py::module_local())
         .def(py::init<>())
         .def_readwrite("From", &UctRes::From)
         .def_readwrite("To", &UctRes::To)
@@ -2423,7 +2458,7 @@ PYBIND11_MODULE(amazon_ai, m) {
         });
 
     // 2. 绑定 AmazonasAI 类
-    py::class_<AmazonasAI>(m, "AmazonasAI")
+    py::class_<AmazonasAI>(m, "AmazonasAI", py::module_local())
         // 绑定无参数构造函数
         .def(py::init<>())
         // 绑定 uctSearch 函数

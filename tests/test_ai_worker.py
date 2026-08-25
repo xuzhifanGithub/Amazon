@@ -6,7 +6,8 @@ import time
 from unittest.mock import Mock
 import pytest
 
-from src.ai.amazon_ai_agent import AIWorker, HintWorker, amazon_ai
+from src.ai.amazon_ai_agent import (AIWorker, HintWorker, amazon_ai,
+                                    amazon_ai_basic, mcts_available)
 from src.core.simulator import AmazonsSimulator, BLACK_AMAZON
 from src.ai.results import AIOutcome
 
@@ -38,6 +39,24 @@ def test_mcts_worker_returns_typed_success_outcome():
     assert outcomes[0].error is None
     assert outcomes[0].result.best_pos_from == 60
     assert engine.args[3] == 2.5
+
+
+def test_18_feature_mcts_worker_uses_the_same_search_contract():
+    engine = FakeMcts()
+    worker = AIWorker(10, None, None, 1, 'mcts_18', engine, mcts_seconds=3.0)
+    outcomes = []
+    worker.finished.connect(outcomes.append)
+
+    worker.run()
+
+    assert outcomes[0].error is None
+    assert engine.args[3] == 3.0
+
+
+def test_each_mcts_difficulty_checks_its_own_native_module():
+    assert mcts_available('mcts') is (amazon_ai_basic is not None)
+    assert mcts_available('mcts_18') is (amazon_ai is not None)
+    assert not mcts_available('unknown')
 
 
 def test_kata_worker_holds_snapshot_engine_context_for_complete_turn():

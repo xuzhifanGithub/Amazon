@@ -35,10 +35,12 @@ for folder, destination, model in (
     datas.extend(folder_datas)
 
 matching_module = AI / "native" / f"amazon_ai.{PY_TAG}-win_amd64.pyd"
-if not matching_module.is_file():
+matching_basic_module = AI / "native" / f"amazon_ai_basic.{PY_TAG}-win_amd64.pyd"
+if not matching_module.is_file() or not matching_basic_module.is_file():
     raise SystemExit(
         f"缺少 Python {sys.version_info.major}.{sys.version_info.minor} 对应的 MCTS .pyd 模块")
 binaries.append((str(matching_module), "src/ai/native"))
+binaries.append((str(matching_basic_module), "src/ai/native"))
 for runtime_dll in (
     "libgomp-1.dll",
     "libwinpthread-1.dll",

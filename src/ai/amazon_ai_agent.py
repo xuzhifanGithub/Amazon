@@ -16,10 +16,16 @@ for module_path in (
         sys.path.append(module_path)
 try:
     import amazon_ai
-    logger.info("成功导入 amazon_ai 模块")
+    logger.info("成功导入 18 特征 MCTS 模块 amazon_ai")
 except ImportError:
     amazon_ai = None
-    logger.warning("未找到 amazon_ai 模块，请选择受支持的 Python 版本或自行编译")
+    logger.warning("未找到 18 特征 MCTS 模块 amazon_ai，请选择受支持的 Python 版本或自行编译")
+try:
+    import amazon_ai_basic
+    logger.info("成功导入基础 MCTS 模块 amazon_ai_basic")
+except ImportError:
+    amazon_ai_basic = None
+    logger.warning("未找到基础 MCTS 模块 amazon_ai_basic，请选择受支持的 Python 版本或自行编译")
 from src.ai.amazons_engine import (AmazonsKataGoEngine, backend_available,
                                     engine_spec_for_backend)
 from src.ai.engine_manager import EngineManager
@@ -33,7 +39,11 @@ from src.ai.results import AIOutcome, BestResult, HintCandidate, HintOutcome
 
 
 def mcts_available(ai_type: str) -> bool:
-    return ai_type == 'mcts' and amazon_ai is not None
+    modules = {
+        'mcts': amazon_ai_basic,
+        'mcts_18': amazon_ai,
+    }
+    return modules.get(ai_type) is not None
 
 class AIWorker(QObject):
     """
@@ -67,7 +77,7 @@ class AIWorker(QObject):
         """
         best_res = BestResult()
         try:
-            if self.ai_type == 'mcts':
+            if self.ai_type in ('mcts', 'mcts_18'):
                 best_move = self.ai_type_engine.uct_search(
                     self.board,
                     self.queenPos,
@@ -319,6 +329,8 @@ class AmazonAIAgent(QObject):
         self._engine_lock = threading.RLock()
         self.size = self.main_window.simulator.size
         self.ai = amazon_ai.AmazonasAI() if amazon_ai is not None else None
+        self.ai_basic = (amazon_ai_basic.AmazonasAI()
+                         if amazon_ai_basic is not None else None)
         # kataAmazon 引擎：可选 'gpu'(XZF 最新权重) / 'legacy'(OpenCL,旧模型)。
         # Gameplay engines are reused per (backend, visits) profile.
         self.ai_engine = None
@@ -350,10 +362,11 @@ class AmazonAIAgent(QObject):
 
 
         worker_ai_type = ai_type
-        if ai_type == 'mcts':
-            if self.ai is None:
-                raise RuntimeError("MCTS 模块不可用。")
-            ai_type_engine = self.ai
+        if ai_type in ('mcts', 'mcts_18'):
+            ai_type_engine = self.ai_basic if ai_type == 'mcts' else self.ai
+            if ai_type_engine is None:
+                model_name = "基础 MCTS" if ai_type == 'mcts' else "18 特征 MCTS"
+                raise RuntimeError(f"{model_name} 模块不可用。")
         elif ai_type in ('kataAmazon', 'kataAmazon_gpu', 'kataAmazon_legacy'):
             #   _gpu    -> 新权重 + CUDA(GPU)
             #   _legacy -> 原始引擎(OpenCL/GPU) + 旧模型 amazons10x10
@@ -635,6 +648,5 @@ class AmazonAIAgent(QObject):
 
         with self._engine_lock:
             self._drop_ai_engine_locked(force=True)
-
 
 

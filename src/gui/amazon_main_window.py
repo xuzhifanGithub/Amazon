@@ -51,6 +51,7 @@ class AmazonsMainWindow(QMainWindow):
     # 定义玩家类型常量
     PLAYER_TYPE_HUMAN = 'human'
     PLAYER_TYPE_AI_MCTS = 'mcts'
+    PLAYER_TYPE_AI_MCTS_18 = 'mcts_18'
     PLAYER_TYPE_AI_KATAAMAZON = 'kataAmazon'          # 兼容旧引用
     PLAYER_TYPE_AI_KATAAMAZON_GPU = 'kataAmazon_gpu'  # XZF 最新模型 + OpenCL(GPU) 引擎
     PLAYER_TYPE_AI_KATAAMAZON_LEGACY = 'kataAmazon_legacy'  # 原始引擎（OpenCL/GPU）+ 旧模型
@@ -480,6 +481,7 @@ class AmazonsMainWindow(QMainWindow):
         # 模型名称
         model_names = {
             'mcts': 'MCTS C++',
+            'mcts_18': 'MCTS-18特征',
             'kataAmazon': KATA_MODEL_DISPLAY_NAMES['gpu'],
             'kataAmazon_gpu': KATA_MODEL_DISPLAY_NAMES['gpu'],
             'kataAmazon_legacy': KATA_MODEL_DISPLAY_NAMES['legacy'],
@@ -690,23 +692,31 @@ class AmazonsMainWindow(QMainWindow):
         black_player_group.addAction(self.black_ai_mcts_action)
         black_ai_menu.addAction(self.black_ai_mcts_action)
 
-        #  kataAmazon（XZF 最新模型，OpenCL/GPU）
-        self.black_ai_kata_gpu_action = QAction(
-            f"{KATA_MODEL_DISPLAY_NAMES['gpu']}★★", self, checkable=True)
-        self.black_ai_kata_gpu_action.setEnabled(backend_available('gpu'))
-        self.black_ai_kata_gpu_action.triggered.connect(
-            lambda: self.set_player_mode(BLACK_AMAZON, self.PLAYER_TYPE_AI_KATAAMAZON_GPU))
-        black_player_group.addAction(self.black_ai_kata_gpu_action)
-        black_ai_menu.addAction(self.black_ai_kata_gpu_action)
+        # 2. 使用 gen217 蒸馏出的正式 18 特征估值器
+        self.black_ai_mcts_18_action = QAction("MCTS-18特征★★", self, checkable=True)
+        self.black_ai_mcts_18_action.setEnabled(mcts_available('mcts_18'))
+        self.black_ai_mcts_18_action.triggered.connect(
+            lambda: self.set_player_mode(BLACK_AMAZON, self.PLAYER_TYPE_AI_MCTS_18))
+        black_player_group.addAction(self.black_ai_mcts_18_action)
+        black_ai_menu.addAction(self.black_ai_mcts_18_action)
 
-        # 原始 kataAmazon（OpenCL/GPU + 旧模型 amazons10x10），项目最初就带的选项
+        # 3. 原始 kataAmazon（OpenCL/GPU + 旧模型 amazons10x10）
         self.black_ai_kata_legacy_action = QAction(
-            f"{KATA_MODEL_DISPLAY_NAMES['legacy']}★★", self, checkable=True)
+            f"{KATA_MODEL_DISPLAY_NAMES['legacy']}★★★", self, checkable=True)
         self.black_ai_kata_legacy_action.setEnabled(backend_available('legacy'))
         self.black_ai_kata_legacy_action.triggered.connect(
             lambda: self.set_player_mode(BLACK_AMAZON, self.PLAYER_TYPE_AI_KATAAMAZON_LEGACY))
         black_player_group.addAction(self.black_ai_kata_legacy_action)
         black_ai_menu.addAction(self.black_ai_kata_legacy_action)
+
+        # 4. kataAmazon（XZF 最新模型，OpenCL/GPU）
+        self.black_ai_kata_gpu_action = QAction(
+            f"{KATA_MODEL_DISPLAY_NAMES['gpu']}★★★★", self, checkable=True)
+        self.black_ai_kata_gpu_action.setEnabled(backend_available('gpu'))
+        self.black_ai_kata_gpu_action.triggered.connect(
+            lambda: self.set_player_mode(BLACK_AMAZON, self.PLAYER_TYPE_AI_KATAAMAZON_GPU))
+        black_player_group.addAction(self.black_ai_kata_gpu_action)
+        black_ai_menu.addAction(self.black_ai_kata_gpu_action)
 
         black_player_menu.addMenu(black_ai_menu)
         game_menu.addMenu(black_player_menu)
@@ -731,23 +741,31 @@ class AmazonsMainWindow(QMainWindow):
         white_player_group.addAction(self.white_ai_mcts_action)
         white_ai_menu.addAction(self.white_ai_mcts_action)
 
-        #  kataAmazon（XZF 最新模型，OpenCL/GPU）
-        self.white_ai_kata_gpu_action = QAction(
-            f"{KATA_MODEL_DISPLAY_NAMES['gpu']}★★", self, checkable=True)
-        self.white_ai_kata_gpu_action.setEnabled(backend_available('gpu'))
-        self.white_ai_kata_gpu_action.triggered.connect(
-            lambda: self.set_player_mode(WHITE_AMAZON, self.PLAYER_TYPE_AI_KATAAMAZON_GPU))
-        white_player_group.addAction(self.white_ai_kata_gpu_action)
-        white_ai_menu.addAction(self.white_ai_kata_gpu_action)
+        # 2. 使用 gen217 蒸馏出的正式 18 特征估值器
+        self.white_ai_mcts_18_action = QAction("MCTS-18特征★★", self, checkable=True)
+        self.white_ai_mcts_18_action.setEnabled(mcts_available('mcts_18'))
+        self.white_ai_mcts_18_action.triggered.connect(
+            lambda: self.set_player_mode(WHITE_AMAZON, self.PLAYER_TYPE_AI_MCTS_18))
+        white_player_group.addAction(self.white_ai_mcts_18_action)
+        white_ai_menu.addAction(self.white_ai_mcts_18_action)
 
-        # 原始 kataAmazon（OpenCL/GPU + 旧模型 amazons10x10），项目最初就带的选项
+        # 3. 原始 kataAmazon（OpenCL/GPU + 旧模型 amazons10x10）
         self.white_ai_kata_legacy_action = QAction(
-            f"{KATA_MODEL_DISPLAY_NAMES['legacy']}★★", self, checkable=True)
+            f"{KATA_MODEL_DISPLAY_NAMES['legacy']}★★★", self, checkable=True)
         self.white_ai_kata_legacy_action.setEnabled(backend_available('legacy'))
         self.white_ai_kata_legacy_action.triggered.connect(
             lambda: self.set_player_mode(WHITE_AMAZON, self.PLAYER_TYPE_AI_KATAAMAZON_LEGACY))
         white_player_group.addAction(self.white_ai_kata_legacy_action)
         white_ai_menu.addAction(self.white_ai_kata_legacy_action)
+
+        # 4. kataAmazon（XZF 最新模型，OpenCL/GPU）
+        self.white_ai_kata_gpu_action = QAction(
+            f"{KATA_MODEL_DISPLAY_NAMES['gpu']}★★★★", self, checkable=True)
+        self.white_ai_kata_gpu_action.setEnabled(backend_available('gpu'))
+        self.white_ai_kata_gpu_action.triggered.connect(
+            lambda: self.set_player_mode(WHITE_AMAZON, self.PLAYER_TYPE_AI_KATAAMAZON_GPU))
+        white_player_group.addAction(self.white_ai_kata_gpu_action)
+        white_ai_menu.addAction(self.white_ai_kata_gpu_action)
 
         white_player_menu.addMenu(white_ai_menu)
         game_menu.addMenu(white_player_menu)
@@ -1014,9 +1032,13 @@ class AmazonsMainWindow(QMainWindow):
         <p>• 平衡探索与利用</p>
         <p>• 适合高分支因子的游戏</p>
 
-        <h3>amazon_X / amazon_L（基于 KataGo 的 AI）★★</h3>
-        <p>• amazon_X：新模型</p>
+        <h3>MCTS-18特征★★</h3>
+        <p>• 使用从 gen217 强模型拟合出的正式 18 特征估值器</p>
+        <p>• 搜索框架与基础 MCTS 相同，局面判断更准确</p>
+
+        <h3>amazon_L★★★ / amazon_X★★★★（基于 KataGo 的 AI）</h3>
         <p>• amazon_L：原始模型</p>
+        <p>• amazon_X：新模型</p>
         <p>• 使用 KataGo 框架的专业 AI</p>
         <p>• 性能更强但计算更复杂</p>
 
@@ -1024,6 +1046,7 @@ class AmazonsMainWindow(QMainWindow):
         <p>★ 基础AI - 适合新手练习</p>
         <p>★★ 中级AI - 有一定挑战性</p>
         <p>★★★ 高级AI - 极具挑战性</p>
+        <p>★★★★ 最强AI - 使用最新强模型</p>
         """
 
         QMessageBox.information(self, "AI算法介绍", ai_text)
@@ -1127,6 +1150,7 @@ class AmazonsMainWindow(QMainWindow):
         """
         availability = {
             self.PLAYER_TYPE_AI_MCTS: mcts_available('mcts'),
+            self.PLAYER_TYPE_AI_MCTS_18: mcts_available('mcts_18'),
             self.PLAYER_TYPE_AI_KATAAMAZON_GPU: backend_available('gpu'),
             self.PLAYER_TYPE_AI_KATAAMAZON_LEGACY: backend_available('legacy'),
         }
@@ -1513,6 +1537,8 @@ class AmazonsMainWindow(QMainWindow):
         ai_type_key = ''
         if current_player_mode == self.PLAYER_TYPE_AI_MCTS:
             ai_type_key = 'mcts'
+        elif current_player_mode == self.PLAYER_TYPE_AI_MCTS_18:
+            ai_type_key = 'mcts_18'
         elif current_player_mode == self.PLAYER_TYPE_AI_KATAAMAZON_GPU:
             ai_type_key = 'kataAmazon_gpu'
         elif current_player_mode == self.PLAYER_TYPE_AI_KATAAMAZON_LEGACY:

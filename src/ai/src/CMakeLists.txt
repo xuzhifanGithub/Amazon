@@ -26,11 +26,19 @@ set(SOURCE_FILES
     cmcts.cpp
 )
 
-# 使用 pybind11_add_module 宏来创建 Python 模块。
+# Build both difficulty levels from the same search implementation.  Only the
+# leaf evaluator differs: amazon_ai uses the distilled 18-feature model, while
+# amazon_ai_basic preserves the original phase formula.
 pybind11_add_module(amazon_ai ${SOURCE_FILES})
+pybind11_add_module(amazon_ai_basic ${SOURCE_FILES})
+target_compile_definitions(amazon_ai_basic PRIVATE
+    AMAZON_AI_MODULE_NAME=amazon_ai_basic
+    AMAZON_AI_ORIGINAL_EVALUATOR=1
+)
 
 # 链接 OpenMP 库。
 target_link_libraries(amazon_ai PRIVATE OpenMP::OpenMP_CXX)
+target_link_libraries(amazon_ai_basic PRIVATE OpenMP::OpenMP_CXX)
 
 # Keep distributable modules separate from disposable CMake build trees. Tests
 # can override this cache path so candidate modules never replace production.
@@ -40,7 +48,9 @@ set(
     CACHE PATH
     "Directory for the compiled amazon_ai Python module"
 )
-set_target_properties(amazon_ai PROPERTIES
-    LIBRARY_OUTPUT_DIRECTORY "${AMAZON_AI_OUTPUT_DIRECTORY}"
-    RUNTIME_OUTPUT_DIRECTORY "${AMAZON_AI_OUTPUT_DIRECTORY}"
-)
+foreach(target amazon_ai amazon_ai_basic)
+    set_target_properties(${target} PROPERTIES
+        LIBRARY_OUTPUT_DIRECTORY "${AMAZON_AI_OUTPUT_DIRECTORY}"
+        RUNTIME_OUTPUT_DIRECTORY "${AMAZON_AI_OUTPUT_DIRECTORY}"
+    )
+endforeach()
