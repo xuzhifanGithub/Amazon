@@ -7,7 +7,6 @@ if not defined KATA_AMAZON_PIP_INDEX set "KATA_AMAZON_PIP_INDEX=https://pypi.tun
 
 where py >nul 2>&1
 if not errorlevel 1 py -3.13 -c "import sys" >nul 2>&1 && set "PYTHON_CMD=py -3.13"
-if not defined PYTHON_CMD py -3.12 -c "import sys" >nul 2>&1 && set "PYTHON_CMD=py -3.12"
 if not defined PYTHON_CMD py -3.11 -c "import sys" >nul 2>&1 && set "PYTHON_CMD=py -3.11"
 if not defined PYTHON_CMD py -3.10 -c "import sys" >nul 2>&1 && set "PYTHON_CMD=py -3.10"
 
@@ -35,7 +34,7 @@ set "SETUP_STATUS=0"
 goto :finish
 
 :no_python
-echo [setup] Python 3.10-3.13 was not found.
+echo [setup] Python 3.10, 3.11, or 3.13 was not found.
 echo [setup] Install 64-bit Python and enable "Add Python to PATH".
 set "SETUP_STATUS=1"
 goto :finish

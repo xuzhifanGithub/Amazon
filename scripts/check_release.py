@@ -11,6 +11,7 @@ AI = ROOT / "src" / "ai"
 
 def main() -> int:
     required = [
+        AI / "native" / "amazon_ai.cp310-win_amd64.pyd",
         AI / "native" / "amazon_ai.cp311-win_amd64.pyd",
         AI / "native" / "amazon_ai.cp313-win_amd64.pyd",
         AI / "native" / "libgomp-1.dll",

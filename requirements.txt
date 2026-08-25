@@ -1,4 +1,4 @@
-# Amazons GUI runtime dependencies (Python 3.10-3.13)
+# Amazons GUI runtime dependencies (Python 3.10, 3.11, or 3.13)
 PyQt6>=6.9,<6.10
 numpy==1.26.4; python_version < "3.13"
 numpy>=2.1,<3; python_version >= "3.13"

@@ -5,7 +5,7 @@
 一款带有双神经网络引擎、三阶段胜率分析与桌面宠物的 PyQt6 亚马逊棋客户端。
 
 [![Tests](https://github.com/xuzhifanGithub/amazonGame/actions/workflows/test.yml/badge.svg?branch=master)](https://github.com/xuzhifanGithub/amazonGame/actions/workflows/test.yml)
-![Python](https://img.shields.io/badge/Python-3.11%20%7C%203.13-3776AB?logo=python&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.13-3776AB?logo=python&logoColor=white)
 ![PyQt6](https://img.shields.io/badge/GUI-PyQt6-41CD52?logo=qt&logoColor=white)
 ![Platform](https://img.shields.io/badge/完整功能-Windows%20x64-0078D4?logo=windows11&logoColor=white)
 ![Git LFS](https://img.shields.io/badge/models-Git%20LFS-F64935?logo=gitlfs&logoColor=white)
@@ -33,7 +33,7 @@
 
 项目自带环境脚本。由于模型和原生引擎通过 Git LFS 管理，首次克隆前请先安装
 [Git LFS](https://git-lfs.com/) 并执行 `git lfs install`。完整功能版本目前正式支持
-**Windows x64 + Python 3.11 / 3.13**；Python 3.10 可运行 GUI 与 KataGo，但不含预编译 MCTS：
+**Windows x64 + Python 3.10 / 3.11 / 3.13**：
 
 Windows：
 
@@ -72,7 +72,7 @@ Linux / macOS 可运行纯 Python GUI 和人人对弈；MCTS 与 kataAmazon 需�
 ./run.sh
 ```
 
-需要本机已安装 Python 3.10—3.13；推荐 3.11 或 3.13，只有这两个版本配有预编译的 C++ MCTS 模块。
+需要本机安装 Python 3.10、3.11 或 3.13；三个版本均配有预编译的 C++ MCTS 模块。
 缺少某个原生模块、模型或配置时，对应 AI 菜单会自动禁用，程序仍可进行人人对弈。
 
 ## AI 引擎说明

@@ -2,6 +2,7 @@
 
 This directory contains the small prebuilt Windows modules used at runtime:
 
+- `amazon_ai.cp310-win_amd64.pyd`
 - `amazon_ai.cp311-win_amd64.pyd`
 - `amazon_ai.cp313-win_amd64.pyd`
 - `libgomp-1.dll`

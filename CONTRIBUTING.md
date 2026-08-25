@@ -4,7 +4,7 @@
 
 ## 开发环境
 
-完整 AI 功能以 Windows x64、Python 3.11/3.13 和可用的 OpenCL 驱动为准。
+完整 AI 功能以 Windows x64、Python 3.10/3.11/3.13 和可用的 OpenCL 驱动为准。
 克隆仓库前请安装 Git LFS，随后执行：
 
 ```bat
