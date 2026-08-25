@@ -111,6 +111,40 @@ def test_kata_worker_holds_snapshot_engine_context_for_complete_turn():
     assert outcomes[0].result.policy_prior == 0.22
 
 
+def test_legacy_kata_worker_does_not_expose_untrained_score_head():
+    class FakeLegacyKata:
+        last_winrate = 51.0
+        last_visits = 400
+        last_score_lead = -4.0
+        last_score_selfplay = 0.2
+        last_score_stdev = 19.0
+        last_utility = 0.02
+        last_policy_prior = 0.15
+
+        def get_best_turn(self, _player):
+            return "A1", "B2", "C3"
+
+        @staticmethod
+        def _convert_coord(coord):
+            return {"A1": (0, 0), "B2": (1, 1), "C3": (2, 2)}[coord]
+
+    @contextmanager
+    def provider(_backend, _visits, _history):
+        yield FakeLegacyKata()
+
+    worker = AIWorker(
+        10, None, None, 1, "kataAmazon", engine_provider=provider,
+        engine_backend="legacy", kata_visits=400)
+    outcomes = []
+    worker.finished.connect(outcomes.append)
+
+    worker.run()
+
+    assert outcomes[0].result.score_selfplay is None
+    assert outcomes[0].result.score_stdev is None
+    assert outcomes[0].result.policy_prior == 0.15
+
+
 def test_kata_worker_reports_resign_as_error_instead_of_ai_resignation():
     class FakeKata:
         last_winrate = None

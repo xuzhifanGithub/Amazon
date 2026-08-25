@@ -512,7 +512,8 @@ class AmazonsMainWindow(QMainWindow):
         # Amazon 的领地标签学习目标是当前自博弈策略下的终局分差，
         # 对应 scoreSelfplay。这个分支的 scoreLead 经过搜索分差校准，
         # 实测可能与胜率方向相反，不能直接当作终局领地差显示。
-        if best_res.score_selfplay is not None:
+        score_supported = ai_type_key in ('kataAmazon', 'kataAmazon_gpu')
+        if score_supported and best_res.score_selfplay is not None:
             score_value = float(best_res.score_selfplay)
             if abs(score_value) < 0.005:
                 score_text = "基本持平"

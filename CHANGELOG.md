@@ -5,6 +5,7 @@
 ## Unreleased
 
 - 精简 amazon_X/L 前端摘要，移除重复的效用值，并提示 amazon_L 首次 OpenCL 调优可能耗时数分钟。
+- amazon_L 虽保留结构上的分差头，但旧训练标签无效；前端仅对 amazon_X 展示预测分差。
 - 在 amazon_X 分析面板按 `scoreSelfplay` 正确显示预计分差、分差不确定度、效用和策略先验。
 - 新增独立的 18 特征 MCTS 模型，前端四个 AI 按棋力显示为 1—4 星。
 - 统一前端模型名称为 `amazon_X` 与 `amazon_L`。

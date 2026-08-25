@@ -74,6 +74,9 @@ def test_amazon_x_score_lead_is_visible_and_names_the_leading_side(qapp):
     result.score_selfplay = -2.5
     window.update_ai_info_panel(result, BLACK_AMAZON, "kataAmazon_gpu")
     assert window.info_score.text().startswith("预测分差：白方 +2.50 分")
+
+    window.update_ai_info_panel(result, BLACK_AMAZON, "kataAmazon_legacy")
+    assert window.info_score.isHidden()
     window.close()
 
 
