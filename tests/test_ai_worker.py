@@ -65,6 +65,10 @@ def test_kata_worker_holds_snapshot_engine_context_for_complete_turn():
     class FakeKata:
         last_winrate = 63.0
         last_visits = 700
+        last_score_lead = 4.25
+        last_score_stdev = 1.1
+        last_utility = 0.48
+        last_policy_prior = 0.22
 
         def get_best_turn(self, player):
             calls.append(("search", player))
@@ -99,6 +103,10 @@ def test_kata_worker_holds_snapshot_engine_context_for_complete_turn():
     assert outcomes[0].result.best_pos_to == 11
     assert outcomes[0].result.best_pos_stone == 22
     assert outcomes[0].result.win_pro == 63.0
+    assert outcomes[0].result.score_lead == 4.25
+    assert outcomes[0].result.score_stdev == 1.1
+    assert outcomes[0].result.utility == 0.48
+    assert outcomes[0].result.policy_prior == 0.22
 
 
 def test_kata_worker_reports_resign_as_error_instead_of_ai_resignation():

@@ -469,6 +469,8 @@ class AmazonsMainWindow(QMainWindow):
         if best_res is None:
             self.info_ai_model.setText("模型：—")
             self.info_move_detail.setText("棋步：—")
+            self.info_score.setText("预测分差：—")
+            self.info_score.hide()
             self.info_win_rate.setText("胜率：—")
             self.info_visits.setText("搜索次数：—")
             self.info_eval.setText("局面估值：—")
@@ -507,6 +509,27 @@ class AmazonsMainWindow(QMainWindow):
             self.info_move_detail.setText("棋步：解析失败")
             self.info_move_detail.setToolTip("")
 
+        # KataGo 的 scoreLead 使用 reportAnalysisWinratesAs 配置的视角；
+        # 本项目配置为 SIDETOMOVE，因此这里把正负值转成直观的领先方。
+        if best_res.score_lead is not None:
+            score_lead = float(best_res.score_lead)
+            if abs(score_lead) < 0.005:
+                score_text = "基本持平"
+            else:
+                opponent = "白方" if player == BLACK_AMAZON else "黑方"
+                leader = who if score_lead > 0 else opponent
+                score_text = f"{leader} +{abs(score_lead):.2f} 分"
+            if best_res.score_stdev is not None:
+                score_text += f" · 不确定度 ±{abs(float(best_res.score_stdev)):.2f}"
+            self.info_score.setText(f"预测分差：{score_text}")
+            self.info_score.setToolTip(
+                "来自模型的 scoreLead；不确定度为 scoreStdev。")
+            self.info_score.show()
+        else:
+            self.info_score.setText("预测分差：—")
+            self.info_score.setToolTip("")
+            self.info_score.hide()
+
         # 胜率
         if best_res.win_pro is not None:
             self.info_win_rate.setText(f"胜率：{best_res.win_pro:.2f}%")
@@ -529,10 +552,18 @@ class AmazonsMainWindow(QMainWindow):
                         else f"{best_res.win_pro:.1f}%")
         visits_summary = ("—" if best_res.max_apt is None
                           else str(int(best_res.max_apt)))
-        eval_summary = ("—" if best_res.select_pro is None
-                        else f"{best_res.select_pro:.3f}")
+        if best_res.utility is not None:
+            eval_label = "效用"
+            eval_summary = f"{best_res.utility:.3f}"
+        else:
+            eval_label = "估值"
+            eval_summary = ("—" if best_res.select_pro is None
+                            else f"{best_res.select_pro:.3f}")
+        prior_summary = ("" if best_res.policy_prior is None
+                         else f" · 先验 {best_res.policy_prior:.3f}")
         self.info_panel.info_summary.setText(
-            f"胜率 {rate_summary} · {visits_summary}次 · 估值 {eval_summary}")
+            f"胜率 {rate_summary} · {visits_summary}次 · "
+            f"{eval_label} {eval_summary}{prior_summary}")
 
     def on_turn_made(self, start_pos, move_pos, arrow_pos):
         """
@@ -649,6 +680,7 @@ class AmazonsMainWindow(QMainWindow):
         self.info_win_rate = self.info_panel.info_win_rate
         self.info_visits = self.info_panel.info_visits
         self.info_eval = self.info_panel.info_eval
+        self.info_score = self.info_panel.info_score
 
         main_h_layout.addWidget(board_panel, 1)
         main_h_layout.addWidget(self.info_panel, 0)
@@ -1622,6 +1654,8 @@ class AmazonsMainWindow(QMainWindow):
         win_pro_str = "—" if best_res.win_pro is None else f"{best_res.win_pro:.2f}%"
         visits_str = "—" if best_res.max_apt is None else str(int(best_res.max_apt))
         select_pro_str = "—" if best_res.select_pro is None else f"{best_res.select_pro:.4f}"
+        score_lead_str = ("" if best_res.score_lead is None
+                          else f" | 预测分差={best_res.score_lead:+.2f}")
         player_name = "黑方" if self.simulator.current_player == BLACK_AMAZON else "白方"
         # 构建状态栏信息
         info_message = (
@@ -1629,6 +1663,7 @@ class AmazonsMainWindow(QMainWindow):
             f"AI 走法: 胜率={win_pro_str} | "
             f"搜索次数={visits_str} | "
             f"局面估值={select_pro_str}"
+            f"{score_lead_str}"
         )
         self.statusBar().showMessage(info_message)
 

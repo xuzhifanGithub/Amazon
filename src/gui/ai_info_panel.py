@@ -137,6 +137,7 @@ class AIInfoPanel(QWidget):
         analysis_card, analysis_layout = self._create_card("AI 分析", "analysisCard")
         self.info_ai_model = QLabel("模型：—")
         self.info_move_detail = QLabel("棋步：—")
+        self.info_score = QLabel("预测分差：—")
         self.info_win_rate = QLabel("胜率：—")
         self.info_visits = QLabel("搜索次数：—")
         self.info_eval = QLabel("局面估值：—")
@@ -156,12 +157,14 @@ class AIInfoPanel(QWidget):
         for label in (
             self.info_ai_model,
             self.info_move_detail,
+            self.info_score,
             self.info_summary,
             self.info_candidates,
         ):
             label.setObjectName("analysisValue")
             label.setWordWrap(True)
             analysis_values_layout.addWidget(label)
+        self.info_score.hide()
         analysis_values_layout.addStretch(1)
         self.analysis_scroll = QScrollArea()
         self.analysis_scroll.setObjectName("analysisScroll")

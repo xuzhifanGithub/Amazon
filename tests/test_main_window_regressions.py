@@ -51,6 +51,30 @@ def test_kata_models_use_consistent_frontend_names(qapp):
     window.close()
 
 
+def test_amazon_x_score_lead_is_visible_and_names_the_leading_side(qapp):
+    window = AmazonsMainWindow(AmazonsSimulator())
+    result = BestResult(
+        60, 50, 40, 73.5, 600, 0.735,
+        score_lead=4.25,
+        score_stdev=1.1,
+        utility=0.48,
+        policy_prior=0.22,
+    )
+
+    window.update_ai_info_panel(result, BLACK_AMAZON, "kataAmazon_gpu")
+
+    assert window.info_score.text() == (
+        "预测分差：黑方 +4.25 分 · 不确定度 ±1.10")
+    assert not window.info_score.isHidden()
+    assert "效用 0.480" in window.info_panel.info_summary.text()
+    assert "先验 0.220" in window.info_panel.info_summary.text()
+
+    result.score_lead = -2.5
+    window.update_ai_info_panel(result, BLACK_AMAZON, "kataAmazon_gpu")
+    assert window.info_score.text().startswith("预测分差：白方 +2.50 分")
+    window.close()
+
+
 def test_18_feature_menu_dispatches_the_distinct_mcts_model(qapp):
     window = AmazonsMainWindow(AmazonsSimulator())
     window.black_modes = window.PLAYER_TYPE_AI_MCTS_18

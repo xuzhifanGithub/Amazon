@@ -36,12 +36,8 @@ logger = logging.getLogger(__name__)
 _EOF = object()
 
 
-def parse_genmove_analyze(response: str):
-    """Parse bounded ``kata-genmove_analyze`` output without engine state.
-
-    Returns ``(played, win_rate_percent, visits, ranked_candidates)`` where
-    candidates are ``(move, win_rate_percent, visits)`` sorted by visits.
-    """
+def parse_genmove_analyze_details(response: str):
+    """Return the selected move and all numeric analysis fields by move."""
     played = None
     move_info = {}
     for raw_line in response.splitlines():
@@ -58,31 +54,83 @@ def parse_genmove_analyze(response: str):
             if not tokens:
                 continue
             move = tokens[0]
-            visits = 0
-            winrate = None
+            metrics = {
+                "move": move,
+                "visits": 0,
+                "winrate": None,
+                "score_lead": None,
+                "score_stdev": None,
+                "utility": None,
+                "prior": None,
+            }
             index = 1
             while index < len(tokens) - 1:
                 key, value = tokens[index], tokens[index + 1]
                 if key == "visits":
                     try:
-                        visits = int(value)
+                        metrics["visits"] = int(value)
                     except ValueError:
-                        visits = 0
+                        metrics["visits"] = 0
                 elif key == "winrate":
                     try:
-                        winrate = float(value) * 100.0
+                        metrics["winrate"] = float(value) * 100.0
                     except ValueError:
-                        winrate = None
+                        metrics["winrate"] = None
+                elif key in ("scoreLead", "scoreMean"):
+                    # scoreMean is retained by KataGo as a compatibility alias
+                    # for scoreLead. Prefer the explicit scoreLead when both
+                    # occur in one analysis line.
+                    if (key == "scoreLead"
+                            or metrics["score_lead"] is None):
+                        try:
+                            metrics["score_lead"] = float(value)
+                        except ValueError:
+                            pass
+                elif key == "scoreStdev":
+                    try:
+                        metrics["score_stdev"] = float(value)
+                    except ValueError:
+                        pass
+                elif key == "utility":
+                    try:
+                        metrics["utility"] = float(value)
+                    except ValueError:
+                        pass
+                elif key == "prior":
+                    try:
+                        metrics["prior"] = float(value)
+                    except ValueError:
+                        pass
                 index += 1
-            move_info[move] = (visits, winrate)
+            move_info[move] = metrics
 
-    ranked = sorted(
-        ((move, winrate, visits) for move, (visits, winrate) in move_info.items()),
-        key=lambda item: item[2],
+    ranked_details = sorted(
+        move_info.values(),
+        key=lambda item: item["visits"],
         reverse=True,
     )
-    selected = played or (ranked[0][0] if ranked else None)
-    selected_visits, selected_winrate = move_info.get(selected, (None, None))
+    selected = played or (ranked_details[0]["move"] if ranked_details else None)
+    return selected, move_info.get(selected), ranked_details
+
+
+def parse_genmove_analyze(response: str):
+    """Parse bounded ``kata-genmove_analyze`` output without engine state.
+
+    Returns ``(played, win_rate_percent, visits, ranked_candidates)`` where
+    candidates are ``(move, win_rate_percent, visits)`` sorted by visits.
+    The stable four-item interface is retained for callers that do not need
+    score-lead metadata.
+    """
+    selected, selected_details, ranked_details = \
+        parse_genmove_analyze_details(response)
+    ranked = [
+        (details["move"], details["winrate"], details["visits"])
+        for details in ranked_details
+    ]
+    selected_visits = (selected_details["visits"]
+                       if selected_details is not None else None)
+    selected_winrate = (selected_details["winrate"]
+                        if selected_details is not None else None)
     return selected, selected_winrate, selected_visits, ranked
 
 # --- 引擎后端表（相对本文件，保证可移植）----------------------------------------
@@ -314,6 +362,11 @@ class AmazonsKataGoEngine(QObject):
         # 最近一次生成着法的胜率(%)与搜索次数，由 genmove_analyze 更新
         self.last_winrate = None      # 0..100，当前行动方视角
         self.last_visits = None
+        self.last_score_lead = None   # 当前行动方视角的预计领先分
+        self.last_score_stdev = None  # 分差预测的标准差
+        self.last_utility = None
+        self.last_policy_prior = None
+        self._last_genmove_metrics = {}
 
         try:
             self._wait_for_engine_ready()
@@ -437,10 +490,17 @@ class AmazonsKataGoEngine(QObject):
         """
         response = self._execute_sync_command(f"kata-genmove_analyze {player_char}")
 
-        played, win_pct, visits, ranked = parse_genmove_analyze(response)
+        played, selected_metrics, ranked_details = \
+            parse_genmove_analyze_details(response)
+        self._last_genmove_metrics = dict(selected_metrics or {})
+        win_pct = (selected_metrics["winrate"]
+                   if selected_metrics is not None else None)
+        visits = (selected_metrics["visits"]
+                  if selected_metrics is not None else None)
         if played is None:
             # 兜底：走普通 genmove（无胜率信息）
             played = self._execute_sync_command(f"genmove {player_char}").strip()
+            self._last_genmove_metrics = {}
             return AmazonsKataGoEngine._require_playable_move(
                 played, "搜索"), None, None
 
@@ -451,15 +511,18 @@ class AmazonsKataGoEngine(QObject):
             # same analysis. Replace it with the most-visited coordinate and
             # repair the engine board before the next stage starts.
             fallback = next(
-                ((move, rate, move_visits)
-                 for move, rate, move_visits in ranked
-                 if str(move).strip().lower() not in ("pass", "resign")),
+                (details for details in ranked_details
+                 if str(details["move"]).strip().lower()
+                 not in ("pass", "resign")),
                 None,
             )
             if fallback is None:
                 return AmazonsKataGoEngine._require_playable_move(
                     played, "搜索"), win_pct, visits
-            fallback_move, fallback_rate, fallback_visits = fallback
+            fallback_move = fallback["move"]
+            fallback_rate = fallback["winrate"]
+            fallback_visits = fallback["visits"]
+            self._last_genmove_metrics = dict(fallback)
             fallback_move = AmazonsKataGoEngine._require_playable_move(
                 fallback_move, "搜索候选")
             if normalized == "pass":
@@ -501,7 +564,10 @@ class AmazonsKataGoEngine(QObject):
         opponent_char = 'w' if player_char == 'b' else 'b'
         played_count = 0
         try:
+            self._last_genmove_metrics = {}
             start_pos_str, winrate, visits = self._genmove_analyze(player_char)
+            start_metrics = dict(
+                getattr(self, '_last_genmove_metrics', {}) or {})
             played_count += 1
             move_pos_str, _move_rate, _move_visits = self._genmove_analyze(opponent_char)
             played_count += 1
@@ -510,6 +576,10 @@ class AmazonsKataGoEngine(QObject):
 
             self.last_winrate = winrate
             self.last_visits = visits
+            self.last_score_lead = start_metrics.get("score_lead")
+            self.last_score_stdev = start_metrics.get("score_stdev")
+            self.last_utility = start_metrics.get("utility")
+            self.last_policy_prior = start_metrics.get("prior")
             return (start_pos_str, move_pos_str, arrow_pos_str)
         finally:
             AmazonsKataGoEngine._restore_temporary_moves(self, played_count)

@@ -13,6 +13,10 @@ class BestResult:
     win_pro: float | None = None
     max_apt: int | None = None
     select_pro: float | None = None
+    score_lead: float | None = None
+    score_stdev: float | None = None
+    utility: float | None = None
+    policy_prior: float | None = None
 
 
 @dataclass(slots=True, frozen=True)

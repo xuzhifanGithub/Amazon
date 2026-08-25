@@ -2,7 +2,9 @@ import pytest
 from types import SimpleNamespace
 from pathlib import Path
 
-from src.ai.amazons_engine import BACKENDS, AmazonsKataGoEngine, parse_genmove_analyze
+from src.ai.amazons_engine import (BACKENDS, AmazonsKataGoEngine,
+                                   parse_genmove_analyze,
+                                   parse_genmove_analyze_details)
 from src.core.simulator import BLACK_AMAZON
 
 
@@ -52,6 +54,30 @@ def test_parse_analyze_falls_back_to_most_visited_move():
     assert ranked[-1] == ("C3", None, 4)
 
 
+def test_parse_analyze_exposes_score_and_policy_metadata():
+    response = (
+        "info move A1 visits 200 utility 0.42 winrate 0.61 "
+        "scoreMean 3.0 scoreStdev 1.25 scoreLead 3.5 prior 0.18 pv A1 "
+        "info move B2 visits 120 utility -0.1 winrate 0.57 "
+        "scoreLead -2.25 scoreStdev 2.5 prior 0.08 pv B2\n"
+        "play B2"
+    )
+
+    move, selected, ranked = parse_genmove_analyze_details(response)
+
+    assert move == "B2"
+    assert selected["score_lead"] == pytest.approx(-2.25)
+    assert selected["score_stdev"] == pytest.approx(2.5)
+    assert selected["utility"] == pytest.approx(-0.1)
+    assert selected["prior"] == pytest.approx(0.08)
+    assert ranked[0]["move"] == "A1"
+    # The original compatibility interface remains unchanged.
+    legacy = parse_genmove_analyze(response)
+    assert legacy[0] == "B2"
+    assert legacy[1] == pytest.approx(57.0)
+    assert legacy[2] == 120
+
+
 @pytest.mark.parametrize("move", ["pass", "resign", "A0", "I1", "L1", "AA1"])
 def test_engine_rejects_non_amazons_move_tokens(move):
     with pytest.raises(RuntimeError, match="禁止|非落子"):
@@ -99,6 +125,7 @@ def test_best_turn_always_restores_engine_position():
     assert turn == ("A1", "B2", "C3")
     assert engine.commands[-3:] == ["undo", "undo", "undo"]
     assert engine.last_winrate == 60.0
+    assert engine.last_score_lead is None
 
 
 def test_analyze_replaces_pass_with_most_visited_coordinate():
