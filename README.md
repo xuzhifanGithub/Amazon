@@ -95,7 +95,12 @@ Linux / macOS 可运行纯 Python GUI 和人人对弈；MCTS 与 kataAmazon 需�
 - **模型**：`src/ai/kataAmazonEngineCuda/amazon10x10_xzf.bin.gz`
   （`gen223_b featurev1`，架构 `b20c256legacyv10`，20 残差块 / 256 通道；
   SHA-256 `f32740014037c091ba564a586d9b6e05fb78d1e3fd4dae59e97c280c99af776a`）。
-  `amazon_X` 的默认对局搜索配置使用 600 visits。
+  `amazon_X` 的默认对局搜索配置使用 600 visits。菜单「AI 参数设置」提供默认均衡和
+  最强棋力预设；最强棋力保持 1 秒公式 MCTS、600 visits KataGo，只为 X/L
+  启用接近正式模型评测的竞赛式搜索参数：零落子温度、关闭根噪声、原生策略温度、
+  标准 cpuct/树搜索，并关闭分差头搜索。自定义模式可在界面直接设置前后期落子温度、
+  网络策略温度、cpuct、图搜索、根噪声、子树价值偏置和搜索线程数；设置窗口内另有
+  “参数说明与参考值”页，列出各参数的作用、默认/最强值和常用范围。
 - **通信**：以 GTP 子进程运行，用有超时边界的 `kata-genmove_analyze` 获取着法和胜率。
   对局着法只在规则层验证通过后提交到所有引擎；提示使用独立后台线程和当前历史快照，
   不会阻塞界面或继续分析旧棋盘。

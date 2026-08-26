@@ -30,6 +30,7 @@ project_root = os.path.join(current_dir, '..', '..')
 # 将项目的根目录添加到 sys.path
 sys.path.append(project_root)
 from src.core.simulator import WHITE_AMAZON, BLACK_AMAZON, OBSTACLE, EMPTY
+from src.ai.ai_profile import KataSearchConfig
 
 
 logger = logging.getLogger(__name__)
@@ -220,9 +221,19 @@ def resolve_engine_resources(backend: str, engine_dir: str | None = None,
     )
 
 
+def _set_config_value(source: str, key: str, value: str) -> str:
+    """Replace or append one exact KataGo configuration value."""
+    replacement = f"{key} = {value}"
+    pattern = rf"(?m)^\s*{re.escape(key)}\s*=.*$"
+    if re.search(pattern, source):
+        return re.sub(pattern, replacement, source)
+    return source.rstrip() + "\n" + replacement + "\n"
+
+
 def profile_config_for_visits(
         backend: str, visits: int,
-        score_utility_enabled: bool | None = None) -> str:
+        score_utility_enabled: bool | None = None,
+        search_config: KataSearchConfig | None = None) -> str:
     """Return a generated config with per-search profile overrides.
 
     The shipped engine configuration is deliberately never edited.  A stable
@@ -234,23 +245,32 @@ def profile_config_for_visits(
     source = os.path.join(spec['dir'], spec['cfg'])
     with open(source, 'r', encoding='utf-8') as handle:
         source_text = handle.read()
-    replacement = f"maxVisits = {visits}"
-    if re.search(r"(?m)^\s*maxVisits\s*=.*$", source_text):
-        rendered = re.sub(r"(?m)^\s*maxVisits\s*=.*$", replacement, source_text)
-    else:
-        rendered = source_text.rstrip() + "\n" + replacement + "\n"
+    rendered = _set_config_value(source_text, "maxVisits", str(visits))
 
     if score_utility_enabled is not None:
         factor = "0.02" if score_utility_enabled else "0.0"
-        replacement = f"dynamicScoreUtilityFactor = {factor}"
-        if re.search(r"(?m)^\s*dynamicScoreUtilityFactor\s*=.*$", rendered):
-            rendered = re.sub(
-                r"(?m)^\s*dynamicScoreUtilityFactor\s*=.*$",
-                replacement,
-                rendered,
-            )
-        else:
-            rendered = rendered.rstrip() + "\n" + replacement + "\n"
+        rendered = _set_config_value(
+            rendered, "dynamicScoreUtilityFactor", factor)
+
+    if search_config is not None:
+        search_config = search_config.normalized()
+        search_overrides = {
+            "chosenMoveTemperatureEarly": str(
+                search_config.move_temperature_early),
+            "chosenMoveTemperature": str(search_config.move_temperature),
+            "rootNoiseEnabled": str(
+                search_config.root_noise_enabled).lower(),
+            "nnPolicyTemperature": str(search_config.policy_temperature),
+            "cpuctExploration": str(search_config.cpuct_exploration),
+            "cpuctExplorationLog": str(search_config.cpuct_exploration_log),
+            "cpuctExplorationBase": str(search_config.cpuct_exploration_base),
+            "useGraphSearch": str(search_config.use_graph_search).lower(),
+            "subtreeValueBiasFactor": str(
+                search_config.subtree_value_bias_factor),
+            "numSearchThreads": str(search_config.num_search_threads),
+        }
+        for key, value in search_overrides.items():
+            rendered = _set_config_value(rendered, key, value)
 
     directory = os.path.join(tempfile.gettempdir(), "amazons-katago-profiles", backend)
     os.makedirs(directory, exist_ok=True)
@@ -313,7 +333,8 @@ class AmazonsKataGoEngine(QObject):
                  model_file: str = None,
                  config_file: str = None,
                  max_visits: int | None = None,
-                 score_utility_enabled: bool | None = None):
+                 score_utility_enabled: bool | None = None,
+                 search_config: KataSearchConfig | None = None):
 
         super().__init__()
 
@@ -335,9 +356,14 @@ class AmazonsKataGoEngine(QObject):
             self.backend, engine_dir, engine_exe, model_file, config_file)
         if max_visits is not None:
             config_file = profile_config_for_visits(
-                self.backend, max_visits, score_utility_enabled)
+                self.backend,
+                max_visits,
+                score_utility_enabled,
+                search_config,
+            )
         self.max_visits = max_visits
         self.score_utility_enabled = score_utility_enabled
+        self.search_config = search_config
 
         # 允许相对路径：以引擎目录为基准解析（引擎子进程也以此为工作目录）
         engine_path = os.path.join(engine_dir, engine_exe)

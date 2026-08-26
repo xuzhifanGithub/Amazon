@@ -6,6 +6,7 @@ import logging
 import threading
 
 from src.ai.amazons_engine import AmazonsKataGoEngine
+from src.ai.ai_profile import KataSearchConfig
 
 
 logger = logging.getLogger(__name__)
@@ -17,7 +18,9 @@ class EngineManager:
     def __init__(self, engine_factory=AmazonsKataGoEngine):
         self._engine_factory = engine_factory
         self.engines: dict[
-            tuple[str, int, str, bool | None], AmazonsKataGoEngine
+            tuple[
+                str, int, str, bool | None, KataSearchConfig | None
+            ], AmazonsKataGoEngine
         ] = {}
         self._lock = threading.RLock()
         self._usage_lock = threading.Lock()
@@ -45,16 +48,34 @@ class EngineManager:
 
     def has_game_engine(self, backend: str, visits: int,
                         mode: str = "gameplay",
-                        score_utility_enabled: bool | None = None) -> bool:
+                        score_utility_enabled: bool | None = None,
+                        search_config: KataSearchConfig | None = None) -> bool:
         """Return whether a matching initialized engine is already pooled."""
-        key = (backend, int(visits), mode, score_utility_enabled)
+        search_config = (
+            search_config.normalized() if search_config is not None else None)
+        key = (
+            backend,
+            int(visits),
+            mode,
+            score_utility_enabled,
+            search_config,
+        )
         with self._lock:
             return key in self.engines
 
     def get_game_engine(self, backend: str, visits: int, history, play_turn,
                         mode: str = "gameplay",
-                        score_utility_enabled: bool | None = None):
-        key = (backend, int(visits), mode, score_utility_enabled)
+                        score_utility_enabled: bool | None = None,
+                        search_config: KataSearchConfig | None = None):
+        search_config = (
+            search_config.normalized() if search_config is not None else None)
+        key = (
+            backend,
+            int(visits),
+            mode,
+            score_utility_enabled,
+            search_config,
+        )
         history = tuple(history)
         with self._lock:
             engine = self.engines.get(key)
@@ -68,6 +89,7 @@ class EngineManager:
             backend=backend,
             max_visits=key[1],
             score_utility_enabled=score_utility_enabled,
+            search_config=search_config,
         )
         try:
             for index, turn in enumerate(history):
@@ -91,7 +113,8 @@ class EngineManager:
     @contextmanager
     def game_engine(self, backend: str, visits: int, history, play_turn,
                     mode: str = "gameplay",
-                    score_utility_enabled: bool | None = None):
+                    score_utility_enabled: bool | None = None,
+                    search_config: KataSearchConfig | None = None):
         """Lease an engine for one complete search.
 
         Reset, undo, and sync requests never write into a search in progress.
@@ -110,7 +133,8 @@ class EngineManager:
             self._close_engines(stale_engines)
             engine = self.get_game_engine(
                 backend, visits, history, play_turn, mode=mode,
-                score_utility_enabled=score_utility_enabled)
+                score_utility_enabled=score_utility_enabled,
+                search_config=search_config)
             try:
                 yield engine
             except BaseException:

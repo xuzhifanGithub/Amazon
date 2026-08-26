@@ -34,7 +34,7 @@ project_root = os.path.join(current_dir, '..', '..')
 # 将项目的根目录添加到 sys.path
 sys.path.append(project_root)
 from src.core.simulator import  WHITE_AMAZON, BLACK_AMAZON
-from src.ai.ai_profile import AIProfile
+from src.ai.ai_profile import AIProfile, KataSearchConfig
 from src.ai.results import AIOutcome, BestResult, HintCandidate, HintOutcome
 
 
@@ -55,7 +55,8 @@ class AIWorker(QObject):
     def __init__(self, board_size, board, queen_pos, current_player, ai_type,
                  ai_type_engine=None, engine_provider=None, engine_backend=None,
                  mcts_seconds: float = 1.0, kata_visits: int | None = None,
-                 history=(), score_utility_enabled: bool | None = None):
+                 history=(), score_utility_enabled: bool | None = None,
+                 search_config: KataSearchConfig | None = None):
         super().__init__()
         self.board_size = board_size
         self.board = board
@@ -69,6 +70,7 @@ class AIWorker(QObject):
         self.kata_visits = kata_visits
         self.history = tuple(history)
         self.score_utility_enabled = score_utility_enabled
+        self.search_config = search_config
 
 
 
@@ -100,7 +102,8 @@ class AIWorker(QObject):
                 engine_context = (
                     self.engine_provider(
                         self.engine_backend, self.kata_visits, self.history,
-                        self.score_utility_enabled)
+                        self.score_utility_enabled,
+                        self.search_config)
                     if self.engine_provider is not None
                     else nullcontext(self.ai_type_engine)
                 )
@@ -396,9 +399,11 @@ class AmazonAIAgent(QObject):
             model_name = 'amazon_L' if backend == 'legacy' else 'amazon_X'
             score_utility_enabled = (
                 profile.score_utility_enabled if backend == 'gpu' else None)
+            search_config = profile.kata_search_config()
             if self._engine_manager.has_game_engine(
                     backend, profile.kata_visits,
-                    score_utility_enabled=score_utility_enabled):
+                    score_utility_enabled=score_utility_enabled,
+                    search_config=search_config):
                 status_text = f"{model_name} 正在思考中..."
             elif backend == 'legacy':
                 status_text = (
@@ -408,6 +413,7 @@ class AmazonAIAgent(QObject):
                 status_text = f"正在启动 {model_name} 并思考..."
         else:
             score_utility_enabled = None
+            search_config = None
             status_text = "AI 正在思考中..."
         self.main_window.statusBar().showMessage(status_text)
         self.worker = AIWorker(
@@ -423,6 +429,7 @@ class AmazonAIAgent(QObject):
             kata_visits=profile.kata_visits,
             history=tuple(simulator.history_do_chess),
             score_utility_enabled=score_utility_enabled,
+            search_config=search_config,
         )
         # 将工作者移动到线程中
         self.worker.moveToThread(self.thread)
@@ -444,7 +451,8 @@ class AmazonAIAgent(QObject):
         return self.thread is not None and self.thread.isRunning()
 
     def ensure_kata_engine(self, backend='gpu', visits=None,
-                           score_utility_enabled: bool | None = None):
+                           score_utility_enabled: bool | None = None,
+                           search_config: KataSearchConfig | None = None):
         """确保 kataAmazon 引擎已按指定后端加载。
 
         两个后端各是一套 (引擎目录, 可执行文件, 模型, 配置)：
@@ -460,7 +468,8 @@ class AmazonAIAgent(QObject):
                 engine = self._engine_manager.get_game_engine(
                     backend, visits, self.main_window.simulator.history_do_chess,
                     self._play_turn_on_engine, mode="gameplay",
-                    score_utility_enabled=score_utility_enabled)
+                    score_utility_enabled=score_utility_enabled,
+                    search_config=search_config)
                 self.ai_engine = engine
                 self.kata_backend = backend
                 return engine
@@ -469,13 +478,15 @@ class AmazonAIAgent(QObject):
 
     @contextmanager
     def acquire_kata_engine(self, backend='gpu', visits=None, history=(),
-                            score_utility_enabled: bool | None = None):
+                            score_utility_enabled: bool | None = None,
+                            search_config: KataSearchConfig | None = None):
         """Lease a gameplay engine for one complete, snapshot-based search."""
         visits = int(visits or (400 if backend == 'legacy' else 600))
         with self._engine_manager.game_engine(
                 backend, visits, tuple(history), self._play_turn_on_engine,
                 mode="gameplay",
-                score_utility_enabled=score_utility_enabled) as engine:
+                score_utility_enabled=score_utility_enabled,
+                search_config=search_config) as engine:
             with self._engine_lock:
                 self.ai_engine = engine
                 self.kata_backend = backend

@@ -2,6 +2,7 @@
 import re
 import os
 import sys
+from dataclasses import replace
 
 import datetime
 import logging
@@ -29,7 +30,9 @@ from src.gui.ai_info_panel import AIInfoPanel
 from src.ai.amazon_ai_agent import AmazonAIAgent, mcts_available
 from src.ai.engine_manager import EngineManager
 from src.ai.amazons_engine import backend_available
-from src.ai.ai_profile import AIProfile, load_profile, save_profile
+from src.ai.ai_profile import (
+    AIProfile, SEARCH_CONFIG_CUSTOM, load_profile, save_profile,
+)
 from src.ai.results import AIOutcome, HintCandidate, HintOutcome
 from src.config import create_settings
 from src.gui.ai_settings_dialog import AISettingsDialog
@@ -508,6 +511,12 @@ class AmazonsMainWindow(QMainWindow):
         profile = self.black_ai_profile if player == BLACK_AMAZON else self.white_ai_profile
         strength = (f"{profile.mcts_seconds:.1f}s" if ai_type_key.startswith("mcts")
                     else f"{profile.kata_visits}v")
+        if (not ai_type_key.startswith("mcts")
+                and profile.strongest_config_enabled):
+            strength += " · 最强配置"
+        elif (not ai_type_key.startswith("mcts")
+              and profile.search_config_mode == SEARCH_CONFIG_CUSTOM):
+            strength += " · 自定义配置"
         side_short = "黑" if player == BLACK_AMAZON else "白"
         self.info_ai_model.setText(f"模型：{model_label} · {side_short}/{strength}")
 
@@ -1595,8 +1604,7 @@ class AmazonsMainWindow(QMainWindow):
         # the player explicitly saves a per-side visits value.
         if (ai_type_key == 'kataAmazon_legacy'
                 and not self.settings.contains(f"ai/{profile_key}/kata_visits")):
-            profile = AIProfile(
-                profile.mcts_seconds, 400, profile.score_utility_enabled)
+            profile = replace(profile, kata_visits=400)
 
         self.current_ai_type = ai_type_key
         try:

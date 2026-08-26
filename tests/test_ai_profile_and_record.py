@@ -3,7 +3,11 @@ from pathlib import Path
 import pytest
 from PyQt6.QtCore import QSettings
 
-from src.ai.ai_profile import AIProfile, load_profile, save_profile
+from src.ai.ai_profile import (
+    AIProfile, KataSearchConfig, SEARCH_CONFIG_CUSTOM,
+    SEARCH_CONFIG_STRONGEST, STRONGEST_KATA_SEARCH_CONFIG,
+    load_profile, save_profile,
+)
 from src.ai.amazons_engine import (
     BACKENDS, profile_config_for_visits, resolve_engine_resources,
 )
@@ -22,6 +26,29 @@ def test_profiles_are_clamped_and_persisted(tmp_path):
     assert saved == AIProfile(10.0, 100, False)
     assert load_profile(settings, "black") == saved
 
+    strongest = save_profile(
+        settings,
+        "white",
+        AIProfile(8, 1800, True, SEARCH_CONFIG_STRONGEST),
+    )
+    assert strongest == AIProfile(
+        1.0,
+        600,
+        False,
+        SEARCH_CONFIG_STRONGEST,
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+        0.45,
+        500,
+        False,
+        False,
+        0.0,
+        1,
+    )
+    assert load_profile(settings, "white") == strongest
+
 
 def test_score_utility_defaults_off_and_dialog_edits_each_side(qapp, tmp_path):
     settings = QSettings(str(tmp_path / "defaults.ini"), QSettings.Format.IniFormat)
@@ -31,13 +58,62 @@ def test_score_utility_defaults_off_and_dialog_edits_each_side(qapp, tmp_path):
         AIProfile(score_utility_enabled=False),
         AIProfile(score_utility_enabled=True),
     )
-    assert not dialog.black_controls[2].isChecked()
-    assert dialog.white_controls[2].isChecked()
+    assert not dialog.black_controls["score_utility"].isChecked()
+    assert dialog.white_controls["score_utility"].isChecked()
     assert dialog.profiles()[0].score_utility_enabled is False
 
     dialog.restore_defaults()
     assert dialog.profiles()[0].score_utility_enabled is False
     assert dialog.profiles()[1].score_utility_enabled is False
+    dialog.close()
+
+
+def test_ai_settings_strength_presets_apply_complete_profiles(qapp):
+    dialog = AISettingsDialog(AIProfile(), AIProfile())
+    strongest = dialog.black_controls["mode"]
+    strongest.setCurrentIndex(
+        strongest.findData(AISettingsDialog.PRESET_STRONGEST))
+
+    black = dialog.profiles()[0]
+    assert black.mcts_seconds == 1.0
+    assert black.kata_visits == 600
+    assert black.score_utility_enabled is False
+    assert black.search_config_mode == SEARCH_CONFIG_STRONGEST
+    assert black.kata_search_config() == STRONGEST_KATA_SEARCH_CONFIG
+
+    # Editing a preset value makes the profile explicitly custom instead of
+    # continuing to claim that a reduced search budget is the strongest one.
+    dialog.black_controls["visits"].setValue(1500)
+    assert strongest.currentData() == AISettingsDialog.PRESET_CUSTOM
+
+    dialog.black_controls["move_temperature"].setValue(0.35)
+    custom = dialog.profiles()[0]
+    assert custom.search_config_mode == SEARCH_CONFIG_CUSTOM
+    assert custom.move_temperature == 0.35
+
+    dialog.restore_defaults()
+    assert dialog.profiles()[0] == AIProfile(1.0, 600, False)
+    assert dialog.profiles()[1] == AIProfile(1.0, 600, False)
+    dialog.close()
+
+
+def test_ai_settings_explains_advanced_parameters_and_reference_values(qapp):
+    dialog = AISettingsDialog(AIProfile(), AIProfile())
+    help_text = dialog.parameter_help.toPlainText()
+
+    for phrase in (
+        "前期 / 后期落子温度",
+        "网络策略温度",
+        "cpuct 探索系数",
+        "搜索线程数",
+        "根节点噪声",
+        "0.8–1.2",
+        "比赛 0–0.01",
+    ):
+        assert phrase in help_text
+    assert "参考 0.8–1.2" in dialog.black_controls[
+        "cpuct_exploration"].toolTip()
+    assert "正式评测" in dialog.black_controls["use_graph_search"].toolTip()
     dialog.close()
 
 
@@ -60,6 +136,54 @@ def test_score_utility_switch_generates_distinct_configs_without_mutating_source
     assert "dynamicScoreUtilityFactor = 0.02" in enabled.read_text(encoding='utf-8')
     assert "dynamicScoreUtilityFactor = 0.0" in disabled.read_text(encoding='utf-8')
     assert source.read_text(encoding='utf-8') == before
+
+
+@pytest.mark.parametrize("backend", ["gpu", "legacy"])
+def test_strongest_profile_generates_competitive_config_at_normal_budget(backend):
+    strongest = Path(profile_config_for_visits(
+        backend, 600, False, STRONGEST_KATA_SEARCH_CONFIG))
+    config = strongest.read_text(encoding="utf-8")
+
+    assert "maxVisits = 600" in config
+    assert "chosenMoveTemperatureEarly = 0.0" in config
+    assert "chosenMoveTemperature = 0.0" in config
+    assert "rootNoiseEnabled = false" in config
+    assert "nnPolicyTemperature = 1.0" in config
+    assert "cpuctExploration = 1.0" in config
+    assert "cpuctExplorationLog = 0.45" in config
+    assert "useGraphSearch = false" in config
+    assert "subtreeValueBiasFactor = 0.0" in config
+    assert "dynamicScoreUtilityFactor = 0.0" in config
+    assert "numSearchThreads = 1" in config
+
+
+def test_custom_search_parameters_are_written_to_generated_config():
+    custom = KataSearchConfig(
+        move_temperature_early=0.7,
+        move_temperature=0.25,
+        policy_temperature=1.2,
+        cpuct_exploration=1.15,
+        cpuct_exploration_log=0.3,
+        cpuct_exploration_base=750,
+        use_graph_search=True,
+        root_noise_enabled=True,
+        subtree_value_bias_factor=0.2,
+        num_search_threads=6,
+    )
+    config = Path(profile_config_for_visits(
+        "gpu", 850, False, custom)).read_text(encoding="utf-8")
+
+    assert "maxVisits = 850" in config
+    assert "chosenMoveTemperatureEarly = 0.7" in config
+    assert "chosenMoveTemperature = 0.25" in config
+    assert "nnPolicyTemperature = 1.2" in config
+    assert "cpuctExploration = 1.15" in config
+    assert "cpuctExplorationLog = 0.3" in config
+    assert "cpuctExplorationBase = 750" in config
+    assert "useGraphSearch = true" in config
+    assert "rootNoiseEnabled = true" in config
+    assert "subtreeValueBiasFactor = 0.2" in config
+    assert "numSearchThreads = 6" in config
 
 
 def test_visits_profile_cache_changes_when_base_config_changes(tmp_path, monkeypatch):
@@ -172,4 +296,25 @@ def test_engine_manager_isolates_score_utility_profiles():
         'gpu', 600, score_utility_enabled=True)
     assert manager.has_game_engine(
         'gpu', 600, score_utility_enabled=False)
+    manager.close_all()
+
+
+def test_engine_manager_isolates_strongest_search_configuration():
+    class FakeEngine:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+        def close(self):
+            pass
+
+    manager = EngineManager(FakeEngine)
+    normal = manager.get_game_engine('gpu', 600, (), lambda *_: None)
+    strongest = manager.get_game_engine(
+        'gpu', 600, (), lambda *_: None,
+        search_config=STRONGEST_KATA_SEARCH_CONFIG)
+
+    assert strongest is not normal
+    assert strongest.kwargs['search_config'] == STRONGEST_KATA_SEARCH_CONFIG
+    assert manager.has_game_engine(
+        'gpu', 600, search_config=STRONGEST_KATA_SEARCH_CONFIG)
     manager.close_all()
