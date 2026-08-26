@@ -77,15 +77,15 @@ class AISettingsDialog(QDialog):
           code { font-family: monospace; }
         </style>
         <h3>如何理解这些参数</h3>
-        <p>“引擎默认配置”不覆盖 X/L 自带配置；“最强棋力”使用表中的固定值；
+        <p>“引擎默认配置”不覆盖 X/Z/L 自带配置；“最强棋力”使用表中的固定值；
         “自定义高级参数”才会把界面数值写入运行时配置。参考范围是实用起点，
         不是所有局面都严格单调变强。</p>
         <table>
           <tr><th>参数</th><th>作用</th><th>默认 / 最强</th><th>常用参考</th></tr>
           <tr><td>MCTS 思考时间</td><td>只控制两个公式 MCTS 的单步时间。</td>
               <td>默认 1 秒；最强方案仍为 1 秒</td><td>0.5–3 秒；越长通常越强</td></tr>
-          <tr><td>KataGo 搜索次数</td><td>控制 X/L 每个阶段的访问数。</td>
-              <td>X 默认 600；L 历史默认 400；最强方案 600</td>
+          <tr><td>KataGo 搜索次数</td><td>控制 X/Z/L 每个阶段的访问数。</td>
+              <td>X/Z 默认 600；L 历史默认 400；最强方案 600</td>
               <td>300 快速，600 均衡，1000–2000 高预算</td></tr>
           <tr><td>amazon_X 分差头</td><td>以 0.02 动态分差效用辅助胜率接近的选步；只对 X 有效。</td>
               <td>默认关闭；最强关闭</td><td>追求纯胜率关闭；偏好大分差可开启</td></tr>
@@ -116,7 +116,7 @@ class AISettingsDialog(QDialog):
               <td>棋力可比测试用 1；日常提速用 4–8</td></tr>
           <tr><td>图搜索</td><td>让重复局面共享节点；可能提高复用率，
               但与正式树搜索评测口径不同。</td>
-              <td>X 默认开启；L 默认/最强关闭</td><td>复现正式评测关闭；可自行对局比较</td></tr>
+              <td>X 默认开启；L/Z 默认及最强关闭</td><td>复现正式评测关闭；可自行对局比较</td></tr>
           <tr><td>根节点噪声</td><td>给根节点加入探索噪声，主要用于产生多样化训练数据。</td>
               <td>默认/最强关闭</td><td>正式下棋关闭；仅自博弈探索时开启</td></tr>
         </table>
@@ -193,7 +193,7 @@ class AISettingsDialog(QDialog):
         visits.setSuffix(" visits")
         visits.setValue(profile.kata_visits)
         visits.setToolTip(
-            "只影响 amazon_X/L。X 默认 600、L 历史默认 400；"
+            "只影响 amazon_X/Z/L。X/Z 默认 600、L 历史默认 400；"
             "300 快速，600 均衡，1000–2000 为高预算。")
         score_utility = QCheckBox("开启", box)
         score_utility.setChecked(profile.score_utility_enabled)

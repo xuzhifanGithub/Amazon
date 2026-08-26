@@ -7,10 +7,11 @@
 #   USE_AMAZON_FEATURES_V1 的 OpenCL 版 amazons.exe。该引擎按模型内部名称中的
 #   featurev1 标记启用新版输入；旧 2022 引擎不能正确推理该模型。
 #
-#   本项目还保留另一套后备模型：
-#     - kataAmazonEngine/     原始 Z 模型及其搜索配置；由可读取外部权重的
-#                              kataAmazonEngineCuda/amazons.exe 推理
-#   默认自动选择：若 gpu 引擎目录存在则用它，否则回退到 legacy。
+#   本项目还保留两套参考模型：
+#     - amazon_L              最初会返回 pass 的原始模型
+#     - amazon_Z              服务器评测使用的 amazon18 强模型
+#   两者都由可读取外部权重的 kataAmazonEngineCuda/amazons.exe 推理。
+#   默认自动选择：依次尝试 amazon_X、amazon_Z、amazon_L。
 #
 #   所有路径都相对本文件（__file__）计算，项目整体复制到别处也能正常工作。
 #   正常运行始终使用项目内随附的引擎、模型和配置；构造函数的显式参数仅供开发测试。
@@ -143,12 +144,14 @@ def parse_genmove_analyze(response: str):
     return selected, selected_winrate, selected_visits, ranked
 
 # --- 引擎后端表（相对本文件，保证可移植）----------------------------------------
-# 本项目提供两个 kataAmazon 引擎选项，每个是一套 (目录, 可执行文件, 模型, 配置)：
+# 本项目提供三个 KataGo 模型选项，每个是一套 (目录, 可执行文件, 模型, 配置)：
 #   'gpu'    -> kataAmazonEngineCuda ：XZF 最新模型 + OpenCL 版 amazons.exe。
 #               需要支持 OpenCL 的显卡及正确安装的驱动。
-#   'legacy' -> kataAmazonEngineCuda ：兼容引擎 + kataAmazonEngine 下的原始 Z 权重及配置。
+#   'legacy' -> kataAmazonEngineCuda ：兼容引擎 + kataAmazonEngine 下的原始 L 权重及配置。
 #               使用外部权重而不是旧程序内嵌权重，因而替换兼容模型会真实生效。
 #               原始模型曾会返回 pass，桥接层会改选访问量最高的合法坐标。
+#   'z'      -> kataAmazonEngineCuda ：同一兼容引擎 + 服务器评测使用的
+#               amazon18-s2161408-d449231 权重，沿用稳定的 L 搜索配置。
 
 BACKENDS = {
     'gpu': {
@@ -169,6 +172,18 @@ BACKENDS = {
         'runtime_files': ('libgcc_s_seh-1.dll', 'libstdc++-6.dll', 'libwinpthread-1.dll'),
         'label': 'amazon_L（OpenCL/GPU）',
     },
+    'z': {
+        'dir': os.path.normpath(os.path.join(current_dir, 'kataAmazonEngineCuda')),
+        'exe': 'amazons.exe',
+        'model': os.path.join(
+            '..', 'kataAmazonEngine', 'weights',
+            'amazon18-s2161408-d449231.bin.gz'),
+        'cfg': os.path.join('..', 'kataAmazonEngine', 'engine.cfg'),
+        'hint_cfg': os.path.join('..', 'kataAmazonEngine', 'hint.cfg'),
+        'runtime_files': (
+            'libgcc_s_seh-1.dll', 'libstdc++-6.dll', 'libwinpthread-1.dll'),
+        'label': 'amazon_Z（OpenCL/GPU）',
+    },
 }
 
 def _backend_files_available(spec: dict) -> bool:
@@ -181,8 +196,12 @@ def _backend_files_available(spec: dict) -> bool:
     ) for item in required)
 
 
-# 默认后端：优先文件完整的新权重 GPU，否则原始引擎。
-_DEFAULT_BACKEND = 'gpu' if _backend_files_available(BACKENDS['gpu']) else 'legacy'
+# 默认后端：依次选择文件完整的 amazon_X、amazon_Z、amazon_L。
+_DEFAULT_BACKEND = next(
+    (key for key in ('gpu', 'z', 'legacy')
+     if _backend_files_available(BACKENDS[key])),
+    'legacy',
+)
 
 # 兼容旧引用
 _CUDA_ENGINE_DIR = BACKENDS['gpu']['dir']
@@ -348,7 +367,7 @@ class AmazonsKataGoEngine(QObject):
         self._output_queue = queue.Queue()
         self._reader_thread = None
 
-        # 若指定了后端('gpu'/'legacy')，用其整套规格作为默认；否则用全局默认后端。
+        # 若指定了后端（X/Z/L），用其整套规格作为默认；否则用全局默认后端。
         spec = engine_spec_for_backend(backend) if backend else BACKENDS[_DEFAULT_BACKEND]
         self.backend = backend or _DEFAULT_BACKEND
 

@@ -15,11 +15,14 @@ from src.gui.amazon_main_window import AmazonsMainWindow
 OPENING_TURN = ((6, 0), (5, 0), (6, 0))
 
 
-def test_four_ai_difficulties_are_exposed_in_strength_order(qapp):
+def test_five_ai_options_are_exposed_in_strength_order(qapp):
     window = AmazonsMainWindow(AmazonsSimulator())
     action_texts = [action.text() for action in window.findChildren(QAction)]
 
-    expected = ["MCTS★", "MCTS-18特征★★", "amazon_L★★★", "amazon_X★★★★"]
+    expected = [
+        "MCTS★", "MCTS-18特征★★", "amazon_L★★★",
+        "amazon_Z★★★★", "amazon_X★★★★",
+    ]
     for label in expected:
         assert action_texts.count(label) == 2  # 黑方、白方各一个入口
     ai_menus = [menu for menu in window.findChildren(QMenu)
@@ -35,8 +38,10 @@ def test_kata_models_use_consistent_frontend_names(qapp):
     action_texts = [action.text() for action in window.findChildren(QAction)]
 
     assert action_texts.count("amazon_X★★★★") == 2
+    assert action_texts.count("amazon_Z★★★★") == 2
     assert action_texts.count("amazon_L★★★") == 2
     assert "amazon_X" in action_texts
+    assert "amazon_Z" in action_texts
     assert "amazon_L" in action_texts
     assert not any("XZF 最新模型" in text for text in action_texts)
     assert not any("kataAmazon(原始)" in text for text in action_texts)
@@ -46,6 +51,8 @@ def test_kata_models_use_consistent_frontend_names(qapp):
     assert window.info_ai_model.text().startswith("模型：amazon_X ·")
     window.update_ai_info_panel(result, BLACK_AMAZON, "kataAmazon_legacy")
     assert window.info_ai_model.text().startswith("模型：amazon_L ·")
+    window.update_ai_info_panel(result, BLACK_AMAZON, "kataAmazon_z")
+    assert window.info_ai_model.text().startswith("模型：amazon_Z ·")
     window.update_ai_info_panel(result, BLACK_AMAZON, "mcts_18")
     assert window.info_ai_model.text().startswith("模型：MCTS-18特征 ·")
     window.close()
@@ -77,6 +84,8 @@ def test_amazon_x_score_lead_is_visible_and_names_the_leading_side(qapp):
 
     window.update_ai_info_panel(result, BLACK_AMAZON, "kataAmazon_legacy")
     assert window.info_score.isHidden()
+    window.update_ai_info_panel(result, BLACK_AMAZON, "kataAmazon_z")
+    assert window.info_score.isHidden()
     window.close()
 
 
@@ -90,6 +99,22 @@ def test_18_feature_menu_dispatches_the_distinct_mcts_model(qapp):
     window.black_ai_agent.start_thread_ai_calculation.assert_called_once()
     assert window.black_ai_agent.start_thread_ai_calculation.call_args.args[0] == "mcts_18"
     assert window.current_ai_type == "mcts_18"
+    window.close()
+
+
+def test_amazon_z_menu_dispatches_the_z_backend(qapp):
+    window = AmazonsMainWindow(AmazonsSimulator())
+    window.black_modes = window.PLAYER_TYPE_AI_KATAAMAZON_Z
+    window.black_ai_agent.start_thread_ai_calculation = Mock(return_value=True)
+
+    window.start_ai_calculation(window.game_generation, BLACK_AMAZON)
+
+    window.black_ai_agent.start_thread_ai_calculation.assert_called_once()
+    assert (
+        window.black_ai_agent.start_thread_ai_calculation.call_args.args[0]
+        == "kataAmazon_z"
+    )
+    assert window.current_ai_type == "kataAmazon_z"
     window.close()
 
 

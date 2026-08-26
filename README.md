@@ -22,7 +22,8 @@
 
 ## 项目亮点
 
-- **四档 AI 难度**：基础 MCTS★、18 特征 MCTS★★、`amazon_L`★★★ 和 `amazon_X`★★★★。
+- **五个 AI 选项**：基础 MCTS★、18 特征 MCTS★★、`amazon_L`★★★，以及
+  `amazon_Z`★★★★ 和 `amazon_X`★★★★。
 - **完整回合分析**：分别展示“选子 → 移动 → 射箭”的胜率、访问量和 Top-N 候选。
 - **稳定的 AI 生命周期**：请求版本隔离、后台提示、引擎池复用，以及新游戏/悔棋时的旧结果丢弃。
 - **可缩放主题界面**：四套棋盘主题、80%—140% 缩放和主题自适应右侧卡片。
@@ -50,7 +51,7 @@ call activate_env.bat  :: 可选：在当前终端激活 .venv
 ### 自包含便携版
 
 发布时可生成 `dist/Amazons/` 便携目录。该目录内包含 Python 运行时、PyQt6、NumPy、
-MCTS 模块、KataGo 引擎、所需 DLL、`amazon_X` 模型和 `amazon_L` 模型；目标电脑不需要另行安装
+MCTS 模块、KataGo 引擎、所需 DLL，以及 `amazon_X`、`amazon_Z`、`amazon_L` 三个模型；目标电脑不需要另行安装
 Python，也不需要在项目目录之外配置模型或引擎文件。
 
 ```bat
@@ -90,17 +91,22 @@ Linux / macOS 可运行纯 Python GUI 和人人对弈；MCTS 与 kataAmazon 需�
 - **`amazon_L`（原始模型，后备）**：
   - 使用同一个可读取外部权重的 `src/ai/kataAmazonEngineCuda/amazons.exe`
     （**OpenCL/GPU**），加载 `src/ai/kataAmazonEngine/weights/amazons10x10.bin.gz`
-    和该目录自己的 L 搜索配置。当前随包权重已恢复为最初的 Z 模型
-    `amazons8x-b20c256-s182755840-d39606896`，不是 `amazon18-s2161408-d449231`；
+    和该目录自己的 L 搜索配置。当前随包权重已恢复为最初的 L 模型（内部名
+    `amazons8x-b20c256-s182755840-d39606896`），不是 `amazon18-s2161408-d449231`；
     以后直接替换此路径下的兼容模型会真实生效。旧模型偶尔会把亚马逊棋着法返回为
     `pass`，桥接层会改选搜索结果中访问量最高的合法坐标。
+- **`amazon_Z`（服务器参考强模型）**：
+  - 使用同一 OpenCL 引擎和稳定的 L 搜索配置，加载
+    `src/ai/kataAmazonEngine/weights/amazon18-s2161408-d449231.bin.gz`。
+    这是服务器历次评测中称为 Z 的原始强模型，SHA-256 为
+    `49777c90faf12991ce18e74478ae80f19aec5930da1c8730dc12729740cb9431`。
 - **默认自动选择**：`amazons_engine.py` 检测到 `amazon_X` 的完整资源则优先使用，
-  否则回退到 `amazon_L`；GUI 菜单可为黑白双方独立选择。
+  否则依次回退到 `amazon_Z`、`amazon_L`；GUI 菜单可为黑白双方独立选择。
 - **模型**：`src/ai/kataAmazonEngineCuda/amazon10x10_xzf.bin.gz`
   （`gen223_b featurev1`，架构 `b20c256legacyv10`，20 残差块 / 256 通道；
   SHA-256 `f32740014037c091ba564a586d9b6e05fb78d1e3fd4dae59e97c280c99af776a`）。
   `amazon_X` 的默认对局搜索配置使用 600 visits。菜单「AI 参数设置」提供默认均衡和
-  最强棋力预设；最强棋力保持 1 秒公式 MCTS、600 visits KataGo，只为 X/L
+  最强棋力预设；最强棋力保持 1 秒公式 MCTS、600 visits KataGo，只为 X/Z/L
   启用接近正式模型评测的竞赛式搜索参数：零落子温度、关闭根噪声、原生策略温度、
   标准 cpuct/树搜索、固定网络推理方向，并关闭分差头搜索。自定义模式可在界面直接
   设置前后期落子温度、网络策略温度、网络方向随机化、cpuct、图搜索、根噪声、
@@ -113,17 +119,17 @@ Linux / macOS 可运行纯 Python GUI 和人人对弈；MCTS 与 kataAmazon 需�
   项目或便携目录内随附的引擎、模型与配置，不读取机器上的外部模型路径。
 
 > 注意：featurev1 模型必须由本项目配套的 `amazons.exe` 推理。旧引擎即使能解析权重，
-> 也不会计算新增输入特征，输出不可信；当前 `amazon_L` 使用最初会产生 `pass` 的原始 Z
+> 也不会计算新增输入特征，输出不可信；当前 `amazon_L` 使用最初会产生 `pass` 的原始 L
 > 模型，并由当前桥接层修正非法 `pass` 返回。替换 L 权重时需自行确保配套引擎兼容其格式。
 > 后续替换 XZF 权重时，应继续使用当前格式导出的模型，并保留内部模型名中的
 > `featurev1` 标记；2022 旧引擎专用的“删 48 行元数据”权重不应与新版引擎混用。
 > 目录名 `kataAmazonEngineCuda` 是历史遗留，当前其中放的是 OpenCL 版引擎。
-> 项目只保留界面中实际可选的 `amazon_X` 与 `amazon_L` 后端，不携带未接入运行流程的
+> 项目只保留界面中实际可选的 `amazon_X`、`amazon_Z` 与 `amazon_L` 后端，不携带未接入运行流程的
 > 试验引擎和重复权重。
 
 ## 功能
 
-1. **四档 AI 对弈**：菜单「游戏 → 黑方/白方 → AI」可按 1—4 星为双方独立选择难度。
+1. **五个 AI 对弈选项**：菜单「游戏 → 黑方/白方 → AI」可按 1—4 星为双方独立选择模型。
 2. **显示胜率**（仿照参考 Hex 项目）：
    - 右侧信息面板实时显示当前行动方的 AI 胜率百分比；
    - 状态栏显示胜率 / 搜索次数 / 局面估值。
@@ -165,7 +171,7 @@ src/
     results.py                  跨线程的类型化 AI/提示结果
     native/                     发布用预编译 MCTS 模块（不含 CMake 临时文件）
     kataAmazonEngineCuda/       amazon_X + amazons.exe(OpenCL) + amazon10x10_xzf.bin.gz + dll + 配置（默认）
-    kataAmazonEngine/           amazon_L 原始 Z 权重 + 独立搜索配置（后备）
+    kataAmazonEngine/           amazon_L/Z 权重 + 独立搜索配置（后备/参考）
   gui/
     amazon_board_widget.py      棋盘绘制（含提示圆环）
     amazon_main_window.py       主窗口（菜单 / 胜率显示 / 提示）

@@ -117,7 +117,8 @@ def test_kata_worker_holds_snapshot_engine_context_for_complete_turn():
     assert outcomes[0].result.policy_prior == 0.22
 
 
-def test_legacy_kata_worker_does_not_expose_untrained_score_head():
+@pytest.mark.parametrize("backend", ["legacy", "z"])
+def test_old_kata_workers_do_not_expose_untrained_score_head(backend):
     class FakeLegacyKata:
         last_winrate = 51.0
         last_visits = 400
@@ -141,7 +142,7 @@ def test_legacy_kata_worker_does_not_expose_untrained_score_head():
 
     worker = AIWorker(
         10, None, None, 1, "kataAmazon", engine_provider=provider,
-        engine_backend="legacy", kata_visits=400)
+        engine_backend=backend, kata_visits=400)
     outcomes = []
     worker.finished.connect(outcomes.append)
 

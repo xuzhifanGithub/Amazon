@@ -33,6 +33,10 @@ for folder, destination, model in (
     folder_binaries, folder_datas = collect_backend(folder, destination, model)
     binaries.extend(folder_binaries)
     datas.extend(folder_datas)
+datas.append((
+    str(AI / "kataAmazonEngine" / "weights" / "amazon18-s2161408-d449231.bin.gz"),
+    "src/ai/kataAmazonEngine/weights",
+))
 
 matching_module = AI / "native" / f"amazon_ai.{PY_TAG}-win_amd64.pyd"
 matching_basic_module = AI / "native" / f"amazon_ai_basic.{PY_TAG}-win_amd64.pyd"

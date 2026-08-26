@@ -42,8 +42,9 @@ from src.logging_setup import log_file_path
 logger = logging.getLogger(__name__)
 
 KATA_MODEL_DISPLAY_NAMES = {
-    'gpu': 'amazon_X',
     'legacy': 'amazon_L',
+    'z': 'amazon_Z',
+    'gpu': 'amazon_X',
 }
 
 
@@ -57,7 +58,8 @@ class AmazonsMainWindow(QMainWindow):
     PLAYER_TYPE_AI_MCTS_18 = 'mcts_18'
     PLAYER_TYPE_AI_KATAAMAZON = 'kataAmazon'          # 兼容旧引用
     PLAYER_TYPE_AI_KATAAMAZON_GPU = 'kataAmazon_gpu'  # XZF 最新模型 + OpenCL(GPU) 引擎
-    PLAYER_TYPE_AI_KATAAMAZON_LEGACY = 'kataAmazon_legacy'  # 原始引擎（OpenCL/GPU）+ 旧模型
+    PLAYER_TYPE_AI_KATAAMAZON_LEGACY = 'kataAmazon_legacy'  # 最初的 L 模型
+    PLAYER_TYPE_AI_KATAAMAZON_Z = 'kataAmazon_z'      # 服务器评测使用的 amazon18 模型
 
     def __init__(self, simulator: AmazonsSimulator):
         super().__init__()
@@ -105,10 +107,14 @@ class AmazonsMainWindow(QMainWindow):
         if self.hint_count not in (1, 3, 5):
             self.hint_count = 1
         self.hint_source = self.settings.value("hints/source", "gpu", type=str)
-        if self.hint_source not in ('gpu', 'legacy'):
+        if self.hint_source not in KATA_MODEL_DISPLAY_NAMES:
             self.hint_source = 'gpu'
         if not backend_available(self.hint_source):
-            self.hint_source = 'gpu' if backend_available('gpu') else 'legacy'
+            self.hint_source = next(
+                (key for key in ('gpu', 'z', 'legacy')
+                 if backend_available(key)),
+                'gpu',
+            )
         self.hint_side = self.settings.value("hints/side", BLACK_AMAZON, type=int)
         if self.hint_side not in (BLACK_AMAZON, WHITE_AMAZON):
             self.hint_side = BLACK_AMAZON
@@ -324,7 +330,7 @@ class AmazonsMainWindow(QMainWindow):
         self.statusBar().showMessage("棋谱已导入。", 3000)
 
     def set_hint_source(self, source):
-        """设置 AI 提示使用的引擎后端（'gpu' / 'legacy'）。"""
+        """设置 AI 提示使用的引擎后端（X / Z / L）。"""
         self.hint_source = source
         self.settings.setValue("hints/source", source)
         self.update_hints()
@@ -506,6 +512,7 @@ class AmazonsMainWindow(QMainWindow):
             'kataAmazon': KATA_MODEL_DISPLAY_NAMES['gpu'],
             'kataAmazon_gpu': KATA_MODEL_DISPLAY_NAMES['gpu'],
             'kataAmazon_legacy': KATA_MODEL_DISPLAY_NAMES['legacy'],
+            'kataAmazon_z': KATA_MODEL_DISPLAY_NAMES['z'],
         }
         model_label = model_names.get(ai_type_key, ai_type_key or "AI")
         profile = self.black_ai_profile if player == BLACK_AMAZON else self.white_ai_profile
@@ -764,7 +771,17 @@ class AmazonsMainWindow(QMainWindow):
         black_player_group.addAction(self.black_ai_kata_legacy_action)
         black_ai_menu.addAction(self.black_ai_kata_legacy_action)
 
-        # 4. kataAmazon（XZF 最新模型，OpenCL/GPU）
+        # 4. 服务器评测使用的 amazon18 强模型
+        self.black_ai_kata_z_action = QAction(
+            f"{KATA_MODEL_DISPLAY_NAMES['z']}★★★★", self, checkable=True)
+        self.black_ai_kata_z_action.setEnabled(backend_available('z'))
+        self.black_ai_kata_z_action.triggered.connect(
+            lambda: self.set_player_mode(
+                BLACK_AMAZON, self.PLAYER_TYPE_AI_KATAAMAZON_Z))
+        black_player_group.addAction(self.black_ai_kata_z_action)
+        black_ai_menu.addAction(self.black_ai_kata_z_action)
+
+        # 5. kataAmazon（XZF 最新模型，OpenCL/GPU）
         self.black_ai_kata_gpu_action = QAction(
             f"{KATA_MODEL_DISPLAY_NAMES['gpu']}★★★★", self, checkable=True)
         self.black_ai_kata_gpu_action.setEnabled(backend_available('gpu'))
@@ -813,7 +830,17 @@ class AmazonsMainWindow(QMainWindow):
         white_player_group.addAction(self.white_ai_kata_legacy_action)
         white_ai_menu.addAction(self.white_ai_kata_legacy_action)
 
-        # 4. kataAmazon（XZF 最新模型，OpenCL/GPU）
+        # 4. 服务器评测使用的 amazon18 强模型
+        self.white_ai_kata_z_action = QAction(
+            f"{KATA_MODEL_DISPLAY_NAMES['z']}★★★★", self, checkable=True)
+        self.white_ai_kata_z_action.setEnabled(backend_available('z'))
+        self.white_ai_kata_z_action.triggered.connect(
+            lambda: self.set_player_mode(
+                WHITE_AMAZON, self.PLAYER_TYPE_AI_KATAAMAZON_Z))
+        white_player_group.addAction(self.white_ai_kata_z_action)
+        white_ai_menu.addAction(self.white_ai_kata_z_action)
+
+        # 5. kataAmazon（XZF 最新模型，OpenCL/GPU）
         self.white_ai_kata_gpu_action = QAction(
             f"{KATA_MODEL_DISPLAY_NAMES['gpu']}★★★★", self, checkable=True)
         self.white_ai_kata_gpu_action.setEnabled(backend_available('gpu'))
@@ -1091,8 +1118,9 @@ class AmazonsMainWindow(QMainWindow):
         <p>• 使用从 gen217 强模型拟合出的正式 18 特征估值器</p>
         <p>• 搜索框架与基础 MCTS 相同，局面判断更准确</p>
 
-        <h3>amazon_L★★★ / amazon_X★★★★（基于 KataGo 的 AI）</h3>
-        <p>• amazon_L：原始模型</p>
+        <h3>amazon_L★★★ / amazon_Z★★★★ / amazon_X★★★★（基于 KataGo 的 AI）</h3>
+        <p>• amazon_L：最初的原始模型</p>
+        <p>• amazon_Z：服务器评测使用的 amazon18 强模型</p>
         <p>• amazon_X：新模型</p>
         <p>• 使用 KataGo 框架的专业 AI</p>
         <p>• 性能更强但计算更复杂</p>
@@ -1101,7 +1129,7 @@ class AmazonsMainWindow(QMainWindow):
         <p>★ 基础AI - 适合新手练习</p>
         <p>★★ 中级AI - 有一定挑战性</p>
         <p>★★★ 高级AI - 极具挑战性</p>
-        <p>★★★★ 最强AI - 使用最新强模型</p>
+        <p>★★★★ 顶级AI - 可选择服务器参考强模型或最新训练模型</p>
         """
 
         QMessageBox.information(self, "AI算法介绍", ai_text)
@@ -1208,6 +1236,7 @@ class AmazonsMainWindow(QMainWindow):
             self.PLAYER_TYPE_AI_MCTS_18: mcts_available('mcts_18'),
             self.PLAYER_TYPE_AI_KATAAMAZON_GPU: backend_available('gpu'),
             self.PLAYER_TYPE_AI_KATAAMAZON_LEGACY: backend_available('legacy'),
+            self.PLAYER_TYPE_AI_KATAAMAZON_Z: backend_available('z'),
         }
         if player_type != self.PLAYER_TYPE_HUMAN and not availability.get(player_type, False):
             QMessageBox.warning(self, "AI 不可用", "所选 AI 的模块、引擎或模型文件不完整。")
@@ -1598,6 +1627,8 @@ class AmazonsMainWindow(QMainWindow):
             ai_type_key = 'kataAmazon_gpu'
         elif current_player_mode == self.PLAYER_TYPE_AI_KATAAMAZON_LEGACY:
             ai_type_key = 'kataAmazon_legacy'
+        elif current_player_mode == self.PLAYER_TYPE_AI_KATAAMAZON_Z:
+            ai_type_key = 'kataAmazon_z'
         if not ai_type_key:
             return
         # Preserve the legacy backend's historical 400-visits default until

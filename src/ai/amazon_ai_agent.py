@@ -128,9 +128,9 @@ class AIWorker(QObject):
                     best_res.win_pro = win
                     best_res.max_apt = visits
                     best_res.select_pro = (win / 100.0) if win is not None else None
-                    # amazon_L has the same architectural score heads, but its
-                    # historical training labels forced territory/score to 0.
-                    # Only amazon_X (gen199+) has meaningful territory targets.
+                    # amazon_L/Z have compatible score heads, but their old
+                    # training data did not provide the current territory
+                    # targets. Only amazon_X (gen199+) exposes that output.
                     if self.engine_backend == 'gpu':
                         best_res.score_lead = getattr(
                             engine, 'last_score_lead', None)
@@ -349,12 +349,12 @@ class AmazonAIAgent(QObject):
         self.ai = amazon_ai.AmazonasAI() if amazon_ai is not None else None
         self.ai_basic = (amazon_ai_basic.AmazonasAI()
                          if amazon_ai_basic is not None else None)
-        # kataAmazon 引擎：可选 'gpu'(XZF 最新权重) / 'legacy'(OpenCL,旧模型)。
+        # KataGo 引擎：可选 XZF 最新权重、服务器 Z 模型或最初 L 模型。
         # Gameplay engines are reused per (backend, visits) profile.
         self.ai_engine = None
         self._engine_manager = engine_manager or EngineManager()
         self._engine_pool = self._engine_manager.engines
-        self.kata_backend = None    # 当前已加载引擎的后端标识（'gpu' / 'legacy' / None）
+        self.kata_backend = None    # 当前已加载引擎的后端标识（X / Z / L / None）
 
         # 提示引擎由长生命周期 HintWorker 独占，避免在 GUI 线程中初始化或搜索。
         self.hint_thread = None
@@ -383,20 +383,27 @@ class AmazonAIAgent(QObject):
             if ai_type_engine is None:
                 model_name = "基础 MCTS" if ai_type == 'mcts' else "18 特征 MCTS"
                 raise RuntimeError(f"{model_name} 模块不可用。")
-        elif ai_type in ('kataAmazon', 'kataAmazon_gpu', 'kataAmazon_legacy'):
-            #   _gpu    -> 新权重 + CUDA(GPU)
-            #   _legacy -> 原始引擎(OpenCL/GPU) + 旧模型 amazons10x10
-            if ai_type.endswith('_legacy'):
-                backend = 'legacy'
-            else:
-                backend = 'gpu'
-            worker_ai_type = 'kataAmazon'   # worker 内部逻辑对三种后端完全一致
+        elif ai_type in (
+                'kataAmazon', 'kataAmazon_gpu', 'kataAmazon_legacy',
+                'kataAmazon_z'):
+            #   _gpu    -> XZF 最新权重
+            #   _legacy -> 最初的 L 权重
+            #   _z      -> 服务器评测使用的 amazon18 权重
+            backend = {
+                'kataAmazon_legacy': 'legacy',
+                'kataAmazon_z': 'z',
+            }.get(ai_type, 'gpu')
+            worker_ai_type = 'kataAmazon'
         else:
             raise ValueError("Invalid AI type provided.")
 
         profile = (profile or AIProfile()).normalized()
         if worker_ai_type == 'kataAmazon':
-            model_name = 'amazon_L' if backend == 'legacy' else 'amazon_X'
+            model_name = {
+                'legacy': 'amazon_L',
+                'z': 'amazon_Z',
+                'gpu': 'amazon_X',
+            }[backend]
             score_utility_enabled = (
                 profile.score_utility_enabled if backend == 'gpu' else None)
             search_config = profile.kata_search_config()
@@ -455,9 +462,10 @@ class AmazonAIAgent(QObject):
                            search_config: KataSearchConfig | None = None):
         """确保 kataAmazon 引擎已按指定后端加载。
 
-        两个后端各是一套 (引擎目录, 可执行文件, 模型, 配置)：
-            'gpu'    新权重 + CUDA(GPU)
-            'legacy' 原始引擎（OpenCL/GPU）+ 旧模型
+        三个后端各自指定 (引擎目录, 可执行文件, 模型, 配置)：
+            'gpu'    XZF 最新权重 + OpenCL(GPU)
+            'legacy' 最初的 L 模型
+            'z'      服务器评测使用的 amazon18 模型
         - 若当前引擎已是该后端，直接复用；
         - 若是另一后端，先关闭旧的再按新后端重建；
         - 重建后把当前对局历史重放进引擎，保证内部棋盘与界面一致。
@@ -613,7 +621,11 @@ class AmazonAIAgent(QObject):
         兼容旧同步调用：创建临时低延迟提示引擎并按当前完整历史重放，
         不影响后台提示工作线程或正式对局引擎。
         """
-        selected_backend = backend or ('gpu' if backend_available('gpu') else 'legacy')
+        selected_backend = backend or next(
+            (key for key in ('gpu', 'z', 'legacy')
+             if backend_available(key)),
+            'legacy',
+        )
         spec = engine_spec_for_backend(selected_backend)
         engine = None
         try:

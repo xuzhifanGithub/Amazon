@@ -92,7 +92,7 @@ def test_engine_accepts_only_10x10_coordinates():
     assert AmazonsKataGoEngine._require_playable_move("j10") == "J10"
 
 
-@pytest.mark.parametrize("backend", ["gpu", "legacy"])
+@pytest.mark.parametrize("backend", ["gpu", "z", "legacy"])
 def test_bundled_engine_configs_disable_resignation(backend):
     spec = BACKENDS[backend]
     for config_name in (spec["cfg"], spec["hint_cfg"]):

@@ -30,6 +30,15 @@ def test_legacy_backend_reads_a_replaceable_external_model():
     assert model.parent.name == "weights"
 
 
+def test_z_backend_reads_the_bundled_server_reference_model():
+    spec = BACKENDS["z"]
+    model = (Path(spec["dir"]) / spec["model"]).resolve()
+
+    assert spec["exe"] == "amazons.exe"
+    assert model.name == "amazon18-s2161408-d449231.bin.gz"
+    assert model.is_file()
+
+
 def test_profiles_are_clamped_and_persisted(tmp_path):
     settings = QSettings(str(tmp_path / "settings.ini"), QSettings.Format.IniFormat)
     saved = save_profile(settings, "black", AIProfile(99, 1, False))
@@ -153,7 +162,7 @@ def test_score_utility_switch_generates_distinct_configs_without_mutating_source
     assert source.read_text(encoding='utf-8') == before
 
 
-@pytest.mark.parametrize("backend", ["gpu", "legacy"])
+@pytest.mark.parametrize("backend", ["gpu", "z", "legacy"])
 def test_strongest_profile_generates_competitive_config_at_normal_budget(backend):
     strongest = Path(profile_config_for_visits(
         backend, 600, False, STRONGEST_KATA_SEARCH_CONFIG))
