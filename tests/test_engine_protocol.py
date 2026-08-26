@@ -5,7 +5,9 @@ from pathlib import Path
 from src.ai.amazons_engine import (BACKENDS, AmazonsKataGoEngine,
                                    parse_genmove_analyze,
                                    parse_genmove_analyze_details)
-from src.core.simulator import BLACK_AMAZON
+from src.core.simulator import (
+    BLACK_AMAZON, WHITE_AMAZON, OBSTACLE,
+)
 
 
 class _RaisingInput:
@@ -90,6 +92,42 @@ def test_engine_rejects_non_amazons_move_tokens(move):
 
 def test_engine_accepts_only_10x10_coordinates():
     assert AmazonsKataGoEngine._require_playable_move("j10") == "J10"
+
+
+def test_complete_amazons_position_command_contains_queens_obstacle_and_side():
+    board = [[0 for _ in range(10)] for _ in range(10)]
+    for point in ((0, 0), (0, 3), (3, 0), (3, 3)):
+        board[point[0]][point[1]] = BLACK_AMAZON
+    for point in ((6, 6), (6, 9), (9, 6), (9, 9)):
+        board[point[0]][point[1]] = WHITE_AMAZON
+    board[4][4] = OBSTACLE
+    commands = []
+    engine = SimpleNamespace(
+        _convert_to_gtp_coord=lambda row, col: (
+            AmazonsKataGoEngine._convert_to_gtp_coord(
+                SimpleNamespace(), row, col)),
+        _execute_sync_command=lambda command: commands.append(command),
+        last_winrate=42.0,
+        last_visits=10,
+        last_score_lead=1.0,
+        last_score_selfplay=2.0,
+        last_score_stdev=3.0,
+        last_utility=0.4,
+        last_policy_prior=0.5,
+    )
+
+    AmazonsKataGoEngine.set_amazons_position(
+        engine, board, WHITE_AMAZON)
+
+    command = commands[0]
+    assert command.startswith("set_amazons_position w ")
+    assert "b A1" in command
+    assert "b D4" in command
+    assert "w G7" in command
+    assert "w K10" in command
+    assert "x E5" in command
+    assert engine.last_winrate is None
+    assert engine.last_policy_prior is None
 
 
 @pytest.mark.parametrize("backend", ["gpu", "z", "legacy"])

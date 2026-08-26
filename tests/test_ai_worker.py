@@ -82,10 +82,10 @@ def test_kata_worker_holds_snapshot_engine_context_for_complete_turn():
 
     @contextmanager
     def provider(backend, visits, history, score_utility_enabled,
-                 search_config):
+                 search_config, position_board, next_player):
         calls.append((
             "acquire", backend, visits, history, score_utility_enabled,
-            search_config))
+            search_config, position_board, next_player))
         yield FakeKata()
         calls.append(("release",))
 
@@ -102,7 +102,7 @@ def test_kata_worker_holds_snapshot_engine_context_for_complete_turn():
 
     assert calls == [
         ("acquire", "gpu", 700, history, False,
-         STRONGEST_KATA_SEARCH_CONFIG),
+         STRONGEST_KATA_SEARCH_CONFIG, None, 1),
         ("search", 1),
         ("release",),
     ]
@@ -137,7 +137,7 @@ def test_old_kata_workers_do_not_expose_untrained_score_head(backend):
 
     @contextmanager
     def provider(_backend, _visits, _history, _score_utility_enabled,
-                 _search_config):
+                 _search_config, _position_board, _next_player):
         yield FakeLegacyKata()
 
     worker = AIWorker(
@@ -163,7 +163,7 @@ def test_kata_worker_reports_resign_as_error_instead_of_ai_resignation():
 
     @contextmanager
     def provider(_backend, _visits, _history, _score_utility_enabled,
-                 _search_config):
+                 _search_config, _position_board, _next_player):
         yield FakeKata()
 
     worker = AIWorker(

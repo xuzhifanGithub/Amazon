@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -13,7 +14,7 @@ from src.ai.amazons_engine import (
 )
 from src.ai.engine_manager import EngineManager
 from src.core.game_record import export_record, load_record
-from src.core.simulator import AmazonsSimulator
+from src.core.simulator import AmazonsSimulator, BLACK_AMAZON, WHITE_AMAZON
 from src.gui.ai_settings_dialog import AISettingsDialog
 
 
@@ -145,6 +146,8 @@ def test_visits_profile_config_does_not_mutate_bundled_file():
     source = Path(BACKENDS['gpu']['dir']) / BACKENDS['gpu']['cfg']
     before = source.read_text(encoding='utf-8')
     generated = Path(profile_config_for_visits('gpu', 750))
+    assert generated.is_relative_to(
+        Path(BACKENDS['gpu']['dir']) / "runtime_profiles")
     assert "maxVisits = 750" in generated.read_text(encoding='utf-8')
     assert source.read_text(encoding='utf-8') == before
 
@@ -263,6 +266,34 @@ def test_game_record_round_trip_and_invalid_import_is_atomic(tmp_path):
     assert (restored.board == before).all()
 
 
+def test_custom_initial_position_round_trips_in_game_record(tmp_path):
+    board = AmazonsSimulator().board * 0
+    for row, col in ((0, 0), (0, 3), (3, 0), (3, 3)):
+        board[row, col] = BLACK_AMAZON
+    for row, col in ((6, 6), (6, 9), (9, 6), (9, 9)):
+        board[row, col] = WHITE_AMAZON
+    board[4, 4] = 2
+
+    original = AmazonsSimulator()
+    original.set_initial_position(board, WHITE_AMAZON)
+    record = tmp_path / "custom.amazons.json"
+    export_record(str(record), original)
+
+    payload = json.loads(record.read_text(encoding="utf-8"))
+    assert payload["initial_position"]["current_player"] == WHITE_AMAZON
+    assert payload["initial_position"]["board"][4][4] == 2
+
+    restored = AmazonsSimulator()
+    turns, initial_board, initial_player = load_record(
+        str(record), restored, include_initial=True)
+    restored.load_turns(turns, initial_board, initial_player)
+
+    assert restored.current_player == WHITE_AMAZON
+    assert (restored.board == board).all()
+    assert (restored.initial_board == board).all()
+    assert not restored.uses_standard_initial_position
+
+
 def test_engine_manager_reuses_same_profile_and_closes_all():
     created = []
 
@@ -293,6 +324,25 @@ def test_engine_manager_reuses_same_profile_and_closes_all():
     manager.close_all()
     assert not manager.has_game_engine('gpu', 600)
     assert all(engine.closed for engine in created)
+
+
+def test_engine_manager_initializes_new_engine_from_complete_position():
+    initialized = []
+
+    class FakeEngine:
+        def close(self):
+            pass
+
+    board = [[0] * 10 for _ in range(10)]
+    manager = EngineManager(lambda **_kwargs: FakeEngine())
+    engine = manager.get_game_engine(
+        "gpu", 600, [OPENING_TURN], lambda *_args: None,
+        position=(board, WHITE_AMAZON),
+        set_position=lambda target, root, player:
+        initialized.append((target, root, player)),
+    )
+
+    assert initialized == [(engine, board, WHITE_AMAZON)]
 
 
 def test_engine_manager_isolates_score_utility_profiles():

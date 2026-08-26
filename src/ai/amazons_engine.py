@@ -22,7 +22,6 @@ import queue
 import re
 import subprocess
 import sys
-import tempfile
 import threading
 import time
 from PyQt6.QtCore import QObject, pyqtSignal
@@ -259,8 +258,11 @@ def profile_config_for_visits(
     """Return a generated config with per-search profile overrides.
 
     The shipped engine configuration is deliberately never edited.  A stable
-    file in the platform temp directory also lets multiple turns reuse the
-    same engine profile without recreating it.
+    file beside the portable engine also lets multiple turns reuse the same
+    profile without recreating it.  Keeping the generated path below the
+    engine directory means the subprocess can receive a short relative path;
+    the MinGW build cannot reliably open a config argument containing Chinese
+    Windows user-directory characters.
     """
     spec = engine_spec_for_backend(backend)
     visits = max(1, int(visits))
@@ -295,7 +297,7 @@ def profile_config_for_visits(
         for key, value in search_overrides.items():
             rendered = _set_config_value(rendered, key, value)
 
-    directory = os.path.join(tempfile.gettempdir(), "amazons-katago-profiles", backend)
+    directory = os.path.join(spec['dir'], "runtime_profiles", backend)
     os.makedirs(directory, exist_ok=True)
     content_hash = hashlib.sha256(rendered.encode('utf-8')).hexdigest()[:12]
     destination = os.path.join(
@@ -400,7 +402,14 @@ class AmazonsKataGoEngine(QObject):
 
         # 使用相对引擎目录的模型路径，保证可移植（cwd=engine_dir）
         model_arg = model_file
-        command = [engine_path, "gtp", "-config", config_file, "-model", model_arg]
+        config_arg = config_file
+        if os.path.isabs(config_file):
+            try:
+                if os.path.commonpath((engine_dir, config_file)) == engine_dir:
+                    config_arg = os.path.relpath(config_file, engine_dir)
+            except ValueError:
+                pass
+        command = [engine_path, "gtp", "-config", config_arg, "-model", model_arg]
 
         startupinfo = None
         creationflags = 0
@@ -797,6 +806,54 @@ class AmazonsKataGoEngine(QObject):
         self._execute_sync_command("clear_board")
         self.last_winrate = None
         self.last_visits = None
+
+    def set_amazons_position(self, board, next_player: int):
+        """Replace the engine root with a complete GUI board snapshot."""
+        if next_player not in (BLACK_AMAZON, WHITE_AMAZON):
+            raise ValueError("自定义局面的先行方无效")
+        try:
+            rows = [list(row) for row in board]
+        except TypeError as exc:
+            raise ValueError("自定义局面的棋盘格式无效") from exc
+        if len(rows) != 10 or any(len(row) != 10 for row in rows):
+            raise ValueError("自定义局面必须是10×10棋盘")
+
+        entity_tokens = {
+            BLACK_AMAZON: "b",
+            WHITE_AMAZON: "w",
+            OBSTACLE: "x",
+        }
+        placements = []
+        counts = {BLACK_AMAZON: 0, WHITE_AMAZON: 0}
+        for row, values in enumerate(rows):
+            for col, raw_value in enumerate(values):
+                try:
+                    value = int(raw_value)
+                except (TypeError, ValueError) as exc:
+                    raise ValueError("自定义局面包含未知棋子") from exc
+                if value == EMPTY:
+                    continue
+                token = entity_tokens.get(value)
+                if token is None:
+                    raise ValueError("自定义局面包含未知棋子")
+                if value in counts:
+                    counts[value] += 1
+                placements.extend(
+                    (token, self._convert_to_gtp_coord(row, col)))
+        if counts[BLACK_AMAZON] != 4 or counts[WHITE_AMAZON] != 4:
+            raise ValueError("自定义局面必须为黑白双方各4枚皇后")
+
+        player = "b" if next_player == BLACK_AMAZON else "w"
+        command = " ".join(
+            ("set_amazons_position", player, *placements))
+        self._execute_sync_command(command)
+        self.last_winrate = None
+        self.last_visits = None
+        self.last_score_lead = None
+        self.last_score_selfplay = None
+        self.last_score_stdev = None
+        self.last_utility = None
+        self.last_policy_prior = None
 
     def play_turn(self, player: int, start_str: str, move_str: str, arrow_str: str):
         player_char = 'b' if player == BLACK_AMAZON else 'w'

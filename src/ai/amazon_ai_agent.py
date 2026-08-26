@@ -56,7 +56,8 @@ class AIWorker(QObject):
                  ai_type_engine=None, engine_provider=None, engine_backend=None,
                  mcts_seconds: float = 1.0, kata_visits: int | None = None,
                  history=(), score_utility_enabled: bool | None = None,
-                 search_config: KataSearchConfig | None = None):
+                 search_config: KataSearchConfig | None = None,
+                 position_board=None):
         super().__init__()
         self.board_size = board_size
         self.board = board
@@ -71,6 +72,7 @@ class AIWorker(QObject):
         self.history = tuple(history)
         self.score_utility_enabled = score_utility_enabled
         self.search_config = search_config
+        self.position_board = position_board
 
 
 
@@ -103,7 +105,8 @@ class AIWorker(QObject):
                     self.engine_provider(
                         self.engine_backend, self.kata_visits, self.history,
                         self.score_utility_enabled,
-                        self.search_config)
+                        self.search_config, self.position_board,
+                        self.current_player)
                     if self.engine_provider is not None
                     else nullcontext(self.ai_type_engine)
                 )
@@ -213,18 +216,23 @@ class HintWorker(QObject):
             engine = self._ensure_engine(request['backend'])
             if self._was_cancelled(request_id):
                 return
-            engine.clear_board()
-            for index, turn in enumerate(request['history']):
-                if self._was_cancelled(request_id):
-                    return
-                player = BLACK_AMAZON if index % 2 == 0 else WHITE_AMAZON
-                start, move, arrow = turn
-                engine.play_turn(
-                    player,
-                    engine._convert_to_gtp_coord(*start),
-                    engine._convert_to_gtp_coord(*move),
-                    engine._convert_to_gtp_coord(*arrow),
-                )
+            position_board = request.get('position_board')
+            if position_board is not None:
+                engine.set_amazons_position(
+                    position_board, request['position_player'])
+            else:
+                engine.clear_board()
+                for index, turn in enumerate(request['history']):
+                    if self._was_cancelled(request_id):
+                        return
+                    player = BLACK_AMAZON if index % 2 == 0 else WHITE_AMAZON
+                    start, move, arrow = turn
+                    engine.play_turn(
+                        player,
+                        engine._convert_to_gtp_coord(*start),
+                        engine._convert_to_gtp_coord(*move),
+                        engine._convert_to_gtp_coord(*arrow),
+                    )
 
             candidates = []
             self._emit_progress(request_id, "正在分析候选棋子…")
@@ -437,6 +445,7 @@ class AmazonAIAgent(QObject):
             history=tuple(simulator.history_do_chess),
             score_utility_enabled=score_utility_enabled,
             search_config=search_config,
+            position_board=simulator.board.copy(),
         )
         # 将工作者移动到线程中
         self.worker.moveToThread(self.thread)
@@ -477,7 +486,10 @@ class AmazonAIAgent(QObject):
                     backend, visits, self.main_window.simulator.history_do_chess,
                     self._play_turn_on_engine, mode="gameplay",
                     score_utility_enabled=score_utility_enabled,
-                    search_config=search_config)
+                    search_config=search_config,
+                    position=(self.main_window.simulator.board.copy(),
+                              self.main_window.simulator.current_player),
+                    set_position=self._set_position_on_engine)
                 self.ai_engine = engine
                 self.kata_backend = backend
                 return engine
@@ -487,14 +499,18 @@ class AmazonAIAgent(QObject):
     @contextmanager
     def acquire_kata_engine(self, backend='gpu', visits=None, history=(),
                             score_utility_enabled: bool | None = None,
-                            search_config: KataSearchConfig | None = None):
+                            search_config: KataSearchConfig | None = None,
+                            position_board=None, next_player=None):
         """Lease a gameplay engine for one complete, snapshot-based search."""
         visits = int(visits or (400 if backend == 'legacy' else 600))
         with self._engine_manager.game_engine(
                 backend, visits, tuple(history), self._play_turn_on_engine,
                 mode="gameplay",
                 score_utility_enabled=score_utility_enabled,
-                search_config=search_config) as engine:
+                search_config=search_config,
+                position=((position_board, next_player)
+                          if position_board is not None else None),
+                set_position=self._set_position_on_engine) as engine:
             with self._engine_lock:
                 self.ai_engine = engine
                 self.kata_backend = backend
@@ -529,6 +545,8 @@ class AmazonAIAgent(QObject):
             'backend': backend,
             'top_n': top_n,
             'history': tuple(self.main_window.simulator.history_do_chess),
+            'position_board': self.main_window.simulator.board.copy(),
+            'position_player': self.main_window.simulator.current_player,
         })
 
     def cancel_hint_analysis(self):
@@ -574,6 +592,10 @@ class AmazonAIAgent(QObject):
             engine._convert_to_gtp_coord(*move_pos),
             engine._convert_to_gtp_coord(*arrow_pos),
         )
+
+    @staticmethod
+    def _set_position_on_engine(engine, board, next_player):
+        engine.set_amazons_position(board, next_player)
 
     def sync_committed_turn(self, player, start_pos, move_pos, arrow_pos):
         """Apply one simulator-validated turn to the loaded gameplay engine."""
@@ -633,12 +655,10 @@ class AmazonAIAgent(QObject):
                 backend=selected_backend,
                 config_file=spec.get('hint_cfg', spec['cfg']),
             )
-            for index, turn_data in enumerate(tuple(self.main_window.simulator.history_do_chess)):
-                self._play_turn_on_engine(
-                    engine,
-                    BLACK_AMAZON if index % 2 == 0 else WHITE_AMAZON,
-                    *turn_data,
-                )
+            engine.set_amazons_position(
+                self.main_window.simulator.board.copy(),
+                self.main_window.simulator.current_player,
+            )
             turn, stage_win_rates, _stage_visits = engine.analyze_turn_stages(player)
         except Exception as e:
             logger.exception("获取 kataAmazon 提示失败")

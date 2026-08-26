@@ -66,7 +66,8 @@ class EngineManager:
     def get_game_engine(self, backend: str, visits: int, history, play_turn,
                         mode: str = "gameplay",
                         score_utility_enabled: bool | None = None,
-                        search_config: KataSearchConfig | None = None):
+                        search_config: KataSearchConfig | None = None,
+                        position=None, set_position=None):
         search_config = (
             search_config.normalized() if search_config is not None else None)
         key = (
@@ -92,8 +93,11 @@ class EngineManager:
             search_config=search_config,
         )
         try:
-            for index, turn in enumerate(history):
-                play_turn(engine, 1 if index % 2 == 0 else -1, *turn)
+            if position is not None and set_position is not None:
+                set_position(engine, *position)
+            else:
+                for index, turn in enumerate(history):
+                    play_turn(engine, 1 if index % 2 == 0 else -1, *turn)
         except Exception:
             try:
                 engine.close()
@@ -114,7 +118,8 @@ class EngineManager:
     def game_engine(self, backend: str, visits: int, history, play_turn,
                     mode: str = "gameplay",
                     score_utility_enabled: bool | None = None,
-                    search_config: KataSearchConfig | None = None):
+                    search_config: KataSearchConfig | None = None,
+                    position=None, set_position=None):
         """Lease an engine for one complete search.
 
         Reset, undo, and sync requests never write into a search in progress.
@@ -134,7 +139,8 @@ class EngineManager:
             engine = self.get_game_engine(
                 backend, visits, history, play_turn, mode=mode,
                 score_utility_enabled=score_utility_enabled,
-                search_config=search_config)
+                search_config=search_config,
+                position=position, set_position=set_position)
             try:
                 yield engine
             except BaseException:

@@ -1,13 +1,16 @@
+import json
 from unittest.mock import Mock
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QAction
-from PyQt6.QtWidgets import QFrame, QMenu
+from PyQt6.QtWidgets import QFrame, QMenu, QMessageBox
 
 from src.ai.results import AIOutcome, BestResult, HintCandidate, HintOutcome
-from src.core.game_record import export_record
+from src.core.game_record import export_record, load_record
 from src.core.game_session import SessionState
-from src.core.simulator import AmazonsSimulator, BLACK_AMAZON
+from src.core.simulator import (
+    AmazonsSimulator, BLACK_AMAZON, WHITE_AMAZON, OBSTACLE,
+)
 from src.gui.ai_info_panel import PANEL_THEMES
 from src.gui.amazon_main_window import AmazonsMainWindow
 
@@ -305,6 +308,104 @@ def test_game_over_status_names_winner(qapp):
     window.close()
 
 
+def test_post_game_replay_steps_board_and_restores_ai_panel(qapp):
+    window = AmazonsMainWindow(AmazonsSimulator())
+    result = BestResult(
+        60, 50, 60, 73.5, 600, 0.735,
+        score_selfplay=4.25,
+        score_stdev=1.1,
+        utility=0.48,
+        policy_prior=0.22,
+    )
+    window.update_win_rate_display(result.win_pro, BLACK_AMAZON)
+    window.update_ai_info_panel(result, BLACK_AMAZON, "kataAmazon_gpu")
+    window.info_panel.set_candidates(["1. A4 → A5 → A4  73.5%"])
+    panel = window._capture_replay_panel()
+
+    assert window.post_animation_update(*OPENING_TURN, panel) == "HUMAN_TURN"
+    final_board = window.simulator.board.copy()
+    opening_board = window.simulator.history[0].copy()
+    window.simulator.game_over = True
+    window.simulator.winner = BLACK_AMAZON
+
+    assert window.enter_replay_mode()
+    assert window.session.state is SessionState.REPLAY
+    assert window.replay_index == 1
+    assert (window.simulator.board == final_board).all()
+    assert window.info_ai_model.text().startswith("模型：amazon_X ·")
+    assert window.info_score.text().startswith("预测分差：黑方 +4.25 分")
+    assert "73.5%" in window.info_panel.info_candidates.text()
+
+    window.replay_first()
+    assert window.replay_index == 0
+    assert (window.simulator.board == opening_board).all()
+    assert window.info_ai_model.text() == "模型：—"
+    assert not window.replay_previous_button.isEnabled()
+
+    window.replay_next()
+    assert window.replay_index == 1
+    assert (window.simulator.board == final_board).all()
+    assert window.win_rate_label.text() == "73.5%"
+    assert window.info_move_detail.text() == "棋步：A4 → A5 → A4"
+    assert not window.replay_next_button.isEnabled()
+
+    window.exit_replay_mode()
+    assert window.replay_index is None
+    assert window.session.state is SessionState.GAME_OVER
+    assert (window.simulator.board == final_board).all()
+    assert window.simulator.current_player == WHITE_AMAZON
+    window.close()
+
+
+def test_replay_snapshots_round_trip_in_json_record(qapp, tmp_path):
+    window = AmazonsMainWindow(AmazonsSimulator())
+    result = BestResult(60, 50, 60, 68.25, 600, 0.6825, utility=0.3)
+    window.update_win_rate_display(result.win_pro, BLACK_AMAZON)
+    window.update_ai_info_panel(result, BLACK_AMAZON, "kataAmazon_gpu")
+    panel = window._capture_replay_panel()
+    assert window.post_animation_update(*OPENING_TURN, panel) == "HUMAN_TURN"
+
+    record = tmp_path / "replay.amazons.json"
+    export_record(str(record), window.simulator, window._replay_records())
+    payload = json.loads(record.read_text(encoding="utf-8"))
+    assert payload["replay_snapshots"][0]["panel"]["win_rate"] == 68.25
+    assert payload["replay_snapshots"][0]["panel"]["model"].startswith(
+        "模型：amazon_X")
+
+    restored = AmazonsMainWindow(AmazonsSimulator())
+    turns, snapshots = load_record(
+        str(record), restored.simulator, include_replay=True)
+    restored.simulator.load_turns(turns)
+    restored._restore_replay_turns(turns, snapshots)
+    restored.simulator.game_over = True
+    restored.simulator.winner = BLACK_AMAZON
+
+    assert restored.enter_replay_mode()
+    assert restored.win_rate_label.text() == "68.2%"
+    assert restored.info_ai_model.text().startswith("模型：amazon_X ·")
+    assert "价值头 0.650" in restored.info_panel.info_summary.text()
+    restored.close()
+    window.close()
+
+
+def test_game_over_prompt_can_enter_replay(qapp, monkeypatch):
+    monkeypatch.setattr(
+        "src.gui.amazon_main_window.QMessageBox.information",
+        lambda *_args, **_kwargs: QMessageBox.StandardButton.Yes,
+    )
+    window = AmazonsMainWindow(AmazonsSimulator())
+    assert window.post_animation_update(*OPENING_TURN) == "HUMAN_TURN"
+    window.simulator.game_over = True
+    window.simulator.winner = BLACK_AMAZON
+
+    window.show_game_over_message()
+
+    assert window.replay_index == 1
+    assert window.session.state is SessionState.REPLAY
+    assert not window.replay_controls.isHidden()
+    window.close()
+
+
 def test_ai_resignation_compatibility_result_does_not_end_game(qapp):
     window = AmazonsMainWindow(AmazonsSimulator())
     window.black_modes = window.PLAYER_TYPE_AI_MCTS
@@ -558,4 +659,95 @@ def test_top_n_hint_candidates_keep_only_highest_rate_on_board(qapp):
     assert window.board_widget.hint_best_turn == (69, 59, 49)
     assert "1." in window.info_panel.info_candidates.text()
     assert "2." in window.info_panel.info_candidates.text()
+    window.close()
+
+
+def _place_valid_custom_setup(window):
+    black = ((0, 0), (0, 3), (3, 0), (3, 3))
+    white = ((6, 6), (6, 9), (9, 6), (9, 9))
+    window.setup_piece_combo.setCurrentIndex(
+        window.setup_piece_combo.findData(BLACK_AMAZON))
+    for point in black:
+        window.edit_setup_cell(*point)
+    window.setup_piece_combo.setCurrentIndex(
+        window.setup_piece_combo.findData(WHITE_AMAZON))
+    for point in white:
+        window.edit_setup_cell(*point)
+    window.setup_piece_combo.setCurrentIndex(
+        window.setup_piece_combo.findData(OBSTACLE))
+    window.edit_setup_cell(4, 4)
+
+
+def test_free_setup_places_entities_and_starts_from_selected_side(qapp):
+    window = AmazonsMainWindow(AmazonsSimulator())
+
+    window.begin_free_setup()
+    assert window.setup_mode
+    assert window.session.state is SessionState.SETUP
+    assert window.board_widget.setup_mode
+    assert not window.setup_controls.isHidden()
+
+    _place_valid_custom_setup(window)
+    window.setup_player_combo.setCurrentIndex(
+        window.setup_player_combo.findData(WHITE_AMAZON))
+    window.start_free_setup_game()
+
+    assert not window.setup_mode
+    assert window.setup_controls.isHidden()
+    assert window.simulator.current_player == WHITE_AMAZON
+    assert len(window.simulator.history) == 1
+    assert not window.simulator.history_do_chess
+    assert not window.simulator.uses_standard_initial_position
+    assert window.simulator.board[4, 4] == OBSTACLE
+    assert (window.simulator.board == window.simulator.initial_board).all()
+    assert window.status_label.text() == "轮到 白方（人类）落子"
+    window.close()
+
+
+def test_free_setup_rejects_missing_queens_and_cancel_restores_game(
+        qapp, monkeypatch):
+    warnings = []
+    monkeypatch.setattr(
+        "src.gui.amazon_main_window.QMessageBox.warning",
+        lambda _parent, _title, message: warnings.append(message))
+    monkeypatch.setattr(
+        "src.gui.amazon_main_window.QMessageBox.question",
+        lambda *_args, **_kwargs: QMessageBox.StandardButton.Yes)
+    window = AmazonsMainWindow(AmazonsSimulator())
+    assert window.simulator.execute_turn(*OPENING_TURN)
+    original = window.simulator.board.copy()
+    original_turns = tuple(window.simulator.history_do_chess)
+
+    window.begin_free_setup()
+    window.edit_setup_cell(0, 0)
+    window.start_free_setup_game()
+
+    assert window.setup_mode
+    assert warnings == ["自定义棋盘必须恰好放置4枚黑方皇后"]
+
+    window.cancel_free_setup()
+    assert not window.setup_mode
+    assert (window.simulator.board == original).all()
+    assert tuple(window.simulator.history_do_chess) == original_turns
+    assert window.simulator.current_player == WHITE_AMAZON
+    window.close()
+
+
+def test_custom_setup_keeps_formula_and_neural_player_modes(qapp):
+    window = AmazonsMainWindow(AmazonsSimulator())
+    window.black_modes = window.PLAYER_TYPE_AI_MCTS_18
+    window.white_modes = window.PLAYER_TYPE_AI_KATAAMAZON_GPU
+    window.white_ai_kata_gpu_action.setChecked(True)
+    window.start_ai_turn = Mock()
+    window.begin_free_setup()
+    _place_valid_custom_setup(window)
+    window.setup_player_combo.setCurrentIndex(
+        window.setup_player_combo.findData(WHITE_AMAZON))
+
+    window.start_free_setup_game()
+
+    assert window.black_modes == window.PLAYER_TYPE_AI_MCTS_18
+    assert window.white_modes == window.PLAYER_TYPE_AI_KATAAMAZON_GPU
+    assert window.white_ai_kata_gpu_action.isChecked()
+    window.start_ai_turn.assert_called_once_with()
     window.close()

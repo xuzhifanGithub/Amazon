@@ -77,6 +77,7 @@ class BoardWidget(QWidget):
     """
     mouse_genmove_completed = pyqtSignal(tuple, tuple, tuple)
     game_over_signal = pyqtSignal(str)
+    setup_cell_clicked = pyqtSignal(int, int)
 
     COORD_MODE_NONE = 0
     COORD_MODE_EDGE = 1  # 边缘坐标
@@ -123,6 +124,7 @@ class BoardWidget(QWidget):
         self.moved_piece_pos = None
         self.valid_moves = []
         self.last_turn = None
+        self.setup_mode = False
 
         # --- 用于悬停效果的状态变量 ---
         self.hovered_piece_pos = None  # 悬停在哪个棋子上
@@ -209,6 +211,14 @@ class BoardWidget(QWidget):
         """
         self.coord_mode = mode
         self._static_board_cache = None
+        self.update()
+
+    def set_setup_mode(self, enabled: bool):
+        """Switch clicks between normal turns and free-position editing."""
+        self.setup_mode = bool(enabled)
+        self.reset_selection()
+        self.hovered_piece_pos = None
+        self.hovered_path_pos = None
         self.update()
 
     def _apply_board_size(self):
@@ -419,7 +429,19 @@ class BoardWidget(QWidget):
     def mousePressEvent(self, event: "QMouseEvent"):
         """处理用户的鼠标点击事件，驱动游戏状态机。"""
         self.setFocus()
-        if self.is_animating or self.simulator.game_over:
+        if self.is_animating:
+            return
+
+        if self.setup_mode:
+            if event.button() != Qt.MouseButton.LeftButton:
+                return
+            row, col = self.get_row_col_from_coord(
+                event.pos().x(), event.pos().y())
+            if row is not None:
+                self.setup_cell_clicked.emit(row, col)
+            return
+
+        if self.simulator.game_over:
             return
 
         if event.button() == Qt.MouseButton.RightButton:
@@ -467,6 +489,13 @@ class BoardWidget(QWidget):
     def mouseMoveEvent(self, event: "QMouseEvent"):
         """当鼠标在控件上移动时调用，用于更新悬停状态。"""
         if self.is_animating:
+            return
+
+        if self.setup_mode:
+            if self.hovered_piece_pos or self.hovered_path_pos:
+                self.hovered_piece_pos = None
+                self.hovered_path_pos = None
+                self.update()
             return
 
         old_hover_piece = self.hovered_piece_pos

@@ -2,13 +2,13 @@
 import re
 import os
 import sys
-from dataclasses import replace
+from dataclasses import dataclass, replace
 
 import datetime
 import logging
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QMessageBox, QVBoxLayout, QPushButton, QLabel,
                              QFileDialog, QHBoxLayout, QInputDialog, QListWidget, QApplication, QMenu, QSlider,
-                             QTextEdit, QLineEdit, QDialog, QDialogButtonBox)
+                             QTextEdit, QLineEdit, QDialog, QDialogButtonBox, QComboBox)
 from PyQt6.QtGui import QFont, QAction, QActionGroup
 from PyQt6.QtCore import Qt, QTimer, QUrl, QPropertyAnimation, QEasingCurve, QSequentialAnimationGroup, \
     QParallelAnimationGroup, QObject, pyqtSignal
@@ -48,6 +48,94 @@ KATA_MODEL_DISPLAY_NAMES = {
 }
 
 
+@dataclass(frozen=True, slots=True)
+class ReplayPanelSnapshot:
+    """Visible analysis-card values associated with one committed turn."""
+
+    model_text: str
+    move_text: str
+    score_text: str
+    score_visible: bool
+    win_rate_text: str
+    visits_text: str
+    evaluation_text: str
+    summary_text: str
+    candidates_text: str
+    win_rate: float | None
+    win_rate_context: str
+
+    def to_record(self) -> dict:
+        return {
+            "model": self.model_text,
+            "move": self.move_text,
+            "score": self.score_text,
+            "score_visible": self.score_visible,
+            "win_rate_text": self.win_rate_text,
+            "visits": self.visits_text,
+            "evaluation": self.evaluation_text,
+            "summary": self.summary_text,
+            "candidates": self.candidates_text,
+            "win_rate": self.win_rate,
+            "win_rate_context": self.win_rate_context,
+        }
+
+    @classmethod
+    def from_record(cls, payload: dict) -> "ReplayPanelSnapshot":
+        def text(key, default):
+            value = payload.get(key, default)
+            return value if isinstance(value, str) else default
+
+        win_rate = payload.get("win_rate")
+        if (not isinstance(win_rate, (int, float))
+                or not 0.0 <= float(win_rate) <= 100.0001):
+            win_rate = None
+        return cls(
+            model_text=text("model", "模型：—"),
+            move_text=text("move", "棋步：—"),
+            score_text=text("score", "预测分差：—"),
+            score_visible=payload.get("score_visible") is True,
+            win_rate_text=text("win_rate_text", "胜率：—"),
+            visits_text=text("visits", "搜索次数：—"),
+            evaluation_text=text("evaluation", "局面估值：—"),
+            summary_text=text("summary", "数据：—"),
+            candidates_text=text("candidates", "候选：—"),
+            win_rate=float(win_rate) if win_rate is not None else None,
+            win_rate_context=text("win_rate_context", "等待 AI 评估"),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ReplayTurn:
+    """One immutable move plus the right-panel data shown for that move."""
+
+    turn: tuple[tuple[int, int], tuple[int, int], tuple[int, int]]
+    player: int
+    panel: ReplayPanelSnapshot
+
+    def to_record(self) -> dict:
+        return {"player": self.player, "panel": self.panel.to_record()}
+
+
+@dataclass(slots=True)
+class SetupBackup:
+    """Complete UI/game snapshot restored when free setup is cancelled."""
+
+    board: object
+    current_player: int
+    history: tuple
+    turns: tuple
+    game_over: bool
+    winner: int
+    initial_board: object
+    initial_player: int
+    replay_turns: tuple
+    panel: ReplayPanelSnapshot
+    last_turn: object
+    black_mode: str
+    white_mode: str
+    game_over_prompted_revision: int | None
+
+
 class AmazonsMainWindow(QMainWindow):
     """
     亚马逊棋游戏主窗口
@@ -60,7 +148,6 @@ class AmazonsMainWindow(QMainWindow):
     PLAYER_TYPE_AI_KATAAMAZON_GPU = 'kataAmazon_gpu'  # XZF 最新模型 + OpenCL(GPU) 引擎
     PLAYER_TYPE_AI_KATAAMAZON_LEGACY = 'kataAmazon_legacy'  # 最初的 L 模型
     PLAYER_TYPE_AI_KATAAMAZON_Z = 'kataAmazon_z'      # 服务器评测使用的 amazon18 模型
-
     def __init__(self, simulator: AmazonsSimulator):
         super().__init__()
         self.simulator = simulator
@@ -71,6 +158,11 @@ class AmazonsMainWindow(QMainWindow):
         self._hint_request_id = 0
         self._closing = False
         self._resume_ai_after_worker = False
+        self.replay_turns: list[ReplayTurn] = []
+        self.replay_index: int | None = None
+        self._game_over_prompted_revision: int | None = None
+        self.setup_mode = False
+        self._setup_backup: SetupBackup | None = None
 
         self.board_widget = None  # 将在init_ui中初始化
 
@@ -147,12 +239,422 @@ class AmazonsMainWindow(QMainWindow):
             self.info_panel.set_task_progress()
         self._cancel_current_animation()
 
+    def _reset_replay_state(self):
+        """Discard replay data when a different game replaces this one."""
+        self.replay_turns.clear()
+        self.replay_index = None
+        self._game_over_prompted_revision = None
+        if hasattr(self, "replay_controls"):
+            self.replay_controls.hide()
+        if hasattr(self, "replay_action"):
+            self.replay_action.setEnabled(False)
+
+    def _capture_replay_panel(self) -> ReplayPanelSnapshot:
+        """Capture the visible analysis values before the next turn changes them."""
+        return ReplayPanelSnapshot(
+            model_text=self.info_ai_model.text(),
+            move_text=self.info_move_detail.text(),
+            score_text=self.info_score.text(),
+            score_visible=not self.info_score.isHidden(),
+            win_rate_text=self.info_win_rate.text(),
+            visits_text=self.info_visits.text(),
+            evaluation_text=self.info_eval.text(),
+            summary_text=self.info_panel.info_summary.text(),
+            candidates_text=self.info_panel.info_candidates.text(),
+            win_rate=self.last_win_rate,
+            win_rate_context=self.info_panel.win_rate_context.text(),
+        )
+
+    def _human_replay_panel(self, player, turn, candidates_text=None):
+        """Create an explicit replay entry for a move without AI analysis."""
+        size = self.simulator.size
+        display = lambda point: self._pos_to_display(
+            point[0] * size + point[1], size)
+        start, move, arrow = turn
+        side = "黑" if player == BLACK_AMAZON else "白"
+        return ReplayPanelSnapshot(
+            model_text=f"模型：人类 · {side}",
+            move_text=(
+                f"棋步：{display(start)} → {display(move)} → {display(arrow)}"),
+            score_text="预测分差：—",
+            score_visible=False,
+            win_rate_text="胜率：—",
+            visits_text="搜索次数：—",
+            evaluation_text="局面估值：—",
+            summary_text="数据：人类落子，无 AI 分析",
+            candidates_text=candidates_text or "候选：—",
+            win_rate=None,
+            win_rate_context="该步无 AI 评估",
+        )
+
+    def _append_replay_turn(self, turn, player, panel=None):
+        """Append analysis only after the rules layer committed the same move."""
+        normalized_turn = tuple(
+            tuple(int(value) for value in point) for point in turn)
+        target = len(self.simulator.history_do_chess) - 1
+        while len(self.replay_turns) < target:
+            index = len(self.replay_turns)
+            missing_turn = self.simulator.history_do_chess[index]
+            missing_player = self.simulator.initial_player * (-1) ** index
+            self.replay_turns.append(ReplayTurn(
+                missing_turn,
+                missing_player,
+                self._human_replay_panel(missing_player, missing_turn),
+            ))
+        del self.replay_turns[target:]
+        if panel is None:
+            panel = self._human_replay_panel(player, normalized_turn)
+        self.replay_turns.append(ReplayTurn(normalized_turn, player, panel))
+
+    def _ensure_replay_turns(self):
+        """Fill entries for imported/legacy moves that have no saved analysis."""
+        turns = self.simulator.history_do_chess
+        del self.replay_turns[len(turns):]
+        while len(self.replay_turns) < len(turns):
+            index = len(self.replay_turns)
+            turn = turns[index]
+            player = self.simulator.initial_player * (-1) ** index
+            self.replay_turns.append(ReplayTurn(
+                turn, player, self._human_replay_panel(player, turn)))
+
+    def _replay_records(self):
+        self._ensure_replay_turns()
+        return tuple(entry.to_record() for entry in self.replay_turns)
+
+    def _restore_replay_turns(self, turns, snapshots):
+        """Restore optional JSON snapshots, falling back to move-only replay."""
+        self.replay_turns.clear()
+        for index, turn in enumerate(turns):
+            default_player = self.simulator.initial_player * (-1) ** index
+            if index < len(snapshots):
+                record = snapshots[index]
+                player = record.get("player", default_player)
+                if player not in (BLACK_AMAZON, WHITE_AMAZON):
+                    player = default_player
+                panel_record = record.get("panel")
+                if isinstance(panel_record, dict):
+                    panel = ReplayPanelSnapshot.from_record(panel_record)
+                else:
+                    panel = self._human_replay_panel(player, turn)
+            else:
+                player = default_player
+                panel = self._human_replay_panel(player, turn)
+            self.replay_turns.append(ReplayTurn(turn, player, panel))
+
+    def _apply_replay_panel(self, snapshot: ReplayPanelSnapshot):
+        self.info_ai_model.setText(snapshot.model_text)
+        self.info_move_detail.setText(snapshot.move_text)
+        self.info_score.setText(snapshot.score_text)
+        self.info_score.setVisible(snapshot.score_visible)
+        self.info_win_rate.setText(snapshot.win_rate_text)
+        self.info_visits.setText(snapshot.visits_text)
+        self.info_eval.setText(snapshot.evaluation_text)
+        self.info_panel.info_summary.setText(snapshot.summary_text)
+        self.info_panel.info_candidates.setText(snapshot.candidates_text)
+        self.last_win_rate = snapshot.win_rate
+        self.info_panel.set_win_rate(
+            snapshot.win_rate, snapshot.win_rate_context)
+        self.info_panel.set_task_progress()
+
+    def _update_replay_position(self):
+        """Render one immutable history state without changing the game record."""
+        if self.replay_index is None:
+            return
+        total = len(self.simulator.history_do_chess)
+        index = max(0, min(total, int(self.replay_index)))
+        self.replay_index = index
+        self.simulator.board = self.simulator.history[index].copy()
+        self.simulator.current_player = (
+            self.simulator.initial_player * (-1) ** index)
+        self.simulator.game_over = True
+        self.board_widget.reset_selection()
+        self.board_widget.set_hints([], self.hint_side)
+
+        if index == 0:
+            self.board_widget.set_last_turn(None)
+            self.update_win_rate_display(None)
+            self.update_ai_info_panel(None, None)
+            detail = "开局"
+        else:
+            entry = self.replay_turns[index - 1]
+            self.board_widget.set_last_turn(entry.turn)
+            self._apply_replay_panel(entry.panel)
+            detail = "黑方落子" if entry.player == BLACK_AMAZON else "白方落子"
+
+        status = f"演示模式：第 {index}/{total} 步 · {detail}"
+        self.info_panel.set_status(status)
+        self.statusBar().showMessage(status)
+        self.replay_position_label.setText(f"第 {index} / {total} 步")
+        self.replay_first_button.setEnabled(index > 0)
+        self.replay_previous_button.setEnabled(index > 0)
+        self.replay_next_button.setEnabled(index < total)
+        self.replay_last_button.setEnabled(index < total)
+        self.board_widget.update()
+
+    def enter_replay_mode(self):
+        """Enter read-only post-game replay at the final position."""
+        if not self.simulator.game_over or not self.simulator.history_do_chess:
+            self.statusBar().showMessage("只有已结束且包含着法的棋局可以演示。", 3500)
+            return False
+        self._invalidate_position()
+        self._game_over_prompted_revision = self.game_generation
+        self._ensure_replay_turns()
+        self.replay_index = len(self.simulator.history_do_chess)
+        self.session.begin_replay()
+        self.board_widget.setEnabled(False)
+        self.replay_controls.show()
+        self.replay_action.setEnabled(True)
+        self._update_replay_position()
+        return True
+
+    def exit_replay_mode(self):
+        """Return from replay to the untouched terminal position."""
+        if self.replay_index is None:
+            return
+        total = len(self.simulator.history_do_chess)
+        self.replay_index = None
+        self.simulator.board = self.simulator.history[-1].copy()
+        self.simulator.current_player = (
+            self.simulator.initial_player * (-1) ** total)
+        self.simulator.game_over = True
+        self.session.finish_turn(True)
+        self.replay_controls.hide()
+        self.board_widget.set_last_turn(
+            self.simulator.history_do_chess[-1] if total else None)
+        if total and self.replay_turns:
+            self._apply_replay_panel(self.replay_turns[-1].panel)
+        self.update_status()
+        self.statusBar().showMessage("已退出棋局演示。", 3000)
+        self.board_widget.update()
+
+    def replay_first(self):
+        if self.replay_index is not None:
+            self.replay_index = 0
+            self._update_replay_position()
+
+    def replay_previous(self):
+        if self.replay_index is not None:
+            self.replay_index -= 1
+            self._update_replay_position()
+
+    def replay_next(self):
+        if self.replay_index is not None:
+            self.replay_index += 1
+            self._update_replay_position()
+
+    def replay_last(self):
+        if self.replay_index is not None:
+            self.replay_index = len(self.simulator.history_do_chess)
+            self._update_replay_position()
+
+    def _set_player_action_checked(self, side, player_type):
+        actions = {
+            self.PLAYER_TYPE_HUMAN: (
+                self.black_human_action, self.white_human_action),
+            self.PLAYER_TYPE_AI_MCTS: (
+                self.black_ai_mcts_action, self.white_ai_mcts_action),
+            self.PLAYER_TYPE_AI_MCTS_18: (
+                self.black_ai_mcts_18_action, self.white_ai_mcts_18_action),
+            self.PLAYER_TYPE_AI_KATAAMAZON_LEGACY: (
+                self.black_ai_kata_legacy_action,
+                self.white_ai_kata_legacy_action),
+            self.PLAYER_TYPE_AI_KATAAMAZON_Z: (
+                self.black_ai_kata_z_action, self.white_ai_kata_z_action),
+            self.PLAYER_TYPE_AI_KATAAMAZON_GPU: (
+                self.black_ai_kata_gpu_action, self.white_ai_kata_gpu_action),
+        }
+        pair = actions.get(player_type)
+        if pair is not None:
+            pair[0 if side == BLACK_AMAZON else 1].setChecked(True)
+
+    def _discard_setup_mode(self):
+        """Close setup controls without restoring or replacing a position."""
+        self.setup_mode = False
+        self._setup_backup = None
+        if hasattr(self, "setup_controls"):
+            self.setup_controls.hide()
+        if self.board_widget is not None:
+            self.board_widget.set_setup_mode(False)
+
+    def begin_free_setup(self):
+        """Open an empty editable board while preserving the current game."""
+        if self.setup_mode:
+            return
+        if not self.confirm_action("进入自由摆盘"):
+            return
+        if self.replay_index is not None:
+            self.exit_replay_mode()
+
+        self._setup_backup = SetupBackup(
+            board=self.simulator.board.copy(),
+            current_player=self.simulator.current_player,
+            history=tuple(board.copy() for board in self.simulator.history),
+            turns=tuple(self.simulator.history_do_chess),
+            game_over=self.simulator.game_over,
+            winner=self.simulator.winner,
+            initial_board=self.simulator.initial_board.copy(),
+            initial_player=self.simulator.initial_player,
+            replay_turns=tuple(self.replay_turns),
+            panel=self._capture_replay_panel(),
+            last_turn=self.board_widget.last_turn,
+            black_mode=self.black_modes,
+            white_mode=self.white_modes,
+            game_over_prompted_revision=self._game_over_prompted_revision,
+        )
+        self._invalidate_position()
+        self._reset_replay_state()
+        self.black_ai_agent.clear_board()
+        self.white_ai_agent.clear_board()
+
+        self.setup_mode = True
+        self.session.begin_setup()
+        self.simulator.board = self.simulator.board * 0
+        self.simulator.current_player = BLACK_AMAZON
+        self.simulator.game_over = False
+        self.simulator.winner = 0
+        self.board_widget.set_setup_mode(True)
+        self.board_widget.set_last_turn(None)
+        self.board_widget.set_hints([], self.hint_side)
+        self.board_widget.setEnabled(True)
+        self.setup_piece_combo.setCurrentIndex(0)
+        self.setup_player_combo.setCurrentIndex(0)
+        self.setup_controls.show()
+        self.update_win_rate_display(None)
+        self.update_ai_info_panel(None, None)
+        self._update_setup_counts()
+        self.update_status()
+        self.statusBar().showMessage(
+            "自由摆盘：选择内容后点击格子；开始前黑白双方必须各有4枚皇后。")
+        self.board_widget.update()
+
+    def _update_setup_counts(self):
+        if not self.setup_mode:
+            return
+        board = self.simulator.board
+        black = int((board == BLACK_AMAZON).sum())
+        white = int((board == WHITE_AMAZON).sum())
+        obstacles = int((board == OBSTACLE).sum())
+        self.setup_count_label.setText(
+            f"黑 {black}/4 · 白 {white}/4 · 障碍 {obstacles}")
+
+    def edit_setup_cell(self, row, col):
+        """Apply the selected setup tool to one board cell."""
+        if not self.setup_mode:
+            return
+        value = int(self.setup_piece_combo.currentData())
+        old_value = int(self.simulator.board[row, col])
+        if value in (BLACK_AMAZON, WHITE_AMAZON) and old_value != value:
+            if int((self.simulator.board == value).sum()) >= 4:
+                side = "黑方" if value == BLACK_AMAZON else "白方"
+                self.statusBar().showMessage(
+                    f"{side}皇后已经有4枚；请先用橡皮擦移除一枚。", 3500)
+                return
+        self.simulator.board[row, col] = value
+        self.board_widget.set_last_turn(None)
+        self._update_setup_counts()
+        self.board_widget.update()
+
+    def clear_setup_board(self):
+        if not self.setup_mode:
+            return
+        self.simulator.board.fill(EMPTY)
+        self._update_setup_counts()
+        self.board_widget.update()
+
+    def use_standard_setup_board(self):
+        if not self.setup_mode:
+            return
+        self.simulator.board = self.simulator.standard_initial_board()
+        self.setup_player_combo.setCurrentIndex(0)
+        self._update_setup_counts()
+        self.board_widget.update()
+
+    def cancel_free_setup(self):
+        """Restore the exact game that was visible before free setup."""
+        backup = self._setup_backup
+        if not self.setup_mode or backup is None:
+            return
+        self._invalidate_position()
+        self._discard_setup_mode()
+        self.simulator.board = backup.board.copy()
+        self.simulator.current_player = backup.current_player
+        self.simulator.history = [board.copy() for board in backup.history]
+        self.simulator.history_do_chess = list(backup.turns)
+        self.simulator.game_over = backup.game_over
+        self.simulator.winner = backup.winner
+        self.simulator.initial_board = backup.initial_board.copy()
+        self.simulator.initial_player = backup.initial_player
+        self.replay_turns = list(backup.replay_turns)
+        self.black_modes = backup.black_mode
+        self.white_modes = backup.white_mode
+        self._set_player_action_checked(BLACK_AMAZON, self.black_modes)
+        self._set_player_action_checked(WHITE_AMAZON, self.white_modes)
+        self._game_over_prompted_revision = backup.game_over_prompted_revision
+        self.board_widget.set_last_turn(backup.last_turn)
+        self._apply_replay_panel(backup.panel)
+        self.replay_action.setEnabled(
+            backup.game_over and bool(backup.turns))
+        self.board_widget.update()
+
+        if backup.game_over:
+            self.session.finish_turn(True)
+            self.board_widget.setEnabled(False)
+        elif self.is_ai_turn():
+            self.session.finish_turn()
+            self.board_widget.setEnabled(False)
+            self.start_ai_turn()
+        else:
+            self.session.finish_turn()
+            self.board_widget.setEnabled(True)
+            self.update_hints()
+        self.update_status()
+        self.statusBar().showMessage("已取消自由摆盘，并恢复原棋局。", 3000)
+
+    def start_free_setup_game(self):
+        """Validate the edited board and make it the immutable game root."""
+        if not self.setup_mode:
+            return
+        board = self.simulator.board.copy()
+        player = int(self.setup_player_combo.currentData())
+        try:
+            self.simulator.validate_initial_position(board, player)
+        except ValueError as exc:
+            QMessageBox.warning(self, "无法开始对局", str(exc))
+            return
+
+        self._invalidate_position()
+        self._discard_setup_mode()
+        self._reset_replay_state()
+        self.black_ai_agent.clear_board()
+        self.white_ai_agent.clear_board()
+        self.simulator.set_initial_position(board, player)
+        self._game_over_prompted_revision = None
+        self.board_widget.reset_selection()
+        self.board_widget.set_last_turn(None)
+        self.board_widget.set_hints([], self.hint_side)
+        self.update_win_rate_display(None)
+        self.update_ai_info_panel(None, None)
+
+        self.board_widget.update()
+
+        if self.simulator.game_over:
+            self.show_game_over_message()
+        elif self.is_ai_turn():
+            self.start_ai_turn()
+        else:
+            self.session.finish_turn()
+            self.board_widget.setEnabled(True)
+            self.update_status()
+        self.statusBar().showMessage("已从自由摆盘局面开始对局。", 3000)
+
     def start_new_game(self):
         if not self.confirm_action("开始新游戏"):
             return
 
         # Invalidate every delayed callback and result that belongs to the old game.
         self._invalidate_position()
+        self._discard_setup_mode()
+        self._reset_replay_state()
 
         self.simulator.reset()
         self.board_widget.reset_selection()
@@ -279,6 +781,10 @@ class AmazonsMainWindow(QMainWindow):
             self.statusBar().showMessage("AI 参数已保存，将在下一次 AI 回合生效。", 3500)
 
     def export_game_record(self):
+        if self.setup_mode:
+            QMessageBox.information(
+                self, "正在自由摆盘", "请先开始对局或取消摆盘，再导出棋谱。")
+            return
         path, _ = QFileDialog.getSaveFileName(
             self, "导出棋谱", "", "Amazons 棋谱 (*.amazons.json)")
         if not path:
@@ -286,8 +792,8 @@ class AmazonsMainWindow(QMainWindow):
         if not path.lower().endswith(".amazons.json"):
             path += ".amazons.json"
         try:
-            export_record(path, self.simulator)
-        except OSError as exc:
+            export_record(path, self.simulator, self._replay_records())
+        except (OSError, ValueError) as exc:
             QMessageBox.warning(self, "导出失败", str(exc))
             return
         self.statusBar().showMessage("棋谱已导出。", 3000)
@@ -298,15 +804,22 @@ class AmazonsMainWindow(QMainWindow):
         if not path:
             return
         try:
-            turns = load_record(path, self.simulator)
+            (turns, replay_snapshots, initial_board,
+             initial_player) = load_record(
+                path, self.simulator, include_replay=True,
+                include_initial=True)
         except ValueError as exc:
             QMessageBox.warning(self, "导入失败", str(exc))
             return
         # Validation above leaves the current board intact; mutate only now.
         self._invalidate_position()
+        self._discard_setup_mode()
+        self._reset_replay_state()
         self.black_ai_agent.clear_board()
         self.white_ai_agent.clear_board()
-        self.simulator.load_turns(turns)
+        self.simulator.load_turns(
+            turns, initial_board, initial_player)
+        self._restore_replay_turns(turns, replay_snapshots)
         self.board_widget.reset_selection()
         self.board_widget.set_last_turn(turns[-1] if turns else None)
         self.board_widget.set_hints([], self.hint_side)
@@ -317,6 +830,7 @@ class AmazonsMainWindow(QMainWindow):
         if self.simulator.game_over:
             self.session.finish_turn(True)
             self.board_widget.setEnabled(False)
+            self.replay_action.setEnabled(bool(turns))
         elif self.is_ai_turn():
             if self.black_ai_agent.is_busy() or self.white_ai_agent.is_busy():
                 self._resume_ai_after_worker = True
@@ -347,7 +861,8 @@ class AmazonsMainWindow(QMainWindow):
         三个数字统一为原行动方视角；仅当轮到所选提示方（hint_side）落子时
         显示，非该方回合时清空。
         """
-        if (not self.show_hints_action.isChecked() or self.simulator.game_over
+        if (self.setup_mode or not self.show_hints_action.isChecked()
+                or self.simulator.game_over
                 or self.simulator.current_player != self.hint_side):
             self._hint_request_id += 1
             self.black_ai_agent.cancel_hint_analysis()
@@ -598,21 +1113,30 @@ class AmazonsMainWindow(QMainWindow):
     def on_turn_made(self, start_pos, move_pos, arrow_pos):
         """
         """
-        if self.simulator.game_over or not self.board_widget.isEnabled():
+        if (self.setup_mode or self.simulator.game_over
+                or not self.board_widget.isEnabled()):
             return
 
         # 如果当前回合是 AI，忽略人类点击
         if self.is_ai_turn():
             return
 
-        # 将 source 参数传递给动画完成后的回调
-        callback = lambda: self.post_animation_update(start_pos, move_pos, arrow_pos)
+        # 人类着法没有引擎结果，但仍保存实际着法和当时已有的候选提示。
+        player = self.simulator.current_player
+        turn = (start_pos, move_pos, arrow_pos)
+        panel = self._human_replay_panel(
+            player, turn, self.info_panel.info_candidates.text())
+        callback = lambda: self.post_animation_update(
+            start_pos, move_pos, arrow_pos, panel)
         self.run_full_turn_animation_sequence(start_pos, move_pos, arrow_pos, self.simulator.current_player, callback)
 
     def undo_move(self):
         """
         处理悔棋操作，人机模式下连续悔两步。
         """
+        if self.setup_mode:
+            self.statusBar().showMessage("自由摆盘中无法悔棋；可清空或取消摆盘。", 3500)
+            return
         if self.simulator.game_over:
             self.statusBar().showMessage("游戏已结束，无法悔棋。")
             return
@@ -650,6 +1174,8 @@ class AmazonsMainWindow(QMainWindow):
         else:
             self.statusBar().showMessage("无法悔棋，已是开局。")
             return
+
+        self._ensure_replay_turns()
 
         # ========= UI 更新 ==========
         self.board_widget.reset_selection()
@@ -695,7 +1221,81 @@ class AmazonsMainWindow(QMainWindow):
         self.board_widget.set_zoom_percent(self.board_zoom)
         self.board_widget.mouse_genmove_completed.connect(self.on_turn_made)
         self.board_widget.game_over_signal.connect(self.show_game_over_message)
+        self.board_widget.setup_cell_clicked.connect(self.edit_setup_cell)
         board_layout.addWidget(self.board_widget)
+
+        self.replay_controls = QWidget(board_panel)
+        self.replay_controls.setObjectName("replayControls")
+        replay_layout = QHBoxLayout(self.replay_controls)
+        replay_layout.setContentsMargins(0, 6, 0, 0)
+        replay_layout.setSpacing(6)
+        self.replay_first_button = QPushButton("⏮ 开局", self.replay_controls)
+        self.replay_previous_button = QPushButton("◀ 上一步", self.replay_controls)
+        self.replay_position_label = QLabel("第 0 / 0 步", self.replay_controls)
+        self.replay_position_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.replay_next_button = QPushButton("下一步 ▶", self.replay_controls)
+        self.replay_last_button = QPushButton("终局 ⏭", self.replay_controls)
+        self.replay_exit_button = QPushButton("退出演示", self.replay_controls)
+        self.replay_first_button.clicked.connect(self.replay_first)
+        self.replay_previous_button.clicked.connect(self.replay_previous)
+        self.replay_next_button.clicked.connect(self.replay_next)
+        self.replay_last_button.clicked.connect(self.replay_last)
+        self.replay_exit_button.clicked.connect(self.exit_replay_mode)
+        for button in (
+                self.replay_first_button, self.replay_previous_button,
+                self.replay_next_button, self.replay_last_button):
+            replay_layout.addWidget(button)
+        replay_layout.insertWidget(2, self.replay_position_label, 1)
+        replay_layout.addWidget(self.replay_exit_button)
+        self.replay_controls.hide()
+        board_layout.addWidget(self.replay_controls)
+
+        self.setup_controls = QWidget(board_panel)
+        self.setup_controls.setObjectName("setupControls")
+        setup_layout = QVBoxLayout(self.setup_controls)
+        setup_layout.setContentsMargins(0, 6, 0, 0)
+        setup_layout.setSpacing(6)
+        setup_options = QHBoxLayout()
+        setup_options.setSpacing(6)
+        setup_options.addWidget(QLabel("放置：", self.setup_controls))
+        self.setup_piece_combo = QComboBox(self.setup_controls)
+        self.setup_piece_combo.addItem("黑方皇后", BLACK_AMAZON)
+        self.setup_piece_combo.addItem("白方皇后", WHITE_AMAZON)
+        self.setup_piece_combo.addItem("障碍", OBSTACLE)
+        self.setup_piece_combo.addItem("橡皮擦", EMPTY)
+        setup_options.addWidget(self.setup_piece_combo)
+        setup_options.addWidget(QLabel("先行方：", self.setup_controls))
+        self.setup_player_combo = QComboBox(self.setup_controls)
+        self.setup_player_combo.addItem("黑方", BLACK_AMAZON)
+        self.setup_player_combo.addItem("白方", WHITE_AMAZON)
+        setup_options.addWidget(self.setup_player_combo)
+        self.setup_count_label = QLabel(
+            "黑 0/4 · 白 0/4 · 障碍 0", self.setup_controls)
+        setup_options.addWidget(self.setup_count_label, 1)
+        setup_layout.addLayout(setup_options)
+
+        setup_buttons = QHBoxLayout()
+        setup_buttons.setSpacing(6)
+        self.setup_clear_button = QPushButton("清空", self.setup_controls)
+        self.setup_standard_button = QPushButton(
+            "标准开局", self.setup_controls)
+        self.setup_start_button = QPushButton(
+            "开始对局", self.setup_controls)
+        self.setup_cancel_button = QPushButton(
+            "取消摆盘", self.setup_controls)
+        self.setup_clear_button.clicked.connect(self.clear_setup_board)
+        self.setup_standard_button.clicked.connect(
+            self.use_standard_setup_board)
+        self.setup_start_button.clicked.connect(self.start_free_setup_game)
+        self.setup_cancel_button.clicked.connect(self.cancel_free_setup)
+        setup_buttons.addWidget(self.setup_clear_button)
+        setup_buttons.addWidget(self.setup_standard_button)
+        setup_buttons.addStretch(1)
+        setup_buttons.addWidget(self.setup_start_button)
+        setup_buttons.addWidget(self.setup_cancel_button)
+        setup_layout.addLayout(setup_buttons)
+        self.setup_controls.hide()
+        board_layout.addWidget(self.setup_controls)
 
         self.info_panel = AIInfoPanel(
             color_scheme=self.current_color_scheme,
@@ -731,6 +1331,11 @@ class AmazonsMainWindow(QMainWindow):
         new_game_action.triggered.connect(lambda: self.start_new_game())
         new_game_action.setShortcut("Ctrl+N")
         game_menu.addAction(new_game_action)
+
+        self.free_setup_action = QAction("自由摆盘…", self)
+        self.free_setup_action.setShortcut("Ctrl+B")
+        self.free_setup_action.triggered.connect(self.begin_free_setup)
+        game_menu.addAction(self.free_setup_action)
 
         game_menu.addSeparator()
 
@@ -863,6 +1468,12 @@ class AmazonsMainWindow(QMainWindow):
         import_action = QAction("导入棋谱…", self)
         import_action.triggered.connect(self.import_game_record)
         game_menu.addAction(import_action)
+
+        self.replay_action = QAction("棋局演示…", self)
+        self.replay_action.setShortcut("Ctrl+P")
+        self.replay_action.setEnabled(False)
+        self.replay_action.triggered.connect(self.enter_replay_mode)
+        game_menu.addAction(self.replay_action)
 
         game_menu.addSeparator()
 
@@ -1141,8 +1752,10 @@ class AmazonsMainWindow(QMainWindow):
 
         <h3>游戏操作</h3>
         <p><b>Ctrl+N</b> - 新游戏</p>
+        <p><b>Ctrl+B</b> - 进入自由摆盘</p>
         <p><b>Ctrl+Z</b> - 悔棋</p>
         <p><b>Ctrl+R</b> - 认输</p>
+        <p><b>Ctrl+P</b> - 进入赛后棋局演示</p>
         <p><b>Ctrl+Q</b> - 退出游戏</p>
 
         <h3>棋盘操作</h3>
@@ -1324,6 +1937,8 @@ class AmazonsMainWindow(QMainWindow):
         """
         判断当前回合是否轮到 AI 下棋。
         """
+        if self.setup_mode or self.replay_index is not None:
+            return False
         # 获取当前玩家对应的模式
         if self.simulator.current_player == BLACK_AMAZON:
             current_mode = self.black_modes
@@ -1335,6 +1950,14 @@ class AmazonsMainWindow(QMainWindow):
 
     def update_status(self):
         """更新状态显示"""
+        if self.setup_mode:
+            self.info_panel.set_status("自由摆盘：点击棋盘放置皇后或障碍")
+            return
+        if self.replay_index is not None:
+            total = len(self.simulator.history_do_chess)
+            self.info_panel.set_status(
+                f"演示模式：第 {self.replay_index}/{total} 步")
+            return
         if self.simulator.game_over:
             if self.simulator.winner in (BLACK_AMAZON, WHITE_AMAZON):
                 winner_name = "黑方" if self.simulator.winner == BLACK_AMAZON else "白方"
@@ -1354,12 +1977,30 @@ class AmazonsMainWindow(QMainWindow):
         """显示游戏结束消息"""
         self.session.finish_turn(True)
         self.board_widget.setEnabled(False)  # 游戏结束，禁用棋盘
+        self._ensure_replay_turns()
+        can_replay = bool(self.simulator.history_do_chess)
+        self.replay_action.setEnabled(can_replay)
         self.update_status()
-        if message:
-            QMessageBox.information(self, "游戏结束", message)
-        else:
+        if self.replay_index is not None:
+            return
+        if self._game_over_prompted_revision == self.game_generation:
+            return
+        self._game_over_prompted_revision = self.game_generation
+        if not message:
             winner_name = "黑方" if self.simulator.winner == BLACK_AMAZON else "白方"
-            QMessageBox.information(self, "游戏结束", f"游戏结束！{winner_name}获胜！")
+            message = f"游戏结束！{winner_name}获胜！"
+        if not can_replay:
+            QMessageBox.information(self, "游戏结束", message)
+            return
+        reply = QMessageBox.information(
+            self,
+            "游戏结束",
+            f"{message}\n\n是否进入棋局演示，逐步查看着法和当时的右侧信息？",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes,
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self.enter_replay_mode()
 
     def confirm_action(self, action_name="此操作"):
         """在执行可能中断游戏的操作前，向用户请求确认。"""
@@ -1372,6 +2013,10 @@ class AmazonsMainWindow(QMainWindow):
 
     def resign_game(self):
         """处理认输操作。"""
+        if self.setup_mode:
+            QMessageBox.information(
+                self, "提示", "自由摆盘中无法认输，请先开始对局。")
+            return
         # 检查是否在游戏中
         if self.simulator.game_over or len(self.simulator.history_do_chess) == 0:
             QMessageBox.information(self, "提示", "游戏尚未开始或已结束，无法认输。")
@@ -1399,12 +2044,18 @@ class AmazonsMainWindow(QMainWindow):
             winner_name = "黑方" if self.simulator.winner == BLACK_AMAZON else "白方"
             self.show_game_over_message(f"游戏结束！{winner_name}获胜！")
 
-    def post_animation_update(self, start_pos, move_pos, arrow_pos):
+    def post_animation_update(self, start_pos, move_pos, arrow_pos,
+                              replay_panel=None):
         """
         动画完成后的核心处理逻辑。
         """
         player_who_moved = self.simulator.current_player
         if self.simulator.execute_turn(start_pos, move_pos, arrow_pos):
+            self._append_replay_turn(
+                (start_pos, move_pos, arrow_pos),
+                player_who_moved,
+                replay_panel,
+            )
             # 先由规则层确认合法，再把同一已提交回合同步到所有对局引擎。
             self.black_ai_agent.sync_committed_turn(
                 player_who_moved, start_pos, move_pos, arrow_pos)
@@ -1728,10 +2379,12 @@ class AmazonsMainWindow(QMainWindow):
         # 更新右侧 AI 分析信息面板
         self.update_ai_info_panel(best_res, self.simulator.current_player,
                                   getattr(self, 'current_ai_type', ''))
+        replay_panel = self._capture_replay_panel()
 
         # 使用动画执行 AI 的走法
         player_who_moved = self.simulator.current_player
-        callback = lambda: self.post_animation_update(start_pos, move_pos, arrow_pos)
+        callback = lambda: self.post_animation_update(
+            start_pos, move_pos, arrow_pos, replay_panel)
         self.run_full_turn_animation_sequence(start_pos, move_pos, arrow_pos, player_who_moved, callback)
 
         # 动画完成后的逻辑会由 on_group_finished -> post_animation_update 处理

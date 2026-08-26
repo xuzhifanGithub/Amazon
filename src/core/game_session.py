@@ -10,6 +10,8 @@ class SessionState(str, Enum):
     ANIMATING = "animating"
     AI_THINKING = "ai_thinking"
     GAME_OVER = "game_over"
+    REPLAY = "replay"
+    SETUP = "setup"
 
 
 @dataclass(slots=True)
@@ -32,3 +34,9 @@ class GameSessionController:
 
     def finish_turn(self, game_over: bool = False) -> None:
         self.state = SessionState.GAME_OVER if game_over else SessionState.IDLE
+
+    def begin_replay(self) -> None:
+        self.state = SessionState.REPLAY
+
+    def begin_setup(self) -> None:
+        self.state = SessionState.SETUP

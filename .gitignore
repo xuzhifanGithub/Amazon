@@ -11,6 +11,7 @@ gtp_logs/
 **/gtp_logs/
 **/KataGoData/
 **/opencltuning/
+**/runtime_profiles/
 **/build/
 *.log
 

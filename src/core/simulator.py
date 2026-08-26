@@ -21,21 +21,26 @@ class AmazonsSimulator:
         self.history_do_chess = []
         self.game_over = False
         self.winner = 0
+        self.initial_board = self.board.copy()
+        self.initial_player = BLACK_AMAZON
         self.reset()
+
+    def standard_initial_board(self):
+        """Return a fresh board containing the official starting layout."""
+        board = np.zeros((self.size, self.size), dtype=np.int8)
+        board[0, self.size//2 - 2] = WHITE_AMAZON
+        board[0, self.size//2 + 1] = WHITE_AMAZON
+        board[self.size//2 - 2, 0] = WHITE_AMAZON
+        board[self.size//2 - 2, self.size - 1] = WHITE_AMAZON
+        board[self.size//2 + 1, 0] = BLACK_AMAZON
+        board[self.size//2 + 1, self.size - 1] = BLACK_AMAZON
+        board[self.size - 1, self.size//2 - 2] = BLACK_AMAZON
+        board[self.size - 1, self.size//2 + 1] = BLACK_AMAZON
+        return board
 
     def reset(self):
         """重置游戏到初始状态。"""
-        self.board.fill(EMPTY)
-        self.board[0, self.size//2 - 2] = WHITE_AMAZON
-        self.board[0, self.size//2 + 1] = WHITE_AMAZON
-        self.board[self.size//2 - 2, 0] = WHITE_AMAZON
-        self.board[self.size//2 - 2, self.size - 1] = WHITE_AMAZON
-
-        # 黑方 (玩家-1) - 对应红方
-        self.board[self.size//2 + 1, 0] = BLACK_AMAZON
-        self.board[self.size//2 + 1, self.size - 1] = BLACK_AMAZON
-        self.board[self.size - 1, self.size//2 - 2] = BLACK_AMAZON
-        self.board[self.size - 1, self.size//2 + 1] = BLACK_AMAZON
+        self.board = self.standard_initial_board()
 
         self.current_player = BLACK_AMAZON
         # 历史记录只保存棋盘状态，开局时保存一次
@@ -45,6 +50,48 @@ class AmazonsSimulator:
         self.history_do_chess.clear()
         self.game_over = False
         self.winner = 0
+        self.initial_board = self.board.copy()
+        self.initial_player = BLACK_AMAZON
+
+    @property
+    def uses_standard_initial_position(self):
+        return (self.initial_player == BLACK_AMAZON
+                and np.array_equal(
+                    self.initial_board, self.standard_initial_board()))
+
+    def validate_initial_position(self, board, current_player):
+        """Return a safe setup board or raise a user-facing error."""
+        candidate = np.asarray(board)
+        if candidate.shape != (self.size, self.size):
+            raise ValueError("自定义棋盘尺寸不匹配")
+        if (isinstance(current_player, (bool, np.bool_))
+                or not isinstance(current_player, (int, np.integer))
+                or current_player not in (BLACK_AMAZON, WHITE_AMAZON)):
+            raise ValueError("自定义棋盘的先行方无效")
+        if not np.issubdtype(candidate.dtype, np.integer):
+            raise ValueError("自定义棋盘包含未知棋子")
+        if not np.isin(candidate, (EMPTY, BLACK_AMAZON,
+                                   WHITE_AMAZON, OBSTACLE)).all():
+            raise ValueError("自定义棋盘包含未知棋子")
+        if np.count_nonzero(candidate == BLACK_AMAZON) != 4:
+            raise ValueError("自定义棋盘必须恰好放置4枚黑方皇后")
+        if np.count_nonzero(candidate == WHITE_AMAZON) != 4:
+            raise ValueError("自定义棋盘必须恰好放置4枚白方皇后")
+        return candidate.astype(np.int8, copy=True)
+
+    def set_initial_position(self, board, current_player=BLACK_AMAZON):
+        """Replace the game atomically with a validated free-setup position."""
+        candidate = self.validate_initial_position(board, current_player)
+        self.board = candidate.copy()
+        self.current_player = int(current_player)
+        self.history = [candidate.copy()]
+        self.history_do_chess.clear()
+        self.game_over = False
+        self.winner = 0
+        self.initial_board = candidate.copy()
+        self.initial_player = int(current_player)
+        self.check_game_over()
+        return candidate
 
     def undo(self):
         """悔棋，撤销最近的一步棋。"""
@@ -132,9 +179,17 @@ class AmazonsSimulator:
 
         return True
 
-    def validate_turns(self, turns):
+    def validate_turns(self, turns, initial_board=None,
+                       initial_player=BLACK_AMAZON):
         """Validate serialised turns without mutating this game."""
         candidate = AmazonsSimulator(self.size)
+        if initial_board is not None:
+            candidate.set_initial_position(initial_board, initial_player)
+            # A saved terminal position may legitimately contain no turns, but
+            # additional serialized turns must still be validated normally.
+            if turns:
+                candidate.game_over = False
+                candidate.winner = 0
         normalized = []
         for turn in turns:
             if not isinstance(turn, (list, tuple)) or len(turn) != 3:
@@ -148,10 +203,18 @@ class AmazonsSimulator:
             normalized.append(points)
         return tuple(normalized)
 
-    def load_turns(self, turns):
+    def load_turns(self, turns, initial_board=None,
+                   initial_player=BLACK_AMAZON):
         """Atomically replace this game with a validated move sequence."""
-        normalized = self.validate_turns(turns)
-        self.reset()
+        normalized = self.validate_turns(
+            turns, initial_board, initial_player)
+        if initial_board is None:
+            self.reset()
+        else:
+            self.set_initial_position(initial_board, initial_player)
+            if normalized:
+                self.game_over = False
+                self.winner = 0
         for turn in normalized:
             if not self.execute_turn(*turn):  # defensive: validation already succeeded
                 raise RuntimeError("棋谱加载失败")
