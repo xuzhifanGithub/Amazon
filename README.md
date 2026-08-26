@@ -88,8 +88,12 @@ Linux / macOS 可运行纯 Python GUI 和人人对弈；MCTS 与 kataAmazon 需�
     `engine.cfg`。首次运行会做一次 OpenCL 自动调优，结果缓存在
     目录内的 `KataGoData/opencltuning/`。
 - **`amazon_L`（原始模型，后备）**：
-  - `src/ai/kataAmazonEngine/kataAmazon.exe`（原始 **OpenCL/GPU** 引擎），搭配
-    `weights/amazons10x10.bin.gz`。
+  - 使用同一个可读取外部权重的 `src/ai/kataAmazonEngineCuda/amazons.exe`
+    （**OpenCL/GPU**），加载 `src/ai/kataAmazonEngine/weights/amazons10x10.bin.gz`
+    和该目录自己的 L 搜索配置。当前随包权重已恢复为最初的 Z 模型
+    `amazons8x-b20c256-s182755840-d39606896`，不是 `amazon18-s2161408-d449231`；
+    以后直接替换此路径下的兼容模型会真实生效。旧模型偶尔会把亚马逊棋着法返回为
+    `pass`，桥接层会改选搜索结果中访问量最高的合法坐标。
 - **默认自动选择**：`amazons_engine.py` 检测到 `amazon_X` 的完整资源则优先使用，
   否则回退到 `amazon_L`；GUI 菜单可为黑白双方独立选择。
 - **模型**：`src/ai/kataAmazonEngineCuda/amazon10x10_xzf.bin.gz`
@@ -109,7 +113,8 @@ Linux / macOS 可运行纯 Python GUI 和人人对弈；MCTS 与 kataAmazon 需�
   项目或便携目录内随附的引擎、模型与配置，不读取机器上的外部模型路径。
 
 > 注意：featurev1 模型必须由本项目配套的 `amazons.exe` 推理。旧引擎即使能解析权重，
-> 也不会计算新增输入特征，输出不可信；原始 `amazon_L` 引擎和模型没有被替换。
+> 也不会计算新增输入特征，输出不可信；当前 `amazon_L` 使用最初会产生 `pass` 的原始 Z
+> 模型，并由当前桥接层修正非法 `pass` 返回。替换 L 权重时需自行确保配套引擎兼容其格式。
 > 后续替换 XZF 权重时，应继续使用当前格式导出的模型，并保留内部模型名中的
 > `featurev1` 标记；2022 旧引擎专用的“删 48 行元数据”权重不应与新版引擎混用。
 > 目录名 `kataAmazonEngineCuda` 是历史遗留，当前其中放的是 OpenCL 版引擎。
@@ -160,7 +165,7 @@ src/
     results.py                  跨线程的类型化 AI/提示结果
     native/                     发布用预编译 MCTS 模块（不含 CMake 临时文件）
     kataAmazonEngineCuda/       amazon_X + amazons.exe(OpenCL) + amazon10x10_xzf.bin.gz + dll + 配置（默认）
-    kataAmazonEngine/           原始引擎 kataAmazon.exe(OpenCL) + weights/ + engine.cfg（后备）
+    kataAmazonEngine/           amazon_L 原始 Z 权重 + 独立搜索配置（后备）
   gui/
     amazon_board_widget.py      棋盘绘制（含提示圆环）
     amazon_main_window.py       主窗口（菜单 / 胜率显示 / 提示）

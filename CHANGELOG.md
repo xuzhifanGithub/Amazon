@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- 将随包的 `amazon_L` 权重从误配的 `amazon18` 恢复为最初的 Z 模型 `amazons8x-b20c256-s182755840-d39606896`，并改用兼容引擎读取外部权重，使直接替换 L 模型真实生效。
 - 精简 amazon_X/L 前端摘要，移除重复的效用值，并提示 amazon_L 首次 OpenCL 调优可能耗时数分钟。
 - amazon_L 虽保留结构上的分差头，但旧训练标签无效；前端仅对 amazon_X 展示预测分差。
 - 在 amazon_X 分析面板按 `scoreSelfplay` 正确显示预计分差、分差不确定度、效用和策略先验。

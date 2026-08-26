@@ -7,8 +7,9 @@
 #   USE_AMAZON_FEATURES_V1 的 OpenCL 版 amazons.exe。该引擎按模型内部名称中的
 #   featurev1 标记启用新版输入；旧 2022 引擎不能正确推理该模型。
 #
-#   本项目还保留两套后备引擎：
-#     - kataAmazonEngine/     原始引擎（kataAmazon.exe, OpenCL）+ 旧模型 weights/amazons10x10.bin.gz
+#   本项目还保留另一套后备模型：
+#     - kataAmazonEngine/     原始 Z 模型及其搜索配置；由可读取外部权重的
+#                              kataAmazonEngineCuda/amazons.exe 推理
 #   默认自动选择：若 gpu 引擎目录存在则用它，否则回退到 legacy。
 #
 #   所有路径都相对本文件（__file__）计算，项目整体复制到别处也能正常工作。
@@ -145,8 +146,9 @@ def parse_genmove_analyze(response: str):
 # 本项目提供两个 kataAmazon 引擎选项，每个是一套 (目录, 可执行文件, 模型, 配置)：
 #   'gpu'    -> kataAmazonEngineCuda ：XZF 最新模型 + OpenCL 版 amazons.exe。
 #               需要支持 OpenCL 的显卡及正确安装的驱动。
-#   'legacy' -> kataAmazonEngine     ：原始引擎（KataGo v1.10.0 OpenCL/GPU）+ 旧模型
-#               weights/amazons10x10.bin.gz。项目最初就带的选项。
+#   'legacy' -> kataAmazonEngineCuda ：兼容引擎 + kataAmazonEngine 下的原始 Z 权重及配置。
+#               使用外部权重而不是旧程序内嵌权重，因而替换兼容模型会真实生效。
+#               原始模型曾会返回 pass，桥接层会改选访问量最高的合法坐标。
 
 BACKENDS = {
     'gpu': {
@@ -159,12 +161,13 @@ BACKENDS = {
         'label': 'XZF gen223_b featurev1（OpenCL/GPU）',
     },
     'legacy': {
-        'dir': os.path.normpath(os.path.join(current_dir, 'kataAmazonEngine')),
-        'exe': 'kataAmazon.exe',
-        'model': os.path.join('weights', 'amazons10x10.bin.gz'),
-        'cfg': 'engine.cfg',
-        'hint_cfg': 'hint.cfg',
-        'label': '原始 kataAmazon（OpenCL/GPU，旧模型）',
+        'dir': os.path.normpath(os.path.join(current_dir, 'kataAmazonEngineCuda')),
+        'exe': 'amazons.exe',
+        'model': os.path.join('..', 'kataAmazonEngine', 'weights', 'amazons10x10.bin.gz'),
+        'cfg': os.path.join('..', 'kataAmazonEngine', 'engine.cfg'),
+        'hint_cfg': os.path.join('..', 'kataAmazonEngine', 'hint.cfg'),
+        'runtime_files': ('libgcc_s_seh-1.dll', 'libstdc++-6.dll', 'libwinpthread-1.dll'),
+        'label': 'amazon_L（OpenCL/GPU）',
     },
 }
 

@@ -20,6 +20,16 @@ from src.gui.ai_settings_dialog import AISettingsDialog
 OPENING_TURN = ((6, 0), (5, 0), (6, 0))
 
 
+def test_legacy_backend_reads_a_replaceable_external_model():
+    spec = BACKENDS["legacy"]
+    model = (Path(spec["dir"]) / spec["model"]).resolve()
+
+    assert spec["exe"] == "amazons.exe"
+    assert Path(spec["dir"]).name == "kataAmazonEngineCuda"
+    assert model.name == "amazons10x10.bin.gz"
+    assert model.parent.name == "weights"
+
+
 def test_profiles_are_clamped_and_persisted(tmp_path):
     settings = QSettings(str(tmp_path / "settings.ini"), QSettings.Format.IniFormat)
     saved = save_profile(settings, "black", AIProfile(99, 1, False))
