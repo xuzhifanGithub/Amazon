@@ -35,6 +35,7 @@ class KataSearchConfig:
     root_noise_enabled: bool = False
     subtree_value_bias_factor: float = 0.0
     num_search_threads: int = 8
+    nn_randomize: bool = True
 
     def normalized(self) -> "KataSearchConfig":
         return KataSearchConfig(
@@ -48,6 +49,7 @@ class KataSearchConfig:
             bool(self.root_noise_enabled),
             max(0.0, min(1.0, float(self.subtree_value_bias_factor))),
             max(1, min(32, int(self.num_search_threads))),
+            bool(self.nn_randomize),
         )
 
 
@@ -64,6 +66,7 @@ STRONGEST_KATA_SEARCH_CONFIG = KataSearchConfig(
     root_noise_enabled=False,
     subtree_value_bias_factor=0.0,
     num_search_threads=1,
+    nn_randomize=False,
 )
 
 
@@ -85,6 +88,7 @@ class AIProfile:
     root_noise_enabled: bool = False
     subtree_value_bias_factor: float = 0.0
     num_search_threads: int = 8
+    nn_randomize: bool = True
 
     @property
     def strongest_config_enabled(self) -> bool:
@@ -109,6 +113,7 @@ class AIProfile:
             self.root_noise_enabled,
             self.subtree_value_bias_factor,
             self.num_search_threads,
+            self.nn_randomize,
         ).normalized()
         score_utility_enabled = bool(self.score_utility_enabled)
         if mode == SEARCH_CONFIG_STRONGEST:
@@ -131,6 +136,7 @@ class AIProfile:
             custom_config.root_noise_enabled,
             custom_config.subtree_value_bias_factor,
             custom_config.num_search_threads,
+            custom_config.nn_randomize,
         )
 
     def kata_search_config(self) -> KataSearchConfig | None:
@@ -149,6 +155,7 @@ class AIProfile:
             profile.root_noise_enabled,
             profile.subtree_value_bias_factor,
             profile.num_search_threads,
+            profile.nn_randomize,
         )
 
 
@@ -228,6 +235,11 @@ def load_profile(settings, side_key: str, backend: str | None = None) -> AIProfi
             default.num_search_threads,
             type=int,
         ),
+        settings.value(
+            f"ai/{side_key}/nn_randomize",
+            default.nn_randomize,
+            type=bool,
+        ),
     ).normalized()
     return profile
 
@@ -249,6 +261,7 @@ def save_profile(settings, side_key: str, profile: AIProfile) -> AIProfile:
         "root_noise_enabled": profile.root_noise_enabled,
         "subtree_value_bias_factor": profile.subtree_value_bias_factor,
         "num_search_threads": profile.num_search_threads,
+        "nn_randomize": profile.nn_randomize,
     }
     for key, value in values.items():
         settings.setValue(f"ai/{side_key}/{key}", value)

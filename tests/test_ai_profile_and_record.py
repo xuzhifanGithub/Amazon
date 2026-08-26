@@ -46,6 +46,7 @@ def test_profiles_are_clamped_and_persisted(tmp_path):
         False,
         0.0,
         1,
+        False,
     )
     assert load_profile(settings, "white") == strongest
 
@@ -80,6 +81,7 @@ def test_ai_settings_strength_presets_apply_complete_profiles(qapp):
     assert black.score_utility_enabled is False
     assert black.search_config_mode == SEARCH_CONFIG_STRONGEST
     assert black.kata_search_config() == STRONGEST_KATA_SEARCH_CONFIG
+    assert black.nn_randomize is False
 
     # Editing a preset value makes the profile explicitly custom instead of
     # continuing to claim that a reduced search budget is the strongest one.
@@ -90,6 +92,7 @@ def test_ai_settings_strength_presets_apply_complete_profiles(qapp):
     custom = dialog.profiles()[0]
     assert custom.search_config_mode == SEARCH_CONFIG_CUSTOM
     assert custom.move_temperature == 0.35
+    assert custom.nn_randomize is False
 
     dialog.restore_defaults()
     assert dialog.profiles()[0] == AIProfile(1.0, 600, False)
@@ -104,6 +107,7 @@ def test_ai_settings_explains_advanced_parameters_and_reference_values(qapp):
     for phrase in (
         "前期 / 后期落子温度",
         "网络策略温度",
+        "网络方向随机化",
         "cpuct 探索系数",
         "搜索线程数",
         "根节点噪声",
@@ -114,6 +118,7 @@ def test_ai_settings_explains_advanced_parameters_and_reference_values(qapp):
     assert "参考 0.8–1.2" in dialog.black_controls[
         "cpuct_exploration"].toolTip()
     assert "正式评测" in dialog.black_controls["use_graph_search"].toolTip()
+    assert "随机旋转或镜像" in dialog.black_controls["nn_randomize"].toolTip()
     dialog.close()
 
 
@@ -155,6 +160,7 @@ def test_strongest_profile_generates_competitive_config_at_normal_budget(backend
     assert "subtreeValueBiasFactor = 0.0" in config
     assert "dynamicScoreUtilityFactor = 0.0" in config
     assert "numSearchThreads = 1" in config
+    assert "nnRandomize = false" in config
 
 
 def test_custom_search_parameters_are_written_to_generated_config():
@@ -169,6 +175,7 @@ def test_custom_search_parameters_are_written_to_generated_config():
         root_noise_enabled=True,
         subtree_value_bias_factor=0.2,
         num_search_threads=6,
+        nn_randomize=True,
     )
     config = Path(profile_config_for_visits(
         "gpu", 850, False, custom)).read_text(encoding="utf-8")
@@ -184,6 +191,7 @@ def test_custom_search_parameters_are_written_to_generated_config():
     assert "rootNoiseEnabled = true" in config
     assert "subtreeValueBiasFactor = 0.2" in config
     assert "numSearchThreads = 6" in config
+    assert "nnRandomize = true" in config
 
 
 def test_visits_profile_cache_changes_when_base_config_changes(tmp_path, monkeypatch):

@@ -268,6 +268,7 @@ def profile_config_for_visits(
             "subtreeValueBiasFactor": str(
                 search_config.subtree_value_bias_factor),
             "numSearchThreads": str(search_config.num_search_threads),
+            "nnRandomize": str(search_config.nn_randomize).lower(),
         }
         for key, value in search_overrides.items():
             rendered = _set_config_value(rendered, key, value)

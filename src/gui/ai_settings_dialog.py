@@ -35,7 +35,8 @@ class AISettingsDialog(QDialog):
         note = QLabel(
             "最强棋力保持 MCTS 1 秒和 KataGo 600 visits，只切换竞赛式搜索参数，"
             "并关闭分差头。选择“自定义高级参数”后，可直接设置温度、cpuct、"
-            "图搜索、根噪声和搜索线程等参数。具体含义和参考值见第二个标签页。",
+            "图搜索、根噪声、网络方向随机化和搜索线程等参数。具体含义和参考值"
+            "见第二个标签页。",
             settings_page)
         note.setWordWrap(True)
         settings_layout.addWidget(note)
@@ -95,6 +96,10 @@ class AISettingsDialog(QDialog):
           <tr><td>网络策略温度</td><td>调整策略头先验分布；低于 1 更尖锐，
               高于 1 更平滑。它不是最终落子的抽样温度。</td>
               <td>X 默认 1.1；L 默认 1.0；最强 1.0</td><td>0.9–1.2</td></tr>
+          <tr><td>网络方向随机化</td><td>推理时随机旋转或镜像棋盘，再把输出映射回来；
+              可降低固定方向偏差，但相同局面可能产生细微不同的策略和估值。</td>
+              <td>引擎默认开启；最强关闭</td>
+              <td>复现实验关闭；需要棋路多样性时开启</td></tr>
           <tr><td>cpuct 探索系数</td><td>平衡探索新着法与利用高价值着法；
               越高越愿意探索低访问候选。</td>
               <td>X 默认 0.9；标准/最强 1.0</td><td>0.8–1.2</td></tr>
@@ -141,6 +146,7 @@ class AISettingsDialog(QDialog):
             profile.root_noise_enabled,
             profile.subtree_value_bias_factor,
             profile.num_search_threads,
+            profile.nn_randomize,
         )
 
     @staticmethod
@@ -158,6 +164,7 @@ class AISettingsDialog(QDialog):
         controls["subtree_value_bias_factor"].setValue(
             config.subtree_value_bias_factor)
         controls["num_search_threads"].setValue(config.num_search_threads)
+        controls["nn_randomize"].setChecked(config.nn_randomize)
 
     @classmethod
     def _add_side(cls, root, title: str, profile: AIProfile):
@@ -253,10 +260,16 @@ class AISettingsDialog(QDialog):
         root_noise_enabled.setChecked(search_config.root_noise_enabled)
         root_noise_enabled.setToolTip(
             "根节点狄利克雷噪声主要用于自博弈探索，正式对弈通常关闭。")
+        nn_randomize = QCheckBox("开启", advanced)
+        nn_randomize.setChecked(search_config.nn_randomize)
+        nn_randomize.setToolTip(
+            "随机旋转或镜像棋盘后进行网络推理。关闭后更容易复现相同棋路；"
+            "最强预设关闭，需要棋路多样性时可开启。")
 
         advanced_form.addRow("前期落子温度", move_temperature_early)
         advanced_form.addRow("后期落子温度", move_temperature)
         advanced_form.addRow("网络策略温度", policy_temperature)
+        advanced_form.addRow("网络方向随机化", nn_randomize)
         advanced_form.addRow("cpuct 探索系数", cpuct_exploration)
         advanced_form.addRow("cpuct 对数增量", cpuct_exploration_log)
         advanced_form.addRow("cpuct 基数", cpuct_exploration_base)
@@ -283,6 +296,7 @@ class AISettingsDialog(QDialog):
             "num_search_threads": num_search_threads,
             "use_graph_search": use_graph_search,
             "root_noise_enabled": root_noise_enabled,
+            "nn_randomize": nn_randomize,
         }
         applying_mode = False
 
@@ -348,6 +362,7 @@ class AISettingsDialog(QDialog):
             controls["root_noise_enabled"].isChecked(),
             controls["subtree_value_bias_factor"].value(),
             controls["num_search_threads"].value(),
+            controls["nn_randomize"].isChecked(),
         ).normalized()
 
     def profiles(self) -> tuple[AIProfile, AIProfile]:
