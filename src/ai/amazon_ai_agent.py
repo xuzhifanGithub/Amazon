@@ -358,7 +358,7 @@ class AmazonAIAgent(QObject):
         self.ai = amazon_ai.AmazonasAI() if amazon_ai is not None else None
         self.ai_basic = (amazon_ai_basic.AmazonasAI()
                          if amazon_ai_basic is not None else None)
-        # KataGo 引擎：只公开 X 自训练模型和 hzyhhzy 原始 L 模型。
+        # KataGo 引擎：只公开 amazon_X 和 amazon_L。
         # Gameplay engines are reused per (backend, visits) profile.
         self.ai_engine = None
         self._engine_manager = engine_manager or EngineManager()
@@ -396,7 +396,7 @@ class AmazonAIAgent(QObject):
                 'kataAmazon', 'kataAmazon_gpu', 'kataAmazon_legacy',
                 'kataAmazon_z'):
             #   _gpu    -> XZF 最新权重
-            #   _legacy -> hzyhhzy 原始 L 权重
+            #   _legacy -> amazon_L 权重
             #   _z      -> 旧设置兼容别名，同样归到 L
             backend = {
                 'kataAmazon_legacy': 'legacy',
@@ -409,8 +409,8 @@ class AmazonAIAgent(QObject):
         profile = (profile or AIProfile()).normalized()
         if worker_ai_type == 'kataAmazon':
             model_name = {
-                'legacy': 'L（hzyhhzy 原始强模型）',
-                'gpu': 'X（自训练模型）',
+                'legacy': 'amazon_L★★★',
+                'gpu': 'amazon_X★★★★',
             }[backend]
             score_utility_enabled = (
                 profile.score_utility_enabled if backend == 'gpu' else None)
@@ -422,7 +422,7 @@ class AmazonAIAgent(QObject):
                 status_text = f"{model_name} 正在思考中..."
             elif backend == 'legacy':
                 status_text = (
-                    "正在启动 L（hzyhhzy 原始强模型）并思考；首次运行会进行 OpenCL 调优，"
+                    "正在启动 amazon_L★★★ 并思考；首次运行会进行 OpenCL 调优，"
                     "可能需要数分钟...")
             else:
                 status_text = f"正在启动 {model_name} 并思考..."
@@ -473,7 +473,7 @@ class AmazonAIAgent(QObject):
 
         两个后端各自指定 (引擎目录, 可执行文件, 模型, 配置)：
             'gpu'    X 自训练权重 + OpenCL(GPU)
-            'legacy' hzyhhzy 原始 L 模型
+            'legacy' amazon_L 模型
         - 若当前引擎已是该后端，直接复用；
         - 若是另一后端，先关闭旧的再按新后端重建；
         - 重建后把当前对局历史重放进引擎，保证内部棋盘与界面一致。

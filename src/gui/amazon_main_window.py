@@ -42,8 +42,8 @@ from src.logging_setup import log_file_path
 logger = logging.getLogger(__name__)
 
 KATA_MODEL_DISPLAY_NAMES = {
-    'legacy': 'L（hzyhhzy 原始强模型）',
-    'gpu': 'X（自训练模型）',
+    'legacy': 'amazon_L★★★',
+    'gpu': 'amazon_X★★★★',
 }
 
 
@@ -145,7 +145,7 @@ class AmazonsMainWindow(QMainWindow):
     PLAYER_TYPE_AI_MCTS_18 = 'mcts_18'
     PLAYER_TYPE_AI_KATAAMAZON = 'kataAmazon'          # 兼容旧引用
     PLAYER_TYPE_AI_KATAAMAZON_GPU = 'kataAmazon_gpu'  # X 自训练模型 + OpenCL(GPU) 引擎
-    PLAYER_TYPE_AI_KATAAMAZON_LEGACY = 'kataAmazon_legacy'  # hzyhhzy 原始 L 模型
+    PLAYER_TYPE_AI_KATAAMAZON_LEGACY = 'kataAmazon_legacy'  # amazon_L 模型
     def __init__(self, simulator: AmazonsSimulator):
         super().__init__()
         self.simulator = simulator
@@ -1350,7 +1350,7 @@ class AmazonsMainWindow(QMainWindow):
 
         # AI 子菜单
         black_ai_menu = QMenu("AI", self)
-        # 1. hzyhhzy 原始强模型 L
+        # 1. amazon_L
         self.black_ai_kata_legacy_action = QAction(
             KATA_MODEL_DISPLAY_NAMES['legacy'], self, checkable=True)
         self.black_ai_kata_legacy_action.setEnabled(backend_available('legacy'))
@@ -1384,7 +1384,7 @@ class AmazonsMainWindow(QMainWindow):
 
         # AI 子菜单
         white_ai_menu = QMenu("AI", self)
-        # 1. hzyhhzy 原始强模型 L
+        # 1. amazon_L
         self.white_ai_kata_legacy_action = QAction(
             KATA_MODEL_DISPLAY_NAMES['legacy'], self, checkable=True)
         self.white_ai_kata_legacy_action.setEnabled(backend_available('legacy'))
@@ -1667,11 +1667,11 @@ class AmazonsMainWindow(QMainWindow):
         ai_text = """
         <h2>AI算法介绍</h2>
 
-        <h3>L（hzyhhzy 原始强模型）</h3>
-        <p>• 来自 hzyhhzy 发布的 10×10 亚马逊棋模型</p>
+        <h3>amazon_L★★★</h3>
+        <p>• 10×10 亚马逊棋 L 模型</p>
         <p>• 内部名 amazons8x-b20c256-s182755840-d39606896</p>
 
-        <h3>X（自训练模型）</h3>
+        <h3>amazon_X★★★★</h3>
         <p>• 本项目自行训练的 featurev1 模型</p>
         <p>• 使用新增亚马逊结构特征，配合项目内置兼容引擎运行</p>
 

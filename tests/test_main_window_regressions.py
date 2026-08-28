@@ -23,7 +23,7 @@ def test_only_l_and_x_are_exposed_in_ai_menus(qapp):
     action_texts = [action.text() for action in window.findChildren(QAction)]
 
     expected = [
-        "L（hzyhhzy 原始强模型）", "X（自训练模型）",
+        "amazon_L★★★", "amazon_X★★★★",
     ]
     for label in expected:
         assert action_texts.count(label) == 3  # 黑方、白方和提示模型各一个入口
@@ -39,8 +39,8 @@ def test_kata_models_use_consistent_frontend_names(qapp):
     window = AmazonsMainWindow(AmazonsSimulator())
     action_texts = [action.text() for action in window.findChildren(QAction)]
 
-    assert action_texts.count("X（自训练模型）") == 3
-    assert action_texts.count("L（hzyhhzy 原始强模型）") == 3
+    assert action_texts.count("amazon_X★★★★") == 3
+    assert action_texts.count("amazon_L★★★") == 3
     assert not any("amazon_Z" in text for text in action_texts)
     assert not any(text.startswith("MCTS") for text in action_texts)
     assert not any("XZF 最新模型" in text for text in action_texts)
@@ -48,11 +48,11 @@ def test_kata_models_use_consistent_frontend_names(qapp):
 
     result = BestResult(60, 50, 40, 73.5, 600, 0.735)
     window.update_ai_info_panel(result, BLACK_AMAZON, "kataAmazon_gpu")
-    assert window.info_ai_model.text().startswith("模型：X（自训练模型） ·")
+    assert window.info_ai_model.text().startswith("模型：amazon_X★★★★ ·")
     window.update_ai_info_panel(result, BLACK_AMAZON, "kataAmazon_legacy")
-    assert window.info_ai_model.text().startswith("模型：L（hzyhhzy 原始强模型） ·")
+    assert window.info_ai_model.text().startswith("模型：amazon_L★★★ ·")
     window.update_ai_info_panel(result, BLACK_AMAZON, "kataAmazon_z")
-    assert window.info_ai_model.text().startswith("模型：L（hzyhhzy 原始强模型） ·")
+    assert window.info_ai_model.text().startswith("模型：amazon_L★★★ ·")
     window.update_ai_info_panel(result, BLACK_AMAZON, "mcts_18")
     assert window.info_ai_model.text().startswith("模型：MCTS-18特征 ·")
     window.close()
@@ -311,7 +311,7 @@ def test_post_game_replay_steps_board_and_restores_ai_panel(qapp):
     assert window.session.state is SessionState.REPLAY
     assert window.replay_index == 1
     assert (window.simulator.board == final_board).all()
-    assert window.info_ai_model.text().startswith("模型：X（自训练模型） ·")
+    assert window.info_ai_model.text().startswith("模型：amazon_X★★★★ ·")
     assert window.info_score.text().startswith("预测分差：黑方 +4.25 分")
     assert "73.5%" in window.info_panel.info_candidates.text()
 
@@ -349,7 +349,7 @@ def test_replay_snapshots_round_trip_in_json_record(qapp, tmp_path):
     payload = json.loads(record.read_text(encoding="utf-8"))
     assert payload["replay_snapshots"][0]["panel"]["win_rate"] == 68.25
     assert payload["replay_snapshots"][0]["panel"]["model"].startswith(
-        "模型：X（自训练模型）")
+        "模型：amazon_X★★★★")
 
     restored = AmazonsMainWindow(AmazonsSimulator())
     turns, snapshots = load_record(
@@ -361,7 +361,7 @@ def test_replay_snapshots_round_trip_in_json_record(qapp, tmp_path):
 
     assert restored.enter_replay_mode()
     assert restored.win_rate_label.text() == "68.2%"
-    assert restored.info_ai_model.text().startswith("模型：X（自训练模型） ·")
+    assert restored.info_ai_model.text().startswith("模型：amazon_X★★★★ ·")
     assert "价值头 0.650" in restored.info_panel.info_summary.text()
     restored.close()
     window.close()

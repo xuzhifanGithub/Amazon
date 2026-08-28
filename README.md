@@ -22,7 +22,7 @@
 
 ## 项目亮点
 
-- **两个 AI 入口**：L（hzyhhzy 原始强模型）与 X（本项目自训练模型），黑白双方均可独立选择。
+- **两个 AI 入口**：`amazon_L★★★` 与 `amazon_X★★★★`，黑白双方均可独立选择。
 - **完整回合分析**：分别展示“选子 → 移动 → 射箭”的胜率、访问量和 Top-N 候选。
 - **赛后棋局演示**：终局后可逐步查看每回合棋盘和当时的右侧分析信息；演示快照随
   `.amazons.json` 棋谱导出，重新导入后仍可回看。
@@ -88,7 +88,7 @@ Linux / macOS 可运行纯 Python GUI 和人人对弈；L/X 需要在目标平�
     OpenCL/zlib/MinGW 运行库与
     `engine.cfg`。首次运行会做一次 OpenCL 自动调优，结果缓存在
     目录内的 `KataGoData/opencltuning/`。
-- **L（hzyhhzy 原始强模型，后备）**：
+- **amazon_L（后备模型）**：
   - 使用同一个可读取外部权重的 `src/ai/kataAmazonEngineCuda/amazons.exe`
     （**OpenCL/GPU**），应加载 `src/ai/kataAmazonEngine/weights/amazons10x10.bin.gz`
     和该目录自己的 L 搜索配置。原始 L 的内部名是
@@ -171,7 +171,7 @@ src/
     results.py                  跨线程的类型化 AI/提示结果
     native/                     发布用预编译 MCTS 模块（不含 CMake 临时文件）
     kataAmazonEngineCuda/       X + amazons.exe(OpenCL) + amazon10x10_xzf.bin.gz + dll + 配置（默认）
-    kataAmazonEngine/           hzyhhzy 原始 L 权重 + 搜索配置
+    kataAmazonEngine/           amazon_L 权重 + 搜索配置
   gui/
     amazon_board_widget.py      棋盘绘制（含提示圆环）
     amazon_main_window.py       主窗口（菜单 / 胜率显示 / 提示）

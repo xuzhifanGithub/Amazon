@@ -8,7 +8,7 @@
 #   featurev1 标记启用新版输入；旧 2022 引擎不能正确推理该模型。
 #
 #   本项目只提供两套模型：
-#     - L                     hzyhhzy 发布的原始强模型
+#     - L                     amazon_L 模型
 #     - X                     本项目自行训练的 featurev1 模型
 #   两者都由可读取外部权重的 kataAmazonEngineCuda/amazons.exe 推理。
 #   默认自动选择：依次尝试 X、L。
@@ -146,7 +146,7 @@ def parse_genmove_analyze(response: str):
 # 本项目提供两个 KataGo 模型选项，每个是一套 (目录, 可执行文件, 模型, 配置)：
 #   'gpu'    -> kataAmazonEngineCuda ：XZF 最新模型 + OpenCL 版 amazons.exe。
 #               需要支持 OpenCL 的显卡及正确安装的驱动。
-#   'legacy' -> kataAmazonEngineCuda ：兼容引擎 + hzyhhzy 原始 L 权重及配置。
+#   'legacy' -> kataAmazonEngineCuda ：兼容引擎 + amazon_L 权重及配置。
 #               使用外部权重而不是旧程序内嵌权重，因而替换兼容模型会真实生效。
 #               原始模型曾会返回 pass，桥接层会改选访问量最高的合法坐标。
 
@@ -163,16 +163,15 @@ BACKENDS = {
     'legacy': {
         'dir': os.path.normpath(os.path.join(current_dir, 'kataAmazonEngineCuda')),
         'exe': 'amazons.exe',
-        # hzyhhzy's 10x10 release is the original L model.  The server's
-        # initial_fixed file contains the same tensors with repaired metadata,
-        # so a separate Z backend would only duplicate this model.
+        # The server's initial_fixed file contains the same tensors with
+        # repaired metadata, so a separate Z backend would only duplicate L.
         'model': os.path.join(
             '..', 'kataAmazonEngine', 'weights',
             'amazons10x10.bin.gz'),
         'cfg': os.path.join('..', 'kataAmazonEngine', 'engine.cfg'),
         'hint_cfg': os.path.join('..', 'kataAmazonEngine', 'hint.cfg'),
         'runtime_files': ('libgcc_s_seh-1.dll', 'libstdc++-6.dll', 'libwinpthread-1.dll'),
-        'label': 'L（hzyhhzy 原始强模型，OpenCL/GPU）',
+        'label': 'amazon_L（OpenCL/GPU）',
     },
 }
 
