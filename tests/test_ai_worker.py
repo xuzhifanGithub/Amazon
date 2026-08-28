@@ -208,6 +208,53 @@ def test_cancelled_queued_hint_does_not_start_engine():
     assert not worker.busy
 
 
+def test_hint_progress_uses_gui_coordinate_labels():
+    class FakeHintEngine:
+        def clear_board(self):
+            pass
+
+        def ranked_start_candidates(self, _player, _top_n):
+            return [("K7", 52.32, 600)]
+
+        @staticmethod
+        def gtp_coord_to_gui(coord):
+            return {"K7": "J4"}[coord]
+
+        @staticmethod
+        def analyze_turn_for_start(_player, _start, start_win, start_visits,
+                                   progress_callback=None):
+            progress_callback("piece", start_win, start_visits)
+            progress_callback("move", 53.0, 500)
+            progress_callback("arrow", 54.0, 400)
+            return (("K7", "J8", "H7"),
+                    (start_win, 53.0, 54.0),
+                    (start_visits, 500, 400))
+
+        @staticmethod
+        def _convert_coord(coord):
+            return {"K7": (6, 9), "J8": (7, 8), "H7": (6, 7)}[coord]
+
+    worker = HintWorker(10)
+    worker._ensure_engine = Mock(return_value=FakeHintEngine())
+    updates = []
+    outcomes = []
+    worker.progress.connect(updates.append)
+    worker.finished.connect(outcomes.append)
+
+    worker.analyze({
+        "request_id": 31,
+        "backend": "z",
+        "player": BLACK_AMAZON,
+        "top_n": 1,
+        "history": (),
+    })
+
+    progress_text = "\n".join(update["text"] for update in updates)
+    assert "J4" in progress_text
+    assert "K7" not in progress_text
+    assert outcomes[0].error is None
+
+
 @pytest.mark.skipif(amazon_ai is None, reason="原生 MCTS 模块不可用")
 def test_native_mcts_releases_gil_during_search():
     simulator = AmazonsSimulator()
@@ -237,3 +284,29 @@ def test_native_mcts_releases_gil_during_search():
         tick for tick in heartbeats if search_started < tick < search_finished]
     assert not observer.is_alive()
     assert len(during_search) >= 3
+
+
+@pytest.mark.skipif(amazon_ai_basic is None, reason="基础 MCTS 模块不可用")
+def test_basic_mcts_original_value_is_normalized():
+    simulator = AmazonsSimulator()
+    assert simulator.execute_turn((6, 0), (5, 0), (4, 0))
+    board, queens = simulator.get_ai_data()
+
+    features = amazon_ai_basic.AmazonasAI().evaluate_features(
+        board, queens, simulator.current_player)
+
+    assert -1.0 <= features['value'] <= 1.0
+    # This position was about -5.12 in the unbounded original formula.  Keep
+    # the sign while proving the native module no longer exposes raw magnitude.
+    assert -1.0 < features['value'] < 0.0
+
+
+@pytest.mark.skipif(amazon_ai_basic is None, reason="基础 MCTS 模块不可用")
+def test_basic_mcts_rejects_position_without_legal_move():
+    simulator = AmazonsSimulator()
+    simulator.board[simulator.board == 0] = 2
+    board, queens = simulator.get_ai_data()
+
+    with pytest.raises(RuntimeError, match="no legal move"):
+        amazon_ai_basic.AmazonasAI().uct_search(
+            board, queens, simulator.current_player, 0.0, False)

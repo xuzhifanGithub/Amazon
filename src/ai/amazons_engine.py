@@ -9,7 +9,7 @@
 #
 #   本项目还保留两套参考模型：
 #     - amazon_L              最初会返回 pass 的原始模型
-#     - amazon_Z              服务器评测使用的 amazon18 强模型
+#     - amazon_Z              服务器评测使用的参考模型
 #   两者都由可读取外部权重的 kataAmazonEngineCuda/amazons.exe 推理。
 #   默认自动选择：依次尝试 amazon_X、amazon_Z、amazon_L。
 #
@@ -146,11 +146,11 @@ def parse_genmove_analyze(response: str):
 # 本项目提供三个 KataGo 模型选项，每个是一套 (目录, 可执行文件, 模型, 配置)：
 #   'gpu'    -> kataAmazonEngineCuda ：XZF 最新模型 + OpenCL 版 amazons.exe。
 #               需要支持 OpenCL 的显卡及正确安装的驱动。
-#   'legacy' -> kataAmazonEngineCuda ：兼容引擎 + kataAmazonEngine 下的原始 L 权重及配置。
+#   'legacy' -> kataAmazonEngineCuda ：兼容引擎 + amazon18 原始 L 权重及配置。
 #               使用外部权重而不是旧程序内嵌权重，因而替换兼容模型会真实生效。
 #               原始模型曾会返回 pass，桥接层会改选访问量最高的合法坐标。
-#   'z'      -> kataAmazonEngineCuda ：同一兼容引擎 + 服务器评测使用的
-#               amazon18-s2161408-d449231 权重，沿用稳定的 L 搜索配置。
+#   'z'      -> kataAmazonEngineCuda ：同一兼容引擎 + amazons10x10 服务器 Z 权重，
+#               沿用稳定的搜索配置。
 
 BACKENDS = {
     'gpu': {
@@ -165,7 +165,12 @@ BACKENDS = {
     'legacy': {
         'dir': os.path.normpath(os.path.join(current_dir, 'kataAmazonEngineCuda')),
         'exe': 'amazons.exe',
-        'model': os.path.join('..', 'kataAmazonEngine', 'weights', 'amazons10x10.bin.gz'),
+        # amazon18 is the original L model.  Keep the public backend identity
+        # independent from the historical filename so the UI cannot silently
+        # present one model as the other.
+        'model': os.path.join(
+            '..', 'kataAmazonEngine', 'weights',
+            'amazon18-s2161408-d449231.bin.gz'),
         'cfg': os.path.join('..', 'kataAmazonEngine', 'engine.cfg'),
         'hint_cfg': os.path.join('..', 'kataAmazonEngine', 'hint.cfg'),
         'runtime_files': ('libgcc_s_seh-1.dll', 'libstdc++-6.dll', 'libwinpthread-1.dll'),
@@ -174,9 +179,9 @@ BACKENDS = {
     'z': {
         'dir': os.path.normpath(os.path.join(current_dir, 'kataAmazonEngineCuda')),
         'exe': 'amazons.exe',
+        # The bundled amazons10x10 weight is the server reference Z model.
         'model': os.path.join(
-            '..', 'kataAmazonEngine', 'weights',
-            'amazon18-s2161408-d449231.bin.gz'),
+            '..', 'kataAmazonEngine', 'weights', 'amazons10x10.bin.gz'),
         'cfg': os.path.join('..', 'kataAmazonEngine', 'engine.cfg'),
         'hint_cfg': os.path.join('..', 'kataAmazonEngine', 'hint.cfg'),
         'runtime_files': (
@@ -930,6 +935,18 @@ class AmazonsKataGoEngine(QObject):
         row_idx = int(row_str)-1
 
         return (row_idx, col_idx)
+
+    def gtp_coord_to_gui(self, coord_str: str) -> str:
+        """Convert an engine GTP coordinate to the coordinate shown by the GUI.
+
+        GTP skips column ``I`` and numbers rows from the engine's side.  The
+        board UI uses consecutive ``A``-``J`` columns and reverses row labels
+        so that Black is displayed at the bottom.
+        """
+        row_idx, col_idx = self._convert_coord(coord_str)
+        if not 0 <= row_idx < 10 or not 0 <= col_idx < 10:
+            raise ValueError(f"GTP coordinate is outside the 10x10 board: {coord_str}")
+        return f"{chr(ord('A') + col_idx)}{10 - row_idx}"
 
     def _convert_to_gtp_coord(self, row_idx: int, col_idx: int) -> str:
         """将内部数组坐标 (9, 0) 或 (0, 8) 转换为 'A1' 或 'J10' 这样的棋谱坐标"""

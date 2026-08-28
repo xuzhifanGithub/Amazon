@@ -253,8 +253,9 @@ class HintWorker(QObject):
                                  start_coord=start):
                     base = 1 + (index - 1) * 2
                     rate_text = "—" if rate is None else f"{rate:.1f}%"
+                    display_start = engine.gtp_coord_to_gui(start_coord)
                     if stage == "piece":
-                        text = (f"候选 {index}/{total_candidates}：棋子 {start_coord} "
+                        text = (f"候选 {index}/{total_candidates}：棋子 {display_start} "
                                 f"胜率 {rate_text}，正在分析移动…")
                         completed = base
                     elif stage == "move":
@@ -357,7 +358,7 @@ class AmazonAIAgent(QObject):
         self.ai = amazon_ai.AmazonasAI() if amazon_ai is not None else None
         self.ai_basic = (amazon_ai_basic.AmazonasAI()
                          if amazon_ai_basic is not None else None)
-        # KataGo 引擎：可选 XZF 最新权重、服务器 Z 模型或最初 L 模型。
+        # KataGo 引擎：可选 XZF 最新权重、服务器 Z 模型或 amazon18 L 模型。
         # Gameplay engines are reused per (backend, visits) profile.
         self.ai_engine = None
         self._engine_manager = engine_manager or EngineManager()
@@ -395,8 +396,8 @@ class AmazonAIAgent(QObject):
                 'kataAmazon', 'kataAmazon_gpu', 'kataAmazon_legacy',
                 'kataAmazon_z'):
             #   _gpu    -> XZF 最新权重
-            #   _legacy -> 最初的 L 权重
-            #   _z      -> 服务器评测使用的 amazon18 权重
+            #   _legacy -> amazon18 原始 L 权重
+            #   _z      -> 服务器评测使用的 Z 权重
             backend = {
                 'kataAmazon_legacy': 'legacy',
                 'kataAmazon_z': 'z',
@@ -473,8 +474,8 @@ class AmazonAIAgent(QObject):
 
         三个后端各自指定 (引擎目录, 可执行文件, 模型, 配置)：
             'gpu'    XZF 最新权重 + OpenCL(GPU)
-            'legacy' 最初的 L 模型
-            'z'      服务器评测使用的 amazon18 模型
+            'legacy' amazon18 原始 L 模型
+            'z'      服务器评测使用的 Z 模型
         - 若当前引擎已是该后端，直接复用；
         - 若是另一后端，先关闭旧的再按新后端重建；
         - 重建后把当前对局历史重放进引擎，保证内部棋盘与界面一致。

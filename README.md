@@ -94,16 +94,17 @@ Linux / macOS 可运行纯 Python GUI 和人人对弈；MCTS 与 kataAmazon 需�
     目录内的 `KataGoData/opencltuning/`。
 - **`amazon_L`（原始模型，后备）**：
   - 使用同一个可读取外部权重的 `src/ai/kataAmazonEngineCuda/amazons.exe`
-    （**OpenCL/GPU**），加载 `src/ai/kataAmazonEngine/weights/amazons10x10.bin.gz`
-    和该目录自己的 L 搜索配置。当前随包权重已恢复为最初的 L 模型（内部名
-    `amazons8x-b20c256-s182755840-d39606896`），不是 `amazon18-s2161408-d449231`；
+    （**OpenCL/GPU**），加载 `src/ai/kataAmazonEngine/weights/amazon18-s2161408-d449231.bin.gz`
+    和该目录自己的 L 搜索配置。该权重就是原始 L 模型（内部名
+    `amazon18-s2161408-d449231`）；
     以后直接替换此路径下的兼容模型会真实生效。旧模型偶尔会把亚马逊棋着法返回为
     `pass`，桥接层会改选搜索结果中访问量最高的合法坐标。
-- **`amazon_Z`（服务器参考强模型）**：
+- **`amazon_Z`（服务器参考模型）**：
   - 使用同一 OpenCL 引擎和稳定的 L 搜索配置，加载
-    `src/ai/kataAmazonEngine/weights/amazon18-s2161408-d449231.bin.gz`。
-    这是服务器历次评测中称为 Z 的原始强模型，SHA-256 为
-    `49777c90faf12991ce18e74478ae80f19aec5930da1c8730dc12729740cb9431`。
+    `src/ai/kataAmazonEngine/weights/amazons10x10.bin.gz`。
+    这是服务器评测中称为 Z 的参考模型（内部名
+    `amazons8x-b20c256-s182755840-d39606896`），SHA-256 为
+    `ed7f4f18a1bef035caaadb93b20907ea522c195d296936e576220aa269edce66`。
 - **默认自动选择**：`amazons_engine.py` 检测到 `amazon_X` 的完整资源则优先使用，
   否则依次回退到 `amazon_Z`、`amazon_L`；GUI 菜单可为黑白双方独立选择。
 - **模型**：`src/ai/kataAmazonEngineCuda/amazon10x10_xzf.bin.gz`

@@ -146,8 +146,8 @@ class AmazonsMainWindow(QMainWindow):
     PLAYER_TYPE_AI_MCTS_18 = 'mcts_18'
     PLAYER_TYPE_AI_KATAAMAZON = 'kataAmazon'          # 兼容旧引用
     PLAYER_TYPE_AI_KATAAMAZON_GPU = 'kataAmazon_gpu'  # XZF 最新模型 + OpenCL(GPU) 引擎
-    PLAYER_TYPE_AI_KATAAMAZON_LEGACY = 'kataAmazon_legacy'  # 最初的 L 模型
-    PLAYER_TYPE_AI_KATAAMAZON_Z = 'kataAmazon_z'      # 服务器评测使用的 amazon18 模型
+    PLAYER_TYPE_AI_KATAAMAZON_LEGACY = 'kataAmazon_legacy'  # amazon18 原始 L 模型
+    PLAYER_TYPE_AI_KATAAMAZON_Z = 'kataAmazon_z'      # 服务器评测使用的 Z 模型
     def __init__(self, simulator: AmazonsSimulator):
         super().__init__()
         self.simulator = simulator
@@ -1367,7 +1367,7 @@ class AmazonsMainWindow(QMainWindow):
         black_player_group.addAction(self.black_ai_mcts_18_action)
         black_ai_menu.addAction(self.black_ai_mcts_18_action)
 
-        # 3. 原始 kataAmazon（OpenCL/GPU + 旧模型 amazons10x10）
+        # 3. 原始 kataAmazon（OpenCL/GPU + amazon18 L 模型）
         self.black_ai_kata_legacy_action = QAction(
             f"{KATA_MODEL_DISPLAY_NAMES['legacy']}★★★", self, checkable=True)
         self.black_ai_kata_legacy_action.setEnabled(backend_available('legacy'))
@@ -1376,7 +1376,7 @@ class AmazonsMainWindow(QMainWindow):
         black_player_group.addAction(self.black_ai_kata_legacy_action)
         black_ai_menu.addAction(self.black_ai_kata_legacy_action)
 
-        # 4. 服务器评测使用的 amazon18 强模型
+        # 4. 服务器评测使用的 Z 模型
         self.black_ai_kata_z_action = QAction(
             f"{KATA_MODEL_DISPLAY_NAMES['z']}★★★★", self, checkable=True)
         self.black_ai_kata_z_action.setEnabled(backend_available('z'))
@@ -1426,7 +1426,7 @@ class AmazonsMainWindow(QMainWindow):
         white_player_group.addAction(self.white_ai_mcts_18_action)
         white_ai_menu.addAction(self.white_ai_mcts_18_action)
 
-        # 3. 原始 kataAmazon（OpenCL/GPU + 旧模型 amazons10x10）
+        # 3. 原始 kataAmazon（OpenCL/GPU + amazon18 L 模型）
         self.white_ai_kata_legacy_action = QAction(
             f"{KATA_MODEL_DISPLAY_NAMES['legacy']}★★★", self, checkable=True)
         self.white_ai_kata_legacy_action.setEnabled(backend_available('legacy'))
@@ -1435,7 +1435,7 @@ class AmazonsMainWindow(QMainWindow):
         white_player_group.addAction(self.white_ai_kata_legacy_action)
         white_ai_menu.addAction(self.white_ai_kata_legacy_action)
 
-        # 4. 服务器评测使用的 amazon18 强模型
+        # 4. 服务器评测使用的 Z 模型
         self.white_ai_kata_z_action = QAction(
             f"{KATA_MODEL_DISPLAY_NAMES['z']}★★★★", self, checkable=True)
         self.white_ai_kata_z_action.setEnabled(backend_available('z'))
@@ -1731,7 +1731,7 @@ class AmazonsMainWindow(QMainWindow):
 
         <h3>amazon_L★★★ / amazon_Z★★★★ / amazon_X★★★★（基于 KataGo 的 AI）</h3>
         <p>• amazon_L：最初的原始模型</p>
-        <p>• amazon_Z：服务器评测使用的 amazon18 强模型</p>
+        <p>• amazon_Z：服务器评测使用的参考模型</p>
         <p>• amazon_X：新模型</p>
         <p>• 使用 KataGo 框架的专业 AI</p>
         <p>• 性能更强但计算更复杂</p>

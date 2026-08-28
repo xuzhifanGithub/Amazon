@@ -1,6 +1,8 @@
 """Dialog for black/white AI strength and KataGo search settings."""
 from __future__ import annotations
 
+import sys
+
 from PyQt6.QtWidgets import (
     QCheckBox, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox, QFormLayout,
     QGroupBox, QHBoxLayout, QLabel, QPushButton, QSpinBox, QTabWidget,
@@ -8,11 +10,25 @@ from PyQt6.QtWidgets import (
 )
 
 from src.ai.ai_profile import (
-    AIProfile, KATA_MAX_VISITS, KATA_MIN_VISITS, KATA_STEP_VISITS,
-    KataSearchConfig, MCTS_MAX_SECONDS, MCTS_MIN_SECONDS, MCTS_STEP_SECONDS,
+    AIProfile, KATA_MIN_VISITS, KATA_STEP_VISITS,
+    KataSearchConfig, MCTS_STEP_SECONDS,
     SEARCH_CONFIG_CUSTOM, SEARCH_CONFIG_DEFAULT, SEARCH_CONFIG_STRONGEST,
     STRONGEST_KATA_SEARCH_CONFIG,
 )
+
+
+class PositiveDurationSpinBox(QDoubleSpinBox):
+    """A compact spin box covering every positive normal Python float."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        # Qt rounds the range to the configured decimals. 323 is its supported
+        # maximum and keeps tiny positive values from being rounded down to 0.
+        self.setDecimals(323)
+        self.setRange(sys.float_info.min, sys.float_info.max)
+
+    def textFromValue(self, value: float) -> str:
+        return format(value, ".15g")
 
 
 class AISettingsDialog(QDialog):
@@ -181,20 +197,22 @@ class AISettingsDialog(QDialog):
             "默认方案保留每个引擎自带参数；最强方案使用固定竞赛参数；"
             "自定义方案应用下方全部高级参数。")
 
-        seconds = cls._double_spin(
-            box, MCTS_MIN_SECONDS, MCTS_MAX_SECONDS,
-            MCTS_STEP_SECONDS, 1, profile.mcts_seconds)
+        seconds = PositiveDurationSpinBox(box)
+        seconds.setSingleStep(MCTS_STEP_SECONDS)
+        seconds.setValue(profile.mcts_seconds)
         seconds.setSuffix(" 秒")
         seconds.setToolTip(
             "只影响公式 MCTS。默认/最强 1 秒；日常参考 0.5–3 秒。")
         visits = QSpinBox(box)
-        visits.setRange(KATA_MIN_VISITS, KATA_MAX_VISITS)
+        # QSpinBox stores a signed 32-bit integer.  Use its technical maximum
+        # instead of imposing a gameplay budget limit.
+        visits.setRange(KATA_MIN_VISITS, 2_147_483_647)
         visits.setSingleStep(KATA_STEP_VISITS)
         visits.setSuffix(" visits")
         visits.setValue(profile.kata_visits)
         visits.setToolTip(
             "只影响 amazon_X/Z/L。X/Z 默认 600、L 历史默认 400；"
-            "300 快速，600 均衡，1000–2000 为高预算。")
+            "300 快速，600 均衡，1000–2000 为高预算；可输入任意正整数。")
         score_utility = QCheckBox("开启", box)
         score_utility.setChecked(profile.score_utility_enabled)
         score_utility.setToolTip(

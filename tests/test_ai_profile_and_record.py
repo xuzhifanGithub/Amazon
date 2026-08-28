@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+import sys
 
 import pytest
 from PyQt6.QtCore import QSettings
@@ -21,13 +22,13 @@ from src.gui.ai_settings_dialog import AISettingsDialog
 OPENING_TURN = ((6, 0), (5, 0), (6, 0))
 
 
-def test_legacy_backend_reads_a_replaceable_external_model():
+def test_legacy_backend_reads_the_original_l_model():
     spec = BACKENDS["legacy"]
     model = (Path(spec["dir"]) / spec["model"]).resolve()
 
     assert spec["exe"] == "amazons.exe"
     assert Path(spec["dir"]).name == "kataAmazonEngineCuda"
-    assert model.name == "amazons10x10.bin.gz"
+    assert model.name == "amazon18-s2161408-d449231.bin.gz"
     assert model.parent.name == "weights"
 
 
@@ -36,15 +37,20 @@ def test_z_backend_reads_the_bundled_server_reference_model():
     model = (Path(spec["dir"]) / spec["model"]).resolve()
 
     assert spec["exe"] == "amazons.exe"
-    assert model.name == "amazon18-s2161408-d449231.bin.gz"
+    assert model.name == "amazons10x10.bin.gz"
     assert model.is_file()
 
 
-def test_profiles_are_clamped_and_persisted(tmp_path):
+def test_profiles_accept_any_positive_budget_and_persist_it(tmp_path):
     settings = QSettings(str(tmp_path / "settings.ini"), QSettings.Format.IniFormat)
-    saved = save_profile(settings, "black", AIProfile(99, 1, False))
-    assert saved == AIProfile(10.0, 100, False)
+    saved = save_profile(settings, "black", AIProfile(86400.125, 5_000_000, False))
+    assert saved == AIProfile(86400.125, 5_000_000, False)
     assert load_profile(settings, "black") == saved
+
+    # Invalid persisted values recover to defaults, but positive values are
+    # neither capped nor rounded to the old 0.5-second / 50-visit steps.
+    invalid = save_profile(settings, "black", AIProfile(0, -1, False))
+    assert invalid == AIProfile(1.0, 600, False)
 
     strongest = save_profile(
         settings,
@@ -86,6 +92,26 @@ def test_score_utility_defaults_off_and_dialog_edits_each_side(qapp, tmp_path):
     dialog.restore_defaults()
     assert dialog.profiles()[0].score_utility_enabled is False
     assert dialog.profiles()[1].score_utility_enabled is False
+    dialog.close()
+
+
+def test_ai_settings_dialog_does_not_cap_positive_budgets(qapp):
+    dialog = AISettingsDialog(AIProfile(), AIProfile())
+    seconds = dialog.black_controls["seconds"]
+    visits = dialog.black_controls["visits"]
+
+    seconds.setValue(7200.125)
+    visits.setValue(5_000_000)
+    black = dialog.profiles()[0]
+
+    assert black.mcts_seconds == 7200.125
+    assert black.kata_visits == 5_000_000
+    assert 0 < seconds.minimum() <= sys.float_info.min
+    assert seconds.maximum() >= sys.float_info.max * 0.999999999999999
+    assert visits.maximum() == 2_147_483_647
+
+    seconds.setValue(1e-20)
+    assert dialog.profiles()[0].mcts_seconds == 1e-20
     dialog.close()
 
 

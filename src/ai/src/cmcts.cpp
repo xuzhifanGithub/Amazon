@@ -11,6 +11,8 @@
 #include <algorithm>
 #include <math.h>
 #include <climits>
+#include <cmath>
+#include <limits>
 #include <array>
 #include <functional>
 #include <omp.h>
@@ -1807,7 +1809,17 @@ double valueAll(const boardArray& board, const queenArray& queenPos, int moveSid
     else {
         k1 = 1; k2 = 1; k3 = 4;
     }
-    return t1 * k1 + t2 * k2 + k3 * mobility;
+    // The UCT code interprets every backed-up value as a win/loss utility in
+    // [-1, 1].  The original formula is measured roughly in board cells and
+    // regularly produces magnitudes of 10-100, so feeding it into UCT raw can
+    // leave every child below the old -1.1 selection sentinel.  Keep the
+    // formula's ordering and sign while mapping one board's worth of advantage
+    // to a stable utility scale.
+    double rawValue = t1 * k1 + t2 * k2 + k3 * mobility;
+    if (!std::isfinite(rawValue)) {
+        return 0.0;
+    }
+    return std::tanh(rawValue / static_cast<double>(BOARD_GRID_SIZE));
 #else
     // Phase-dependent formula distilled from candidate_gen217 immediate MCTS
     // values on 288,915 complete-turn self-play positions. The fitted formula
@@ -1886,11 +1898,16 @@ UCTNode* uctSelect(UCTNode* node)
             uctExpand(currentPtr);
         }
 
-        UCTNode* bestNode = nullptr;
-        double bestR = -1.1;
+        // Always retain a valid fallback child.  A malformed/non-finite score
+        // must never turn into a null pointer dereference in the native module.
+        UCTNode* bestNode = currentPtr->vecNodes.front();
+        double bestR = -std::numeric_limits<double>::infinity();
 
         for (int i = 0; i < currentPtr->vecNodes.size(); i++) {
             double tempR = uctGetR(currentPtr->vecNodes[i]);
+            if (!std::isfinite(tempR)) {
+                tempR = -std::numeric_limits<double>::infinity();
+            }
             currentPtr->vecNodes[i]->message.r = tempR;
 
             if (tempR > bestR) {
@@ -2254,7 +2271,9 @@ UctRes  uctAll(const boardArray& board,const queenArray& queenPos, int moveSide,
         {
             if (uctTree->vecNodes.empty() == true)
             {
-                system("pause");
+                deleteRoot(uctTree);
+                throw std::runtime_error(
+                    "MCTS cannot search a position with no legal move");
             }
 
             UCTNode* bestNode = uctTree->vecNodes[0];

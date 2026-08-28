@@ -242,6 +242,17 @@ def test_candidate_turn_reports_all_three_progress_stages():
     ]
 
 
+@pytest.mark.parametrize(
+    ("gtp", "gui"),
+    [("D10", "D1"), ("K7", "J4"), ("A1", "A10")],
+)
+def test_gtp_coordinate_is_converted_to_gui_labels(gtp, gui):
+    engine = SimpleNamespace()
+    engine._convert_coord = lambda coord: AmazonsKataGoEngine._convert_coord(
+        engine, coord)
+    assert AmazonsKataGoEngine.gtp_coord_to_gui(engine, gtp) == gui
+
+
 def test_ranked_candidates_filter_pass_before_top_n_limit():
     commands = []
     response = (

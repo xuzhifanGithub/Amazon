@@ -2,14 +2,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 
 
-MCTS_MIN_SECONDS = 0.5
-MCTS_MAX_SECONDS = 10.0
-MCTS_STEP_SECONDS = 0.5
-KATA_MIN_VISITS = 100
-KATA_MAX_VISITS = 2000
-KATA_STEP_VISITS = 50
+MCTS_STEP_SECONDS = 0.1
+KATA_MIN_VISITS = 1
+KATA_STEP_VISITS = 1
 
 SEARCH_CONFIG_DEFAULT = "default"
 SEARCH_CONFIG_STRONGEST = "strongest"
@@ -98,10 +96,18 @@ class AIProfile:
         mode = str(self.search_config_mode)
         if mode not in SEARCH_CONFIG_MODES:
             mode = SEARCH_CONFIG_DEFAULT
-        seconds = max(MCTS_MIN_SECONDS, min(MCTS_MAX_SECONDS, float(self.mcts_seconds)))
-        seconds = round(seconds / MCTS_STEP_SECONDS) * MCTS_STEP_SECONDS
-        visits = max(KATA_MIN_VISITS, min(KATA_MAX_VISITS, int(self.kata_visits)))
-        visits = round(visits / KATA_STEP_VISITS) * KATA_STEP_VISITS
+        try:
+            seconds = float(self.mcts_seconds)
+        except (TypeError, ValueError, OverflowError):
+            seconds = 1.0
+        if not math.isfinite(seconds) or seconds <= 0:
+            seconds = 1.0
+        try:
+            visits = int(self.kata_visits)
+        except (TypeError, ValueError, OverflowError):
+            visits = 600
+        if visits <= 0:
+            visits = 600
         custom_config = KataSearchConfig(
             self.move_temperature_early,
             self.move_temperature,
