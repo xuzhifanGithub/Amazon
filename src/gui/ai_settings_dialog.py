@@ -2,7 +2,10 @@
 from __future__ import annotations
 
 import sys
+import math
+import re
 
+from PyQt6.QtGui import QValidator
 from PyQt6.QtWidgets import (
     QCheckBox, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox, QFormLayout,
     QGroupBox, QHBoxLayout, QLabel, QPushButton, QSpinBox, QTabWidget,
@@ -20,6 +23,9 @@ from src.ai.ai_profile import (
 class PositiveDurationSpinBox(QDoubleSpinBox):
     """A compact spin box covering every positive normal Python float."""
 
+    _PARTIAL_NUMBER = re.compile(
+        r"^[+-]?(?:(?:\d+(?:[.,]\d*)?)|(?:[.,]\d*))?(?:[eE][+-]?\d*)?$")
+
     def __init__(self, parent=None):
         super().__init__(parent)
         # Qt rounds the range to the configured decimals. 323 is its supported
@@ -28,7 +34,52 @@ class PositiveDurationSpinBox(QDoubleSpinBox):
         self.setRange(sys.float_info.min, sys.float_info.max)
 
     def textFromValue(self, value: float) -> str:
-        return format(value, ".15g")
+        # 17 significant digits round-trip every finite IEEE-754 double.
+        # Using 15 can round sys.float_info.max upward to infinity when the
+        # displayed text is parsed again, leaving the maximum visibly invalid.
+        return format(value, ".17g")
+
+    def _number_text(self, text: str) -> str:
+        value = text.strip()
+        prefix = self.prefix()
+        suffix = self.suffix()
+        if prefix and value.startswith(prefix):
+            value = value[len(prefix):].strip()
+        if suffix and value.endswith(suffix):
+            value = value[:-len(suffix)].strip()
+        decimal = self.locale().decimalPoint()
+        if decimal and decimal != ".":
+            value = value.replace(decimal, ".")
+        return value
+
+    def validate(self, text: str, pos: int):
+        """Accept decimal and scientific notation during real keyboard edits."""
+        number = self._number_text(text)
+        if not number or number in ("+", "-", ".", "+.", "-."):
+            return QValidator.State.Intermediate, text, pos
+        if not self._PARTIAL_NUMBER.fullmatch(number):
+            return QValidator.State.Invalid, text, pos
+        if number.lower().endswith(("e", "e+", "e-")):
+            return QValidator.State.Intermediate, text, pos
+        try:
+            value = float(number.replace(",", "."))
+        except ValueError:
+            return QValidator.State.Invalid, text, pos
+        # Zero is a necessary intermediate while typing values such as
+        # ``0.000001`` even though it is not a valid final duration.
+        if value == 0:
+            return QValidator.State.Intermediate, text, pos
+        if not math.isfinite(value) or value < 0 or value > self.maximum():
+            return QValidator.State.Invalid, text, pos
+        return QValidator.State.Acceptable, text, pos
+
+    def valueFromText(self, text: str) -> float:
+        number = self._number_text(text)
+        try:
+            value = float(number.replace(",", "."))
+        except ValueError:
+            return self.value()
+        return value if math.isfinite(value) and value > 0 else self.value()
 
 
 class AISettingsDialog(QDialog):
@@ -93,17 +144,17 @@ class AISettingsDialog(QDialog):
           code { font-family: monospace; }
         </style>
         <h3>如何理解这些参数</h3>
-        <p>“引擎默认配置”不覆盖 X/Z/L 自带配置；“最强棋力”使用表中的固定值；
+        <p>“引擎默认配置”不覆盖 X/L 自带配置；“最强棋力”使用表中的固定值；
         “自定义高级参数”才会把界面数值写入运行时配置。参考范围是实用起点，
         不是所有局面都严格单调变强。</p>
         <table>
           <tr><th>参数</th><th>作用</th><th>默认 / 最强</th><th>常用参考</th></tr>
           <tr><td>MCTS 思考时间</td><td>只控制两个公式 MCTS 的单步时间。</td>
               <td>默认 1 秒；最强方案仍为 1 秒</td><td>0.5–3 秒；越长通常越强</td></tr>
-          <tr><td>KataGo 搜索次数</td><td>控制 X/Z/L 每个阶段的访问数。</td>
-              <td>X/Z 默认 600；L 历史默认 400；最强方案 600</td>
+          <tr><td>KataGo 搜索次数</td><td>控制 X/L 每个阶段的访问数。</td>
+              <td>X 默认 600；L 历史默认 400；最强方案 600</td>
               <td>300 快速，600 均衡，1000–2000 高预算</td></tr>
-          <tr><td>amazon_X 分差头</td><td>以 0.02 动态分差效用辅助胜率接近的选步；只对 X 有效。</td>
+          <tr><td>X 模型分差头</td><td>以 0.02 动态分差效用辅助胜率接近的选步；只对 X 有效。</td>
               <td>默认关闭；最强关闭</td><td>追求纯胜率关闭；偏好大分差可开启</td></tr>
           <tr><td>前期 / 后期落子温度</td><td>搜索结束后按访问数抽取实际着法；
               0 表示稳定选择搜索最优着，越高越随机。</td>
@@ -132,7 +183,7 @@ class AISettingsDialog(QDialog):
               <td>棋力可比测试用 1；日常提速用 4–8</td></tr>
           <tr><td>图搜索</td><td>让重复局面共享节点；可能提高复用率，
               但与正式树搜索评测口径不同。</td>
-              <td>X 默认开启；L/Z 默认及最强关闭</td><td>复现正式评测关闭；可自行对局比较</td></tr>
+              <td>X 默认开启；L 默认及最强关闭</td><td>复现正式评测关闭；可自行对局比较</td></tr>
           <tr><td>根节点噪声</td><td>给根节点加入探索噪声，主要用于产生多样化训练数据。</td>
               <td>默认/最强关闭</td><td>正式下棋关闭；仅自博弈探索时开启</td></tr>
         </table>
@@ -211,17 +262,17 @@ class AISettingsDialog(QDialog):
         visits.setSuffix(" visits")
         visits.setValue(profile.kata_visits)
         visits.setToolTip(
-            "只影响 amazon_X/Z/L。X/Z 默认 600、L 历史默认 400；"
+            "只影响 X/L。X 默认 600、L 历史默认 400；"
             "300 快速，600 均衡，1000–2000 为高预算；可输入任意正整数。")
         score_utility = QCheckBox("开启", box)
         score_utility.setChecked(profile.score_utility_enabled)
         score_utility.setToolTip(
-            "仅作用于 amazon_X；开启后搜索会加入少量动态分差价值。"
+            "仅作用于 X；开启后搜索会加入少量动态分差价值。"
             "最强棋力方案固定关闭。")
         form.addRow("配置方案", mode)
         form.addRow("MCTS 思考时间", seconds)
         form.addRow("KataGo 搜索次数", visits)
-        form.addRow("amazon_X 分差头", score_utility)
+        form.addRow("X 模型分差头", score_utility)
         box_layout.addLayout(form)
 
         advanced = QGroupBox("KataGo 高级搜索参数", box)

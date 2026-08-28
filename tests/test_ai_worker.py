@@ -117,8 +117,8 @@ def test_kata_worker_holds_snapshot_engine_context_for_complete_turn():
     assert outcomes[0].result.policy_prior == 0.22
 
 
-@pytest.mark.parametrize("backend", ["legacy", "z"])
-def test_old_kata_workers_do_not_expose_untrained_score_head(backend):
+def test_l_worker_does_not_expose_untrained_score_head():
+    backend = "legacy"
     class FakeLegacyKata:
         last_winrate = 51.0
         last_visits = 400
@@ -243,7 +243,7 @@ def test_hint_progress_uses_gui_coordinate_labels():
 
     worker.analyze({
         "request_id": 31,
-        "backend": "z",
+        "backend": "legacy",
         "player": BLACK_AMAZON,
         "top_n": 1,
         "history": (),

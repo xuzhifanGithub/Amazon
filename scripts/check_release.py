@@ -28,9 +28,7 @@ def main() -> int:
         AI / "kataAmazonEngineCuda" / "libgcc_s_seh-1.dll",
         AI / "kataAmazonEngineCuda" / "libstdc++-6.dll",
         AI / "kataAmazonEngineCuda" / "libwinpthread-1.dll",
-        AI / "kataAmazonEngine" / "kataAmazon.exe",
         AI / "kataAmazonEngine" / "weights" / "amazons10x10.bin.gz",
-        AI / "kataAmazonEngine" / "weights" / "amazon18-s2161408-d449231.bin.gz",
         AI / "kataAmazonEngine" / "engine.cfg",
         AI / "kataAmazonEngine" / "hint.cfg",
     ]

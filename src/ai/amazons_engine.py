@@ -7,11 +7,11 @@
 #   USE_AMAZON_FEATURES_V1 的 OpenCL 版 amazons.exe。该引擎按模型内部名称中的
 #   featurev1 标记启用新版输入；旧 2022 引擎不能正确推理该模型。
 #
-#   本项目还保留两套参考模型：
-#     - amazon_L              最初会返回 pass 的原始模型
-#     - amazon_Z              服务器评测使用的参考模型
+#   本项目只提供两套模型：
+#     - L                     hzyhhzy 发布的原始强模型
+#     - X                     本项目自行训练的 featurev1 模型
 #   两者都由可读取外部权重的 kataAmazonEngineCuda/amazons.exe 推理。
-#   默认自动选择：依次尝试 amazon_X、amazon_Z、amazon_L。
+#   默认自动选择：依次尝试 X、L。
 #
 #   所有路径都相对本文件（__file__）计算，项目整体复制到别处也能正常工作。
 #   正常运行始终使用项目内随附的引擎、模型和配置；构造函数的显式参数仅供开发测试。
@@ -143,14 +143,12 @@ def parse_genmove_analyze(response: str):
     return selected, selected_winrate, selected_visits, ranked
 
 # --- 引擎后端表（相对本文件，保证可移植）----------------------------------------
-# 本项目提供三个 KataGo 模型选项，每个是一套 (目录, 可执行文件, 模型, 配置)：
+# 本项目提供两个 KataGo 模型选项，每个是一套 (目录, 可执行文件, 模型, 配置)：
 #   'gpu'    -> kataAmazonEngineCuda ：XZF 最新模型 + OpenCL 版 amazons.exe。
 #               需要支持 OpenCL 的显卡及正确安装的驱动。
-#   'legacy' -> kataAmazonEngineCuda ：兼容引擎 + amazon18 原始 L 权重及配置。
+#   'legacy' -> kataAmazonEngineCuda ：兼容引擎 + hzyhhzy 原始 L 权重及配置。
 #               使用外部权重而不是旧程序内嵌权重，因而替换兼容模型会真实生效。
 #               原始模型曾会返回 pass，桥接层会改选访问量最高的合法坐标。
-#   'z'      -> kataAmazonEngineCuda ：同一兼容引擎 + amazons10x10 服务器 Z 权重，
-#               沿用稳定的搜索配置。
 
 BACKENDS = {
     'gpu': {
@@ -165,28 +163,16 @@ BACKENDS = {
     'legacy': {
         'dir': os.path.normpath(os.path.join(current_dir, 'kataAmazonEngineCuda')),
         'exe': 'amazons.exe',
-        # amazon18 is the original L model.  Keep the public backend identity
-        # independent from the historical filename so the UI cannot silently
-        # present one model as the other.
+        # hzyhhzy's 10x10 release is the original L model.  The server's
+        # initial_fixed file contains the same tensors with repaired metadata,
+        # so a separate Z backend would only duplicate this model.
         'model': os.path.join(
             '..', 'kataAmazonEngine', 'weights',
-            'amazon18-s2161408-d449231.bin.gz'),
+            'amazons10x10.bin.gz'),
         'cfg': os.path.join('..', 'kataAmazonEngine', 'engine.cfg'),
         'hint_cfg': os.path.join('..', 'kataAmazonEngine', 'hint.cfg'),
         'runtime_files': ('libgcc_s_seh-1.dll', 'libstdc++-6.dll', 'libwinpthread-1.dll'),
-        'label': 'amazon_L（OpenCL/GPU）',
-    },
-    'z': {
-        'dir': os.path.normpath(os.path.join(current_dir, 'kataAmazonEngineCuda')),
-        'exe': 'amazons.exe',
-        # The bundled amazons10x10 weight is the server reference Z model.
-        'model': os.path.join(
-            '..', 'kataAmazonEngine', 'weights', 'amazons10x10.bin.gz'),
-        'cfg': os.path.join('..', 'kataAmazonEngine', 'engine.cfg'),
-        'hint_cfg': os.path.join('..', 'kataAmazonEngine', 'hint.cfg'),
-        'runtime_files': (
-            'libgcc_s_seh-1.dll', 'libstdc++-6.dll', 'libwinpthread-1.dll'),
-        'label': 'amazon_Z（OpenCL/GPU）',
+        'label': 'L（hzyhhzy 原始强模型，OpenCL/GPU）',
     },
 }
 
@@ -200,12 +186,17 @@ def _backend_files_available(spec: dict) -> bool:
     ) for item in required)
 
 
-# 默认后端：依次选择文件完整的 amazon_X、amazon_Z、amazon_L。
+# 默认后端：依次选择文件完整的 X、L。
 _DEFAULT_BACKEND = next(
-    (key for key in ('gpu', 'z', 'legacy')
+    (key for key in ('gpu', 'legacy')
      if _backend_files_available(BACKENDS[key])),
     'legacy',
 )
+
+# Development builds briefly exposed the original L weights as ``z``.
+# Preserve that string as an input alias for old settings without presenting
+# Z as a third model or retaining a duplicate backend entry.
+_BACKEND_ALIASES = {'z': 'legacy'}
 
 # 兼容旧引用
 _CUDA_ENGINE_DIR = BACKENDS['gpu']['dir']
@@ -219,7 +210,14 @@ _DEFAULT_CFG = BACKENDS[_DEFAULT_BACKEND]['cfg']
 
 def engine_spec_for_backend(backend: str) -> dict:
     """按后端名返回其 (dir/exe/model/cfg/label) 规格。未知后端回退到默认后端。"""
-    return BACKENDS.get(backend, BACKENDS[_DEFAULT_BACKEND])
+    canonical = _BACKEND_ALIASES.get(backend, backend)
+    return BACKENDS.get(canonical, BACKENDS[_DEFAULT_BACKEND])
+
+
+def canonical_backend_name(backend: str | None) -> str:
+    """Return one of the two public backends, accepting the retired Z alias."""
+    canonical = _BACKEND_ALIASES.get(backend, backend)
+    return canonical if canonical in BACKENDS else _DEFAULT_BACKEND
 
 
 def engine_dir_for_backend(backend: str) -> str:
@@ -269,6 +267,7 @@ def profile_config_for_visits(
     the MinGW build cannot reliably open a config argument containing Chinese
     Windows user-directory characters.
     """
+    backend = canonical_backend_name(backend)
     spec = engine_spec_for_backend(backend)
     visits = max(1, int(visits))
     source = os.path.join(spec['dir'], spec['cfg'])
@@ -374,9 +373,8 @@ class AmazonsKataGoEngine(QObject):
         self._output_queue = queue.Queue()
         self._reader_thread = None
 
-        # 若指定了后端（X/Z/L），用其整套规格作为默认；否则用全局默认后端。
-        spec = engine_spec_for_backend(backend) if backend else BACKENDS[_DEFAULT_BACKEND]
-        self.backend = backend or _DEFAULT_BACKEND
+        # 若指定了后端（X/L），用其整套规格作为默认；否则用全局默认后端。
+        self.backend = canonical_backend_name(backend)
 
         # Bundled resources are authoritative.  Ambient machine-level
         # KATA_AMAZON_* variables must not redirect a portable build to files

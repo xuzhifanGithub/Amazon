@@ -26,18 +26,25 @@ binaries = []
 datas = []
 for pet_asset in (ROOT / "src" / "assets" / "line_dogs").glob("*.gif"):
     datas.append((str(pet_asset), "src/assets/line_dogs"))
-for folder, destination, model in (
-    (AI / "kataAmazonEngineCuda", "src/ai/kataAmazonEngineCuda", Path("amazon10x10_xzf.bin.gz")),
-    (AI / "kataAmazonEngine", "src/ai/kataAmazonEngine", Path("weights/amazons10x10.bin.gz")),
-):
-    folder_binaries, folder_datas = collect_backend(folder, destination, model)
-    binaries.extend(folder_binaries)
-    datas.extend(folder_datas)
+folder_binaries, folder_datas = collect_backend(
+    AI / "kataAmazonEngineCuda",
+    "src/ai/kataAmazonEngineCuda",
+    Path("amazon10x10_xzf.bin.gz"),
+)
+binaries.extend(folder_binaries)
+datas.extend(folder_datas)
+
+# L shares X's compatible OpenCL engine and runtime DLLs. Only its own model
+# and search configs are needed from the legacy resource directory.
+for name in ("engine.cfg", "hint.cfg"):
+    datas.append((
+        str(AI / "kataAmazonEngine" / name),
+        "src/ai/kataAmazonEngine",
+    ))
 datas.append((
-    str(AI / "kataAmazonEngine" / "weights" / "amazon18-s2161408-d449231.bin.gz"),
+    str(AI / "kataAmazonEngine" / "weights" / "amazons10x10.bin.gz"),
     "src/ai/kataAmazonEngine/weights",
 ))
-
 matching_module = AI / "native" / f"amazon_ai.{PY_TAG}-win_amd64.pyd"
 matching_basic_module = AI / "native" / f"amazon_ai_basic.{PY_TAG}-win_amd64.pyd"
 if not matching_module.is_file() or not matching_basic_module.is_file():

@@ -130,7 +130,7 @@ def test_complete_amazons_position_command_contains_queens_obstacle_and_side():
     assert engine.last_policy_prior is None
 
 
-@pytest.mark.parametrize("backend", ["gpu", "z", "legacy"])
+@pytest.mark.parametrize("backend", ["gpu", "legacy"])
 def test_bundled_engine_configs_disable_resignation(backend):
     spec = BACKENDS[backend]
     for config_name in (spec["cfg"], spec["hint_cfg"]):

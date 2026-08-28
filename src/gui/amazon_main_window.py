@@ -42,9 +42,8 @@ from src.logging_setup import log_file_path
 logger = logging.getLogger(__name__)
 
 KATA_MODEL_DISPLAY_NAMES = {
-    'legacy': 'amazon_L',
-    'z': 'amazon_Z',
-    'gpu': 'amazon_X',
+    'legacy': 'L（hzyhhzy 原始强模型）',
+    'gpu': 'X（自训练模型）',
 }
 
 
@@ -145,9 +144,8 @@ class AmazonsMainWindow(QMainWindow):
     PLAYER_TYPE_AI_MCTS = 'mcts'
     PLAYER_TYPE_AI_MCTS_18 = 'mcts_18'
     PLAYER_TYPE_AI_KATAAMAZON = 'kataAmazon'          # 兼容旧引用
-    PLAYER_TYPE_AI_KATAAMAZON_GPU = 'kataAmazon_gpu'  # XZF 最新模型 + OpenCL(GPU) 引擎
-    PLAYER_TYPE_AI_KATAAMAZON_LEGACY = 'kataAmazon_legacy'  # amazon18 原始 L 模型
-    PLAYER_TYPE_AI_KATAAMAZON_Z = 'kataAmazon_z'      # 服务器评测使用的 Z 模型
+    PLAYER_TYPE_AI_KATAAMAZON_GPU = 'kataAmazon_gpu'  # X 自训练模型 + OpenCL(GPU) 引擎
+    PLAYER_TYPE_AI_KATAAMAZON_LEGACY = 'kataAmazon_legacy'  # hzyhhzy 原始 L 模型
     def __init__(self, simulator: AmazonsSimulator):
         super().__init__()
         self.simulator = simulator
@@ -199,11 +197,15 @@ class AmazonsMainWindow(QMainWindow):
         if self.hint_count not in (1, 3, 5):
             self.hint_count = 1
         self.hint_source = self.settings.value("hints/source", "gpu", type=str)
+        if self.hint_source == 'z':
+            # Migrate the short-lived duplicate Z entry to the real L model.
+            self.hint_source = 'legacy'
+            self.settings.setValue("hints/source", self.hint_source)
         if self.hint_source not in KATA_MODEL_DISPLAY_NAMES:
             self.hint_source = 'gpu'
         if not backend_available(self.hint_source):
             self.hint_source = next(
-                (key for key in ('gpu', 'z', 'legacy')
+                (key for key in ('gpu', 'legacy')
                  if backend_available(key)),
                 'gpu',
             )
@@ -451,21 +453,16 @@ class AmazonsMainWindow(QMainWindow):
         actions = {
             self.PLAYER_TYPE_HUMAN: (
                 self.black_human_action, self.white_human_action),
-            self.PLAYER_TYPE_AI_MCTS: (
-                self.black_ai_mcts_action, self.white_ai_mcts_action),
-            self.PLAYER_TYPE_AI_MCTS_18: (
-                self.black_ai_mcts_18_action, self.white_ai_mcts_18_action),
             self.PLAYER_TYPE_AI_KATAAMAZON_LEGACY: (
                 self.black_ai_kata_legacy_action,
                 self.white_ai_kata_legacy_action),
-            self.PLAYER_TYPE_AI_KATAAMAZON_Z: (
-                self.black_ai_kata_z_action, self.white_ai_kata_z_action),
             self.PLAYER_TYPE_AI_KATAAMAZON_GPU: (
                 self.black_ai_kata_gpu_action, self.white_ai_kata_gpu_action),
         }
         pair = actions.get(player_type)
-        if pair is not None:
-            pair[0 if side == BLACK_AMAZON else 1].setChecked(True)
+        if pair is None:
+            pair = actions[self.PLAYER_TYPE_HUMAN]
+        pair[0 if side == BLACK_AMAZON else 1].setChecked(True)
 
     def _discard_setup_mode(self):
         """Close setup controls without restoring or replacing a position."""
@@ -844,7 +841,7 @@ class AmazonsMainWindow(QMainWindow):
         self.statusBar().showMessage("棋谱已导入。", 3000)
 
     def set_hint_source(self, source):
-        """设置 AI 提示使用的引擎后端（X / Z / L）。"""
+        """设置 AI 提示使用的引擎后端（X / L）。"""
         self.hint_source = source
         self.settings.setValue("hints/source", source)
         self.update_hints()
@@ -987,7 +984,7 @@ class AmazonsMainWindow(QMainWindow):
     def _ai_evaluation_for_display(best_res, ai_type_key: str):
         """返回界面应显示的估值名称和值。
 
-        amazon_X 的 ``select_pro`` 是胜率除以 100，并不是独立的局面
+        X 的 ``select_pro`` 是胜率除以 100，并不是独立的局面
         估值；该模型改用引擎的原始 utility/value 输出，并将其从
         ``[-1, 1]`` 线性映射到便于阅读的 ``[0, 1]``。其他 AI 保留
         原有估值语义。
@@ -1027,7 +1024,8 @@ class AmazonsMainWindow(QMainWindow):
             'kataAmazon': KATA_MODEL_DISPLAY_NAMES['gpu'],
             'kataAmazon_gpu': KATA_MODEL_DISPLAY_NAMES['gpu'],
             'kataAmazon_legacy': KATA_MODEL_DISPLAY_NAMES['legacy'],
-            'kataAmazon_z': KATA_MODEL_DISPLAY_NAMES['z'],
+            # The retired Z identifier pointed at the same tensors as L.
+            'kataAmazon_z': KATA_MODEL_DISPLAY_NAMES['legacy'],
         }
         model_label = model_names.get(ai_type_key, ai_type_key or "AI")
         profile = self.black_ai_profile if player == BLACK_AMAZON else self.white_ai_profile
@@ -1091,7 +1089,7 @@ class AmazonsMainWindow(QMainWindow):
         else:
             self.info_visits.setText("搜索次数：—")
 
-        # amazon_X 展示独立的价值头输出，避免重复显示归一化胜率。
+        # X 展示独立的价值头输出，避免重复显示归一化胜率。
         eval_label, eval_value = self._ai_evaluation_for_display(
             best_res, ai_type_key)
         if eval_value is not None:
@@ -1352,43 +1350,18 @@ class AmazonsMainWindow(QMainWindow):
 
         # AI 子菜单
         black_ai_menu = QMenu("AI", self)
-        # 1. MCTS(c++)
-        self.black_ai_mcts_action = QAction("MCTS★", self, checkable=True)
-        self.black_ai_mcts_action.setEnabled(mcts_available('mcts'))
-        self.black_ai_mcts_action.triggered.connect(lambda: self.set_player_mode(BLACK_AMAZON, self.PLAYER_TYPE_AI_MCTS))
-        black_player_group.addAction(self.black_ai_mcts_action)
-        black_ai_menu.addAction(self.black_ai_mcts_action)
-
-        # 2. 使用 gen217 蒸馏出的正式 18 特征估值器
-        self.black_ai_mcts_18_action = QAction("MCTS-18特征★★", self, checkable=True)
-        self.black_ai_mcts_18_action.setEnabled(mcts_available('mcts_18'))
-        self.black_ai_mcts_18_action.triggered.connect(
-            lambda: self.set_player_mode(BLACK_AMAZON, self.PLAYER_TYPE_AI_MCTS_18))
-        black_player_group.addAction(self.black_ai_mcts_18_action)
-        black_ai_menu.addAction(self.black_ai_mcts_18_action)
-
-        # 3. 原始 kataAmazon（OpenCL/GPU + amazon18 L 模型）
+        # 1. hzyhhzy 原始强模型 L
         self.black_ai_kata_legacy_action = QAction(
-            f"{KATA_MODEL_DISPLAY_NAMES['legacy']}★★★", self, checkable=True)
+            KATA_MODEL_DISPLAY_NAMES['legacy'], self, checkable=True)
         self.black_ai_kata_legacy_action.setEnabled(backend_available('legacy'))
         self.black_ai_kata_legacy_action.triggered.connect(
             lambda: self.set_player_mode(BLACK_AMAZON, self.PLAYER_TYPE_AI_KATAAMAZON_LEGACY))
         black_player_group.addAction(self.black_ai_kata_legacy_action)
         black_ai_menu.addAction(self.black_ai_kata_legacy_action)
 
-        # 4. 服务器评测使用的 Z 模型
-        self.black_ai_kata_z_action = QAction(
-            f"{KATA_MODEL_DISPLAY_NAMES['z']}★★★★", self, checkable=True)
-        self.black_ai_kata_z_action.setEnabled(backend_available('z'))
-        self.black_ai_kata_z_action.triggered.connect(
-            lambda: self.set_player_mode(
-                BLACK_AMAZON, self.PLAYER_TYPE_AI_KATAAMAZON_Z))
-        black_player_group.addAction(self.black_ai_kata_z_action)
-        black_ai_menu.addAction(self.black_ai_kata_z_action)
-
-        # 5. kataAmazon（XZF 最新模型，OpenCL/GPU）
+        # 2. 本项目自行训练的 X 模型
         self.black_ai_kata_gpu_action = QAction(
-            f"{KATA_MODEL_DISPLAY_NAMES['gpu']}★★★★", self, checkable=True)
+            KATA_MODEL_DISPLAY_NAMES['gpu'], self, checkable=True)
         self.black_ai_kata_gpu_action.setEnabled(backend_available('gpu'))
         self.black_ai_kata_gpu_action.triggered.connect(
             lambda: self.set_player_mode(BLACK_AMAZON, self.PLAYER_TYPE_AI_KATAAMAZON_GPU))
@@ -1411,43 +1384,18 @@ class AmazonsMainWindow(QMainWindow):
 
         # AI 子菜单
         white_ai_menu = QMenu("AI", self)
-        # 1. MCTS(c++)
-        self.white_ai_mcts_action = QAction("MCTS★", self, checkable=True)
-        self.white_ai_mcts_action.setEnabled(mcts_available('mcts'))
-        self.white_ai_mcts_action.triggered.connect(lambda: self.set_player_mode(WHITE_AMAZON, self.PLAYER_TYPE_AI_MCTS))
-        white_player_group.addAction(self.white_ai_mcts_action)
-        white_ai_menu.addAction(self.white_ai_mcts_action)
-
-        # 2. 使用 gen217 蒸馏出的正式 18 特征估值器
-        self.white_ai_mcts_18_action = QAction("MCTS-18特征★★", self, checkable=True)
-        self.white_ai_mcts_18_action.setEnabled(mcts_available('mcts_18'))
-        self.white_ai_mcts_18_action.triggered.connect(
-            lambda: self.set_player_mode(WHITE_AMAZON, self.PLAYER_TYPE_AI_MCTS_18))
-        white_player_group.addAction(self.white_ai_mcts_18_action)
-        white_ai_menu.addAction(self.white_ai_mcts_18_action)
-
-        # 3. 原始 kataAmazon（OpenCL/GPU + amazon18 L 模型）
+        # 1. hzyhhzy 原始强模型 L
         self.white_ai_kata_legacy_action = QAction(
-            f"{KATA_MODEL_DISPLAY_NAMES['legacy']}★★★", self, checkable=True)
+            KATA_MODEL_DISPLAY_NAMES['legacy'], self, checkable=True)
         self.white_ai_kata_legacy_action.setEnabled(backend_available('legacy'))
         self.white_ai_kata_legacy_action.triggered.connect(
             lambda: self.set_player_mode(WHITE_AMAZON, self.PLAYER_TYPE_AI_KATAAMAZON_LEGACY))
         white_player_group.addAction(self.white_ai_kata_legacy_action)
         white_ai_menu.addAction(self.white_ai_kata_legacy_action)
 
-        # 4. 服务器评测使用的 Z 模型
-        self.white_ai_kata_z_action = QAction(
-            f"{KATA_MODEL_DISPLAY_NAMES['z']}★★★★", self, checkable=True)
-        self.white_ai_kata_z_action.setEnabled(backend_available('z'))
-        self.white_ai_kata_z_action.triggered.connect(
-            lambda: self.set_player_mode(
-                WHITE_AMAZON, self.PLAYER_TYPE_AI_KATAAMAZON_Z))
-        white_player_group.addAction(self.white_ai_kata_z_action)
-        white_ai_menu.addAction(self.white_ai_kata_z_action)
-
-        # 5. kataAmazon（XZF 最新模型，OpenCL/GPU）
+        # 2. 本项目自行训练的 X 模型
         self.white_ai_kata_gpu_action = QAction(
-            f"{KATA_MODEL_DISPLAY_NAMES['gpu']}★★★★", self, checkable=True)
+            KATA_MODEL_DISPLAY_NAMES['gpu'], self, checkable=True)
         self.white_ai_kata_gpu_action.setEnabled(backend_available('gpu'))
         self.white_ai_kata_gpu_action.triggered.connect(
             lambda: self.set_player_mode(WHITE_AMAZON, self.PLAYER_TYPE_AI_KATAAMAZON_GPU))
@@ -1719,28 +1667,15 @@ class AmazonsMainWindow(QMainWindow):
         ai_text = """
         <h2>AI算法介绍</h2>
 
-        <h3>MCTS (蒙特卡洛树搜索)★</h3>
-        <p>python版本要求:3.11.5/3.13.3/自行编译</p>
-        <p>• 通过随机模拟探索游戏树</p>
-        <p>• 平衡探索与利用</p>
-        <p>• 适合高分支因子的游戏</p>
+        <h3>L（hzyhhzy 原始强模型）</h3>
+        <p>• 来自 hzyhhzy 发布的 10×10 亚马逊棋模型</p>
+        <p>• 内部名 amazons8x-b20c256-s182755840-d39606896</p>
 
-        <h3>MCTS-18特征★★</h3>
-        <p>• 使用从 gen217 强模型拟合出的正式 18 特征估值器</p>
-        <p>• 搜索框架与基础 MCTS 相同，局面判断更准确</p>
+        <h3>X（自训练模型）</h3>
+        <p>• 本项目自行训练的 featurev1 模型</p>
+        <p>• 使用新增亚马逊结构特征，配合项目内置兼容引擎运行</p>
 
-        <h3>amazon_L★★★ / amazon_Z★★★★ / amazon_X★★★★（基于 KataGo 的 AI）</h3>
-        <p>• amazon_L：最初的原始模型</p>
-        <p>• amazon_Z：服务器评测使用的参考模型</p>
-        <p>• amazon_X：新模型</p>
-        <p>• 使用 KataGo 框架的专业 AI</p>
-        <p>• 性能更强但计算更复杂</p>
-
-        <h3>AI难度等级</h3>
-        <p>★ 基础AI - 适合新手练习</p>
-        <p>★★ 中级AI - 有一定挑战性</p>
-        <p>★★★ 高级AI - 极具挑战性</p>
-        <p>★★★★ 顶级AI - 可选择服务器参考强模型或最新训练模型</p>
+        <p>两个模型都使用 KataGo 搜索，可在“AI 参数设置”中调整 visits、温度和搜索参数。</p>
         """
 
         QMessageBox.information(self, "AI算法介绍", ai_text)
@@ -1849,7 +1784,6 @@ class AmazonsMainWindow(QMainWindow):
             self.PLAYER_TYPE_AI_MCTS_18: mcts_available('mcts_18'),
             self.PLAYER_TYPE_AI_KATAAMAZON_GPU: backend_available('gpu'),
             self.PLAYER_TYPE_AI_KATAAMAZON_LEGACY: backend_available('legacy'),
-            self.PLAYER_TYPE_AI_KATAAMAZON_Z: backend_available('z'),
         }
         if player_type != self.PLAYER_TYPE_HUMAN and not availability.get(player_type, False):
             QMessageBox.warning(self, "AI 不可用", "所选 AI 的模块、引擎或模型文件不完整。")
@@ -2278,8 +2212,6 @@ class AmazonsMainWindow(QMainWindow):
             ai_type_key = 'kataAmazon_gpu'
         elif current_player_mode == self.PLAYER_TYPE_AI_KATAAMAZON_LEGACY:
             ai_type_key = 'kataAmazon_legacy'
-        elif current_player_mode == self.PLAYER_TYPE_AI_KATAAMAZON_Z:
-            ai_type_key = 'kataAmazon_z'
         if not ai_type_key:
             return
         # Preserve the legacy backend's historical 400-visits default until

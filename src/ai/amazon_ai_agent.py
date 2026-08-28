@@ -131,9 +131,9 @@ class AIWorker(QObject):
                     best_res.win_pro = win
                     best_res.max_apt = visits
                     best_res.select_pro = (win / 100.0) if win is not None else None
-                    # amazon_L/Z have compatible score heads, but their old
+                    # L has a compatible score head, but its old
                     # training data did not provide the current territory
-                    # targets. Only amazon_X (gen199+) exposes that output.
+                    # targets. Only X (gen199+) exposes that output.
                     if self.engine_backend == 'gpu':
                         best_res.score_lead = getattr(
                             engine, 'last_score_lead', None)
@@ -358,12 +358,12 @@ class AmazonAIAgent(QObject):
         self.ai = amazon_ai.AmazonasAI() if amazon_ai is not None else None
         self.ai_basic = (amazon_ai_basic.AmazonasAI()
                          if amazon_ai_basic is not None else None)
-        # KataGo 引擎：可选 XZF 最新权重、服务器 Z 模型或 amazon18 L 模型。
+        # KataGo 引擎：只公开 X 自训练模型和 hzyhhzy 原始 L 模型。
         # Gameplay engines are reused per (backend, visits) profile.
         self.ai_engine = None
         self._engine_manager = engine_manager or EngineManager()
         self._engine_pool = self._engine_manager.engines
-        self.kata_backend = None    # 当前已加载引擎的后端标识（X / Z / L / None）
+        self.kata_backend = None    # 当前已加载引擎的后端标识（X / L / None）
 
         # 提示引擎由长生命周期 HintWorker 独占，避免在 GUI 线程中初始化或搜索。
         self.hint_thread = None
@@ -396,11 +396,11 @@ class AmazonAIAgent(QObject):
                 'kataAmazon', 'kataAmazon_gpu', 'kataAmazon_legacy',
                 'kataAmazon_z'):
             #   _gpu    -> XZF 最新权重
-            #   _legacy -> amazon18 原始 L 权重
-            #   _z      -> 服务器评测使用的 Z 权重
+            #   _legacy -> hzyhhzy 原始 L 权重
+            #   _z      -> 旧设置兼容别名，同样归到 L
             backend = {
                 'kataAmazon_legacy': 'legacy',
-                'kataAmazon_z': 'z',
+                'kataAmazon_z': 'legacy',
             }.get(ai_type, 'gpu')
             worker_ai_type = 'kataAmazon'
         else:
@@ -409,9 +409,8 @@ class AmazonAIAgent(QObject):
         profile = (profile or AIProfile()).normalized()
         if worker_ai_type == 'kataAmazon':
             model_name = {
-                'legacy': 'amazon_L',
-                'z': 'amazon_Z',
-                'gpu': 'amazon_X',
+                'legacy': 'L（hzyhhzy 原始强模型）',
+                'gpu': 'X（自训练模型）',
             }[backend]
             score_utility_enabled = (
                 profile.score_utility_enabled if backend == 'gpu' else None)
@@ -423,7 +422,7 @@ class AmazonAIAgent(QObject):
                 status_text = f"{model_name} 正在思考中..."
             elif backend == 'legacy':
                 status_text = (
-                    "正在启动 amazon_L 并思考；首次运行会进行 OpenCL 调优，"
+                    "正在启动 L（hzyhhzy 原始强模型）并思考；首次运行会进行 OpenCL 调优，"
                     "可能需要数分钟...")
             else:
                 status_text = f"正在启动 {model_name} 并思考..."
@@ -472,10 +471,9 @@ class AmazonAIAgent(QObject):
                            search_config: KataSearchConfig | None = None):
         """确保 kataAmazon 引擎已按指定后端加载。
 
-        三个后端各自指定 (引擎目录, 可执行文件, 模型, 配置)：
-            'gpu'    XZF 最新权重 + OpenCL(GPU)
-            'legacy' amazon18 原始 L 模型
-            'z'      服务器评测使用的 Z 模型
+        两个后端各自指定 (引擎目录, 可执行文件, 模型, 配置)：
+            'gpu'    X 自训练权重 + OpenCL(GPU)
+            'legacy' hzyhhzy 原始 L 模型
         - 若当前引擎已是该后端，直接复用；
         - 若是另一后端，先关闭旧的再按新后端重建；
         - 重建后把当前对局历史重放进引擎，保证内部棋盘与界面一致。
@@ -645,7 +643,7 @@ class AmazonAIAgent(QObject):
         不影响后台提示工作线程或正式对局引擎。
         """
         selected_backend = backend or next(
-            (key for key in ('gpu', 'z', 'legacy')
+            (key for key in ('gpu', 'legacy')
              if backend_available(key)),
             'legacy',
         )

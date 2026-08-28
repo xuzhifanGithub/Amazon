@@ -3,7 +3,8 @@ from pathlib import Path
 import sys
 
 import pytest
-from PyQt6.QtCore import QSettings
+from PyQt6.QtCore import QSettings, Qt
+from PyQt6.QtTest import QTest
 
 from src.ai.ai_profile import (
     AIProfile, KataSearchConfig, SEARCH_CONFIG_CUSTOM,
@@ -11,7 +12,8 @@ from src.ai.ai_profile import (
     load_profile, save_profile,
 )
 from src.ai.amazons_engine import (
-    BACKENDS, profile_config_for_visits, resolve_engine_resources,
+    BACKENDS, engine_spec_for_backend, profile_config_for_visits,
+    resolve_engine_resources,
 )
 from src.ai.engine_manager import EngineManager
 from src.core.game_record import export_record, load_record
@@ -28,17 +30,14 @@ def test_legacy_backend_reads_the_original_l_model():
 
     assert spec["exe"] == "amazons.exe"
     assert Path(spec["dir"]).name == "kataAmazonEngineCuda"
-    assert model.name == "amazon18-s2161408-d449231.bin.gz"
-    assert model.parent.name == "weights"
-
-
-def test_z_backend_reads_the_bundled_server_reference_model():
-    spec = BACKENDS["z"]
-    model = (Path(spec["dir"]) / spec["model"]).resolve()
-
-    assert spec["exe"] == "amazons.exe"
     assert model.name == "amazons10x10.bin.gz"
+    assert model.parent.name == "weights"
     assert model.is_file()
+
+
+def test_only_l_and_x_are_public_backends_and_z_migrates_to_l():
+    assert set(BACKENDS) == {"gpu", "legacy"}
+    assert engine_spec_for_backend("z") is BACKENDS["legacy"]
 
 
 def test_profiles_accept_any_positive_budget_and_persist_it(tmp_path):
@@ -112,6 +111,33 @@ def test_ai_settings_dialog_does_not_cap_positive_budgets(qapp):
 
     seconds.setValue(1e-20)
     assert dialog.profiles()[0].mcts_seconds == 1e-20
+    dialog.close()
+
+
+def test_ai_settings_duration_accepts_scientific_notation_from_keyboard(qapp):
+    dialog = AISettingsDialog(AIProfile(), AIProfile())
+    seconds = dialog.black_controls["seconds"]
+
+    for text, expected in (
+            ("0.000001", 1e-6), ("1e-20", 1e-20), ("1e20", 1e20)):
+        seconds.setFocus()
+        seconds.selectAll()
+        QTest.keyClicks(seconds, text)
+        QTest.keyClick(seconds, Qt.Key.Key_Enter)
+        assert seconds.value() == pytest.approx(expected)
+        assert dialog.profiles()[0].mcts_seconds == pytest.approx(expected)
+
+    seconds.setValue(sys.float_info.max)
+    assert seconds.hasAcceptableInput()
+    assert seconds.valueFromText(seconds.text()) == sys.float_info.max
+
+    seconds.setValue(2.5)
+    seconds.setFocus()
+    seconds.selectAll()
+    QTest.keyClicks(seconds, "-1")
+    QTest.keyClick(seconds, Qt.Key.Key_Enter)
+    assert seconds.value() == pytest.approx(2.5)
+
     dialog.close()
 
 
@@ -191,7 +217,7 @@ def test_score_utility_switch_generates_distinct_configs_without_mutating_source
     assert source.read_text(encoding='utf-8') == before
 
 
-@pytest.mark.parametrize("backend", ["gpu", "z", "legacy"])
+@pytest.mark.parametrize("backend", ["gpu", "legacy"])
 def test_strongest_profile_generates_competitive_config_at_normal_budget(backend):
     strongest = Path(profile_config_for_visits(
         backend, 600, False, STRONGEST_KATA_SEARCH_CONFIG))
