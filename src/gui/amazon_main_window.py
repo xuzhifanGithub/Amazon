@@ -453,6 +453,10 @@ class AmazonsMainWindow(QMainWindow):
         actions = {
             self.PLAYER_TYPE_HUMAN: (
                 self.black_human_action, self.white_human_action),
+            self.PLAYER_TYPE_AI_MCTS: (
+                self.black_ai_mcts_action, self.white_ai_mcts_action),
+            self.PLAYER_TYPE_AI_MCTS_18: (
+                self.black_ai_mcts_18_action, self.white_ai_mcts_18_action),
             self.PLAYER_TYPE_AI_KATAAMAZON_LEGACY: (
                 self.black_ai_kata_legacy_action,
                 self.white_ai_kata_legacy_action),
@@ -1350,7 +1354,26 @@ class AmazonsMainWindow(QMainWindow):
 
         # AI 子菜单
         black_ai_menu = QMenu("AI", self)
-        # 1. amazon_L
+        # 1. 基础 C++ MCTS
+        self.black_ai_mcts_action = QAction("MCTS★", self, checkable=True)
+        self.black_ai_mcts_action.setEnabled(mcts_available('mcts'))
+        self.black_ai_mcts_action.triggered.connect(
+            lambda: self.set_player_mode(
+                BLACK_AMAZON, self.PLAYER_TYPE_AI_MCTS))
+        black_player_group.addAction(self.black_ai_mcts_action)
+        black_ai_menu.addAction(self.black_ai_mcts_action)
+
+        # 2. 18 特征 C++ MCTS
+        self.black_ai_mcts_18_action = QAction(
+            "MCTS-18特征★★", self, checkable=True)
+        self.black_ai_mcts_18_action.setEnabled(mcts_available('mcts_18'))
+        self.black_ai_mcts_18_action.triggered.connect(
+            lambda: self.set_player_mode(
+                BLACK_AMAZON, self.PLAYER_TYPE_AI_MCTS_18))
+        black_player_group.addAction(self.black_ai_mcts_18_action)
+        black_ai_menu.addAction(self.black_ai_mcts_18_action)
+
+        # 3. amazon_L
         self.black_ai_kata_legacy_action = QAction(
             KATA_MODEL_DISPLAY_NAMES['legacy'], self, checkable=True)
         self.black_ai_kata_legacy_action.setEnabled(backend_available('legacy'))
@@ -1359,7 +1382,7 @@ class AmazonsMainWindow(QMainWindow):
         black_player_group.addAction(self.black_ai_kata_legacy_action)
         black_ai_menu.addAction(self.black_ai_kata_legacy_action)
 
-        # 2. 本项目自行训练的 X 模型
+        # 4. amazon_X
         self.black_ai_kata_gpu_action = QAction(
             KATA_MODEL_DISPLAY_NAMES['gpu'], self, checkable=True)
         self.black_ai_kata_gpu_action.setEnabled(backend_available('gpu'))
@@ -1384,7 +1407,26 @@ class AmazonsMainWindow(QMainWindow):
 
         # AI 子菜单
         white_ai_menu = QMenu("AI", self)
-        # 1. amazon_L
+        # 1. 基础 C++ MCTS
+        self.white_ai_mcts_action = QAction("MCTS★", self, checkable=True)
+        self.white_ai_mcts_action.setEnabled(mcts_available('mcts'))
+        self.white_ai_mcts_action.triggered.connect(
+            lambda: self.set_player_mode(
+                WHITE_AMAZON, self.PLAYER_TYPE_AI_MCTS))
+        white_player_group.addAction(self.white_ai_mcts_action)
+        white_ai_menu.addAction(self.white_ai_mcts_action)
+
+        # 2. 18 特征 C++ MCTS
+        self.white_ai_mcts_18_action = QAction(
+            "MCTS-18特征★★", self, checkable=True)
+        self.white_ai_mcts_18_action.setEnabled(mcts_available('mcts_18'))
+        self.white_ai_mcts_18_action.triggered.connect(
+            lambda: self.set_player_mode(
+                WHITE_AMAZON, self.PLAYER_TYPE_AI_MCTS_18))
+        white_player_group.addAction(self.white_ai_mcts_18_action)
+        white_ai_menu.addAction(self.white_ai_mcts_18_action)
+
+        # 3. amazon_L
         self.white_ai_kata_legacy_action = QAction(
             KATA_MODEL_DISPLAY_NAMES['legacy'], self, checkable=True)
         self.white_ai_kata_legacy_action.setEnabled(backend_available('legacy'))
@@ -1393,7 +1435,7 @@ class AmazonsMainWindow(QMainWindow):
         white_player_group.addAction(self.white_ai_kata_legacy_action)
         white_ai_menu.addAction(self.white_ai_kata_legacy_action)
 
-        # 2. 本项目自行训练的 X 模型
+        # 4. amazon_X
         self.white_ai_kata_gpu_action = QAction(
             KATA_MODEL_DISPLAY_NAMES['gpu'], self, checkable=True)
         self.white_ai_kata_gpu_action.setEnabled(backend_available('gpu'))
@@ -1667,6 +1709,14 @@ class AmazonsMainWindow(QMainWindow):
         ai_text = """
         <h2>AI算法介绍</h2>
 
+        <h3>MCTS★</h3>
+        <p>• 基础 C++ 蒙特卡洛树搜索</p>
+        <p>• 使用分阶段公式估值器</p>
+
+        <h3>MCTS-18特征★★</h3>
+        <p>• 使用 18 特征局面估值器的 C++ 蒙特卡洛树搜索</p>
+        <p>• 搜索框架与基础 MCTS 相同，局面判断更细致</p>
+
         <h3>amazon_L★★★</h3>
         <p>• 10×10 亚马逊棋 L 模型</p>
         <p>• 内部名 amazons8x-b20c256-s182755840-d39606896</p>
@@ -1675,7 +1725,7 @@ class AmazonsMainWindow(QMainWindow):
         <p>• 本项目自行训练的 featurev1 模型</p>
         <p>• 使用新增亚马逊结构特征，配合项目内置兼容引擎运行</p>
 
-        <p>两个模型都使用 KataGo 搜索，可在“AI 参数设置”中调整 visits、温度和搜索参数。</p>
+        <p>amazon_L 和 amazon_X 使用 KataGo 搜索，可在“AI 参数设置”中调整 visits、温度和搜索参数。</p>
         """
 
         QMessageBox.information(self, "AI算法介绍", ai_text)

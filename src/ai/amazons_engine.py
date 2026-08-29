@@ -374,6 +374,7 @@ class AmazonsKataGoEngine(QObject):
 
         # 若指定了后端（X/L），用其整套规格作为默认；否则用全局默认后端。
         self.backend = canonical_backend_name(backend)
+        spec = engine_spec_for_backend(self.backend)
 
         # Bundled resources are authoritative.  Ambient machine-level
         # KATA_AMAZON_* variables must not redirect a portable build to files

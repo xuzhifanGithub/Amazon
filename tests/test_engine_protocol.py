@@ -2,6 +2,7 @@ import pytest
 from types import SimpleNamespace
 from pathlib import Path
 
+import src.ai.amazons_engine as amazons_engine
 from src.ai.amazons_engine import (BACKENDS, AmazonsKataGoEngine,
                                    parse_genmove_analyze,
                                    parse_genmove_analyze_details)
@@ -21,6 +22,32 @@ class _RaisingInput:
 class _Signal:
     def emit(self, _value):
         pass
+
+
+@pytest.mark.parametrize(
+    ("backend", "label"),
+    [("legacy", "amazon_L"), ("gpu", "XZF")],
+)
+def test_engine_constructor_logs_the_selected_backend(
+        monkeypatch, caplog, backend, label):
+    process = SimpleNamespace(
+        pid=123,
+        stdin=None,
+        stdout=(),
+        poll=lambda: 0,
+    )
+    monkeypatch.setattr(
+        amazons_engine.subprocess, "Popen", lambda *_args, **_kwargs: process)
+    monkeypatch.setattr(
+        AmazonsKataGoEngine, "_wait_for_engine_ready", lambda _self: None)
+    monkeypatch.setattr(
+        AmazonsKataGoEngine, "_initialize_engine", lambda _self: None)
+
+    with caplog.at_level("INFO"):
+        engine = AmazonsKataGoEngine(backend=backend)
+
+    assert engine.backend == backend
+    assert label in caplog.text
 
 
 def test_send_command_normalizes_process_closing_race():

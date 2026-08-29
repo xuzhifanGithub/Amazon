@@ -18,15 +18,17 @@ from src.gui.amazon_main_window import AmazonsMainWindow
 OPENING_TURN = ((6, 0), (5, 0), (6, 0))
 
 
-def test_only_l_and_x_are_exposed_in_ai_menus(qapp):
+def test_four_ai_options_are_exposed_in_strength_order(qapp):
     window = AmazonsMainWindow(AmazonsSimulator())
     action_texts = [action.text() for action in window.findChildren(QAction)]
 
     expected = [
-        "amazon_L★★★", "amazon_X★★★★",
+        "MCTS★", "MCTS-18特征★★", "amazon_L★★★", "amazon_X★★★★",
     ]
-    for label in expected:
-        assert action_texts.count(label) == 3  # 黑方、白方和提示模型各一个入口
+    assert action_texts.count("MCTS★") == 2
+    assert action_texts.count("MCTS-18特征★★") == 2
+    assert action_texts.count("amazon_L★★★") == 3
+    assert action_texts.count("amazon_X★★★★") == 3
     ai_menus = [menu for menu in window.findChildren(QMenu)
                 if menu.title() == "AI"]
     assert len(ai_menus) == 2
@@ -42,7 +44,8 @@ def test_kata_models_use_consistent_frontend_names(qapp):
     assert action_texts.count("amazon_X★★★★") == 3
     assert action_texts.count("amazon_L★★★") == 3
     assert not any("amazon_Z" in text for text in action_texts)
-    assert not any(text.startswith("MCTS") for text in action_texts)
+    assert action_texts.count("MCTS★") == 2
+    assert action_texts.count("MCTS-18特征★★") == 2
     assert not any("XZF 最新模型" in text for text in action_texts)
     assert not any("kataAmazon(原始)" in text for text in action_texts)
 
