@@ -1,5 +1,5 @@
 -r requirements.txt
 pytest==8.3.5
-cmake>=3.29,<4
+cmake>=4.4.2,<5
 pybind11>=2.13,<3
 pyinstaller>=6.10,<7
